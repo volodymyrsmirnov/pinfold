@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Rome</name>
+    <description/>
+    <Style id="icon-1899-0288D1-normal">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+    </Style>
+    <Style id="icon-1899-0288D1-highlight">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+    </Style>
+    <StyleMap id="icon-1899-0288D1">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1899-0288D1-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1899-0288D1-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="icon-1899-DB4436-normal">
+      <IconStyle>
+        <color>ff3644db</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+    </Style>
+    <Style id="icon-1899-DB4436-highlight">
+      <IconStyle>
+        <color>ff3644db</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+    </Style>
+    <StyleMap id="icon-1899-DB4436">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1899-DB4436-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1899-DB4436-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Folder>
+      <name>🏨 Hotel</name>
+      <Placemark>
+        <name>Rhinoceros Roma</name>
+        <description><![CDATA[Your hotel — Via dei Cerchi 83, Aventine Hill<br><br>         A converted medieval tower transformed into a living artwork by Russian conceptual artist Ilya Kabakov. Every room is a unique installation — you're sleeping inside a work of art, not just a hotel. The building itself has been inhabited since the Middle Ages and sits right on the edge of the ancient Circus Maximus valley.<br><br>         Location: Aventine Hill — one of Rome's Seven Hills, quiet, green and residential. 5 min walk to Orange Garden viewpoint, 7 min to Circus Maximus.<br><br>         Check-in: Friday ~18:00 after arriving from FCO (Leonardo Express → Termini, then taxi ~15 min).]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4829,41.8833,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name><![CDATA[🟡 Friday Evening — Arrival & Aventine Walk]]></name>
+      <Placemark>
+        <name>1. Giardino degli Aranci (Orange Garden)</name>
+        <description><![CDATA[Type: Viewpoint / Garden<br>         Time: ~18:30 | Duration: 30 min<br>         Entry: Free<br><br>         Rome's best-kept panoramic secret. A formal garden on the Aventine Hill filled with bitter orange trees, with a terrace that frames an unbeatable view over the Tiber, the dome of St. Peter's and the rooftops of Trastevere. Especially magical at sunset. Locals come here to watch the city turn gold — almost no tourists.<br><br>         Tip: Walk around the back of the garden to find a keyhole in a green door — looking through it reveals a perfectly framed view of St. Peter's dome. One of Rome's great hidden surprises.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4793,41.8831,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>2. Circus Maximus</name>
+        <description><![CDATA[Type: Ancient Site<br>         Time: ~19:15 | Duration: 20–30 min walk-through<br>         Entry: Free (exterior) / €6 inside the small museum<br><br>         The ancient world's largest sports venue — at its peak it held up to 250,000 spectators for chariot races. The oval valley is now a public park stretching 600 metres. Walking its length at dusk, with the Palatine Hill rising on one side and the Aventine on the other, gives a powerful sense of ancient Rome's scale. Julius Caesar expanded it, Augustus used it regularly.<br><br>         Tip: Just walk it — the atmosphere is the thing. No need to pay for the museum on this trip.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4853,41.8853,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>3. Testaccio — Dinner</name>
+        <description><![CDATA[Type: Neighbourhood / Dinner<br>         Time: ~20:00<br><br>         Rome's most authentic food neighbourhood — built on a hill made of ancient Roman amphorae (broken pottery shards, hence "Testaccio"). No tourist menus here. This is where Romans eat. The area is packed with traditional trattorias serving Roman classics: cacio e pepe, carbonara, coda alla vaccinara (oxtail), supplì.<br><br>         Must-try dishes: Cacio e pepe, tonnarelli alla gricia, artichokes alla romana.<br>         Tip: Keep it simple on Friday — a glass of local wine, pasta, early night. Saturday is a big walking day.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4757,41.8771,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>🔴 Saturday — The Grand Roman Circuit</name>
+      <Placemark>
+        <name>1. Colosseum</name>
+        <description><![CDATA[Type: Ancient Monument<br>         Time: 08:30 (first slot) | Duration: 1.5 hours<br>         Entry: ~€18 — combined ticket includes Roman Forum + Palatine Hill<br>         ⚠️ Book in advance: coopculture.it — sells out days ahead in April<br><br>         The most iconic building of the ancient world. Completed in 80 AD, this 50,000-seat amphitheatre hosted gladiatorial contests, animal hunts and public spectacles for four centuries. The engineering is extraordinary — 80 arched entrances allowed the entire crowd to be seated or evacuated in minutes. The underground hypogeum (where animals and gladiators waited) is visible on certain tickets.<br><br>         Tip: Go first slot at 8:30am — you'll have the arena nearly to yourself. By 10am it's packed.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4922,41.8902,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[2. Roman Forum & Palatine Hill]]></name>
+        <description><![CDATA[Type: Ancient Site<br>         Time: ~10:00 | Duration: 1.5 hours<br>         Entry: Included in Colosseum combined ticket<br><br>         The Roman Forum was the political, religious and commercial heart of ancient Rome for over a thousand years. Walking through it you pass the Temple of Julius Caesar (where he was cremated), the Via Sacra (the oldest road in Rome), the Arch of Titus and the House of the Vestal Virgins. Climb Palatine Hill above for sweeping views over the whole Forum and the city.<br><br>         Tip: Pick up a free map at the entrance. The Forum looks chaotic at first — orient yourself by finding the Temple of Saturn (8 columns) at the far end.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4853,41.8925,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[3. Capitoline Hill & Piazza del Campidoglio]]></name>
+        <description><![CDATA[Type: Historic Site / Viewpoint<br>         Time: ~11:30 | Duration: 30 min<br>         Entry: Free (piazza) / €15 Capitoline Museums (optional)<br><br>         The Capitoline is the smallest of Rome's Seven Hills but historically the most important — it housed Rome's most sacred temples and was the symbolic centre of the Roman Empire. The piazza was designed by Michelangelo in 1536 and features the equestrian statue of Marcus Aurelius at its centre. Walk around the back of the Palazzo dei Senatori for the best view of the Roman Forum from above.<br><br>         Tip: The Capitoline Museums contain the original Marcus Aurelius statue and the famous Capitoline Wolf sculpture — worth visiting if you have time, but skip if pace is tight.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4833,41.8934,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>4. Vittoriano / Altare della Patria</name>
+        <description><![CDATA[Type: Monument / Viewpoint<br>         Time: ~12:00 | Duration: 30 min<br>         Entry: Free (building + elevator costs ~€7)<br><br>         The enormous white marble monument built between 1885–1935 to honour King Victor Emmanuel II, the first king of unified Italy. Romans call it "the wedding cake" or "the typewriter" — it's aggressively grand. Take the free elevator to the rooftop (Altare della Patria level) for a spectacular 360° panorama of Rome: Forum, Colosseum, Pantheon dome, St. Peter's — all visible simultaneously.<br><br>         Tip: The rooftop view is genuinely one of the best in Rome and massively underrated. Do it.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4827,41.8951,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>5. Largo di Torre Argentina</name>
+        <description><![CDATA[Type: Ancient Site<br>         Time: ~13:00 | Duration: 15 min<br>         Entry: Free (viewable from street level and now partially open)<br><br>         Four Republican-era temples dating from the 4th to 2nd century BC, excavated in the 1920s when Mussolini ordered the clearing of this block. This is the exact spot where Julius Caesar was assassinated on the Ides of March (15 March, 44 BC) — he was killed at the base of Pompey's Theatre, which stood here. The ruins are now home to a large colony of stray cats, maintained by volunteers.<br><br>         Tip: A brief but historically electrifying stop. Just looking down into the ruins from the street takes 10 minutes and costs nothing.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4759,41.8959,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[6. Campo de' Fiori — Lunch]]></name>
+        <description><![CDATA[Type: Piazza / Lunch Stop<br>         Time: ~13:15 | Duration: 45–60 min<br><br>         One of Rome's most lively piazzas, surrounded by trattorias and bars. In the mornings it hosts a daily market (fruits, vegetables, flowers). The statue at the centre is Giordano Bruno, a philosopher burned at the stake here for heresy in 1600. Choose any of the trattorias around the square for lunch — sit outside, order pasta and house wine.<br><br>         Tip: Avoid the most tourist-facing restaurants on the square itself — duck one street back (Via dei Baullari or Via del Pellegrino) for better value and quality.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4722,41.8956,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>7. Piazza Navona</name>
+        <description><![CDATA[Type: Piazza / Baroque Masterpiece<br>         Time: ~14:30 | Duration: 30 min<br>         Entry: Free<br><br>         Rome's most theatrical public space, built over the ancient Stadium of Domitian (1st century AD) — the elongated oval shape is the original stadium footprint. Dominated by Gian Lorenzo Bernini's Fountain of the Four Rivers (1651), a towering baroque sculpture representing the four great rivers of the world. The church of Sant'Agnese in Agone faces it directly. Street artists and cafés line the perimeter.<br><br>         Tip: Walk the full perimeter and look at the fountain from all angles — the figures twist and reach dramatically from every viewpoint. Buy a gelato and take your time.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4731,41.8992,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>8. Pantheon</name>
+        <description><![CDATA[Type: Ancient Temple / Church<br>         Time: 14:00 (booked slot) | Duration: 30–45 min<br>         Entry: €5 — timed entry, pre-booked at pantheonroma.com<br>         ✅ Already selected: 14:00–15:00 slot<br><br>         The best-preserved ancient building in the world, completed around 125 AD under Emperor Hadrian. Its unreinforced concrete dome — 43.3 metres in diameter — remained the world's largest for 1,300 years and is still an engineering marvel. The oculus (9-metre open hole at the dome's apex) is the only light source inside. When it rains, water falls through and drains via a hidden Roman drainage system. Raphael is buried here.<br><br>         Tip: Stand directly under the oculus and look up. That's it. That's the experience. Give it a few minutes of silence.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4769,41.8986,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>9. Trevi Fountain</name>
+        <description><![CDATA[Type: Baroque Fountain<br>         Time: ~17:00 | Duration: 20 min<br>         Entry: Free<br><br>         The largest baroque fountain in Rome, completed in 1762 and fed by the ancient Aqua Virgo aqueduct built in 19 BC. The central figure is Neptune on a shell-shaped chariot pulled by sea horses. The tradition of throwing a coin over your left shoulder with your right hand to ensure a return to Rome dates to the 1954 film "Three Coins in the Fountain." About €3,000 is collected from the fountain every day and donated to charity.<br><br>         Tip: Go at 17:00 — the afternoon light hits the travertine marble beautifully. It's still crowded but the light is worth it. Avoid midday.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4833,41.9009,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>10. Spanish Steps (Scalinata di Trinità dei Monti)</name>
+        <description><![CDATA[Type: Landmark / Viewpoint<br>         Time: ~17:30 | Duration: 20 min<br>         Entry: Free<br><br>         135 steps built between 1723–1725 connecting the Piazza di Spagna below with the Trinità dei Monti church above. Designed by Francesco de Sanctis and funded by the French, they are the widest staircase in Europe. The view looking back down over Via Condotti (Rome's luxury shopping street) is spectacular at sunset. John Keats died in the house to the right of the steps in 1821 — it's now a museum.<br><br>         Tip: Climb to the top and look back over the city. In spring the steps are lined with azaleas in bloom.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4823,41.9058,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>11. Villa Borghese (Evening Walk)</name>
+        <description><![CDATA[Type: Park<br>         Time: ~18:00 | Duration: 30–40 min walk-through<br>         Entry: Free (park) / €15 Borghese Gallery (requires advance booking)<br><br>         Rome's most beautiful public park — 80 hectares of formal gardens, umbrella pines and neoclassical fountains created by Cardinal Scipione Borghese in the early 17th century. Walking through the park from the Spanish Steps back towards the city is a peaceful, green alternative to the busy streets. The Borghese Gallery inside contains Bernini's greatest sculptures (Apollo and Daphne, The Rape of Proserpina) — if you want to visit, book separately in advance as entry is strictly by 2-hour timed slot.<br><br>         Tip: Even if you skip the gallery, the park itself at golden hour is one of Rome's great pleasures.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4922,41.9139,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>12. Monti — Dinner</name>
+        <description><![CDATA[Type: Neighbourhood / Dinner<br>         Time: ~20:00<br><br>         Rome's hippest village-within-a-city — a medieval neighbourhood of cobblestone lanes, indie boutiques and some of the city's best restaurants. After a 20km+ day, you've earned a proper sit-down dinner here. The neighbourhood is between the Colosseum and Termini, so it's on your way back to the hotel.<br><br>         Recommended streets: Via dei Serpenti, Via Leonina, Piazza della Madonna dei Monti.<br>         Tip: Book ahead if you can — Monti gets busy on Saturday evenings. Or just wander and take the first table with a chalkboard menu.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.495,41.8942,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name><![CDATA[🔵 Sunday — Trastevere, Janiculum & Vatican Side]]></name>
+      <Placemark>
+        <name>1. Testaccio Market</name>
+        <description><![CDATA[Type: Market / Breakfast<br>         Time: ~08:30 | Duration: 45 min<br>         Entry: Free<br>         Open: Daily until ~14:00, best Sunday morning<br><br>         One of Rome's finest covered food markets, relocated to a purpose-built modern structure in 2012. Vendors sell fresh produce, cheese, cured meats, street food and local specialities. Perfect for a Sunday morning breakfast — grab a supplì (fried rice ball), a cornetto and a coffee from the market bars. Very local, zero tourist atmosphere.<br><br>         Tip: Try the supplì al telefono — the classic Roman rice ball with mozzarella that stretches like a telephone wire when you pull it apart.]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <Point>
+          <coordinates>
+            12.4757,41.8773,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>2. Trastevere</name>
+        <description><![CDATA[Type: Neighbourhood<br>         Time: ~09:30 | Duration: 1 hour wandering<br><br>         Trastevere ("across the Tiber") is one of Rome's oldest neighbourhoods, inhabited continuously since ancient times. Its medieval street plan — narrow lanes, ochre-coloured buildings draped in ivy, small piazzas with outdoor tables — is essentially unchanged. On Sunday mornings the streets are at their most peaceful: locals heading to church, shutters still closed, light filtering through the narrow alleys.<br><br>         Tip: Get genuinely lost. There's no wrong turn in Trastevere. Every lane leads somewhere beautiful.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4698,41.8896,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>3. Santa Maria in Trastevere</name>
+        <description><![CDATA[Type: Church<br>         Time: ~09:45 | Duration: 20–30 min<br>         Entry: Free<br><br>         One of the oldest churches in Rome, with origins dating to the 3rd century AD. The current basilica was built in the 12th century and is famous for its extraordinary golden mosaics — both on the façade and inside the apse above the altar. The mosaics of Pietro Cavallini in the lower apse (13th century) are considered precursors to the Renaissance. The church faces a lively piazza with a baroque fountain at its centre.<br><br>         Tip: Stand at the back of the church and look towards the apse. The gold mosaics catch the morning light and are quietly breathtaking. No queues, no tickets, just walk in.]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <Point>
+          <coordinates>
+            12.4699,41.8896,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>4. Gianicolo Hill (Janiculum)</name>
+        <description><![CDATA[Type: Viewpoint / Park<br>         Time: ~10:45 | Duration: 45 min<br>         Entry: Free<br><br>         The Janiculum is not one of Rome's Seven Hills, but it offers the single best panoramic view of the entire city — better than any other point in Rome. From the terrace at the top you can see the whole historic centre spread out before you: domes, towers, ruins and rooftops stretching to the Alban Hills on the horizon. At noon every day, a cannon is fired from here — a tradition maintained since 1847 to synchronise the bells of Rome's churches.<br><br>         Tip: Walk up from Trastevere via Via Garibaldi (~15 min uphill). The view from the equestrian statue of Garibaldi is the best spot.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4631,41.8921,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[5. Castel Sant'Angelo]]></name>
+        <description><![CDATA[Type: Castle / Museum<br>         Time: ~12:00 | Duration: 45 min<br>         Entry: €15 inside / Free exterior + bridge<br><br>         Originally built as a mausoleum for Emperor Hadrian in 139 AD, the building was later converted into a papal fortress, prison and refuge. Popes used the secret passageway (Passetto di Borgo) connecting it to the Vatican to flee during sieges. The rooftop terrace has excellent views of the Tiber and St. Peter's. Ponte Sant'Angelo — the bridge leading to the castle — is lined with 10 Bernini-designed angel statues and is one of Rome's most beautiful river crossings.<br><br>         Tip: At minimum walk across Ponte Sant'Angelo — it's free and the angels are extraordinary. Go inside if you have 45 minutes and energy.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4664,41.9031,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[6. St. Peter's Square & Basilica]]></name>
+        <description><![CDATA[Type: Church / Landmark<br>         Time: ~13:00 | Duration: 1.5 hours<br>         Entry: Free (Basilica + Square) / €8 Dome climb<br>         Note: Skip Vatican Museums — too long for your schedule. The Basilica is free and extraordinary.<br><br>         St. Peter's Basilica is the largest church in the world by interior volume and the spiritual centre of the Catholic Church. The current building, begun in 1506, was designed by Bramante, Raphael, Michelangelo (who designed the dome) and Bernini. Inside: Michelangelo's Pietà (1499) to the right of the entrance — a 24-year-old sculpting marble that looks like cloth. Bernini's bronze baldachin over the altar is 29 metres tall. The square outside was designed by Bernini in 1656 with 284 columns forming an elliptical embrace.<br><br>         Tip: Dress code enforced — covered shoulders and knees required. No shorts. Security queue can be 20–30 min — go at 13:00 when tour groups are at lunch.]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <Point>
+          <coordinates>
+            12.4539,41.9022,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>7. Prati — Last Lunch</name>
+        <description><![CDATA[Type: Neighbourhood / Lunch<br>         Time: ~14:30 | Duration: 1 hour<br><br>         Prati is the residential neighbourhood just north of the Vatican — wide avenues, no tourist traps, excellent restaurants. A perfect spot for a last proper Roman lunch before heading back to the hotel to pack. Via Cola di Rienzo and Via Candia have a good concentration of trattorias and cafés.<br><br>         Tip: Have a proper sit-down meal — you've earned it. Order the house wine, get the tiramisu. Flight isn't until 20:00.]]></description>
+        <styleUrl>#icon-1899-DB4436</styleUrl>
+        <Point>
+          <coordinates>
+            12.4663,41.9079,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

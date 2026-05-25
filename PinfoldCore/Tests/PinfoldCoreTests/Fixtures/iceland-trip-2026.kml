@@ -1,0 +1,1506 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Iceland Trip 2026</name>
+    <description>100 points of interest across 10 days. Colours: blue = planned, gold = must-visit, white = suggested detour.</description>
+    
+    <Style id="poi_blu-1">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-1.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-2">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-2.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-3">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-3.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-4">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-4.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-5">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-5.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-6">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-6.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-7">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-7.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-8">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-8.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-9">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-9.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_blu-10">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/blu-10.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-1">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-1.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-2">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-2.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-2">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-2.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-3">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-3.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-3">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-3.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-4">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-4.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-5">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-5.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-6">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-6.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-7">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-7.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-7">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-7.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-8">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-8.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-9">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-9.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-9">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-9.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-4">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-4.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-5">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-5.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-6">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-6.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-8">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-8.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_wht-10">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-10.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    <Style id="poi_ylw-1">
+      <IconStyle>
+        <scale>1.1</scale>
+        <Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-1.png</href></Icon>
+        <hotSpot x="32" y="1" xunits="pixels" yunits="pixels"/>
+      </IconStyle>
+      <LabelStyle><scale>0.9</scale></LabelStyle>
+    </Style>
+    
+    <Style id="stay_camping">
+      <IconStyle>
+        <scale>1.2</scale>
+        <color>ff71cc2e</color>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/campground.png</href></Icon>
+      </IconStyle>
+    </Style>
+    <Style id="stay_hotel">
+      <IconStyle>
+        <scale>1.2</scale>
+        <color>ffdb9834</color>
+        <Icon><href>http://maps.google.com/mapfiles/kml/shapes/lodging.png</href></Icon>
+      </IconStyle>
+    </Style>
+    
+    <Folder>
+      <name>Day 1 — Arrive → Reykjavik (Fri 19 Jun)</name>
+      
+      <Placemark>
+        <name>Hallgrímskirkja</name>
+        <description><![CDATA[<p>Iconic rocket-shaped Lutheran church — the tallest building in Iceland (74m). Take the elevator for sweeping panoramic views of Reykjavik. Free entry to the church; small fee for the tower.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=17847528671789558511">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9265,64.142,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Laugavegur Street</name>
+        <description><![CDATA[<p>Reykjavik&apos;s vibrant main street — packed with restaurants, design boutiques, bars, and cafés. Perfect for an evening stroll under the midnight sun.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=16769449416557359474">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9126,64.143,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Old Harbour (Grandi)</name>
+        <description><![CDATA[<p>Reykjavik&apos;s regenerated harbour area. Excellent seafood restaurants, the famous Bæjarins Beztu hot dog stand, and a lively foodie scene with ocean views.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1215328711851288750">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9441,64.1546,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Sun Voyager (Sólfar)</name>
+        <description><![CDATA[<p>Jón Gunnar Árnason&apos;s iconic steel sculpture of a Viking longship on the Reykjavik seafront. One of Iceland&apos;s most photographed landmarks — especially magical under the midnight sun.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=15599126036860413608">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9223,64.1476,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Grótta Lighthouse</name>
+        <description><![CDATA[<p>Peaceful lighthouse at the western tip of Seltjarnarnes — great midnight-sun viewpoint just 10 min from central Reykjavik. Accessible on foot at low tide.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=12362041231672849722">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.022,64.165,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Brimketill Lava Rock Pool</name>
+        <description><![CDATA[<p>Ocean-carved lava basin on the Reykjanes coast. A striking first taste of Iceland&apos;s raw coastline. 15–25 min stop on the drive from KEF.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=17355198323339130228">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.6061,63.8194,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gunnuhver Hot Springs</name>
+        <description><![CDATA[<p>Iceland&apos;s largest hot spring — loud, steamy vents and boiling mud pots with boardwalk paths. Atmospheric and raw, 25–30 min from KEF.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=4166789706793062248">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.6847,63.8192,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Seltún Geothermal Area</name>
+        <description><![CDATA[<p>Bubbling mud pots and sulfur vents on the eastern (safe) Reykjanes side — far emptier than Geysir. On Route 42 via Krýsuvík. A proper geothermal experience without the tour buses.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> geothermal</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=6366274195408286889">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>geothermal</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.0548,63.8958,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Kleifarvatn</name>
+        <description><![CDATA[<p>Eerie black-sand lake right after Seltún with no real detour if you&apos;re doing the Krýsuvík loop. Walk down to the shore — moody, quiet, and feels nothing like the tourist trail.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=7292813203440538889">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9716,63.9257,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Bridge Between Continents</name>
+        <description><![CDATA[<p>Pedestrian bridge spanning a visible rift between the North American and Eurasian tectonic plates at Sandvík. Photogenic, geological, and free. 30 min, ~15 min detour into the peninsula.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=6140454114928580297">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.6755,63.8683,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Grænavatn Maar</name>
+        <description><![CDATA[<p>Vivid teal crater lake formed 6,000 years ago — the extraordinary color comes from geothermal algae and minerals. Near Seltún/Krýsuvík, far less visited than any Blue Lagoon alternative. 15 min, no detour if doing the Krýsuvík loop.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=3677748132963679923">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.1128,63.9176,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Blue Lagoon (Bláa Lónið)</name>
+        <description><![CDATA[<p>Iceland&apos;s most famous geothermal spa — milky blue silica-rich water at 37–39°C surrounded by raw black lava fields. Stunning at any hour under the midnight sun. ⚠️ Book months in advance — slots sell out. Premium Experience recommended. Right on the drive from KEF toward Reykjavik via Reykjanes.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=17542781178486386798">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.4473,63.8807,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Sundhnúkur Eruption Zone</name>
+        <description><![CDATA[<p>Fresh lava fields from the 2023–2024 Sundhnúkur fissure eruptions near Grindavík — the most recent volcanic activity on Reykjanes. Walk the perimeter of jet-black aa lava fields, some still steaming. A raw, accessible taste of Iceland&apos;s living geology. Just a few minutes from Blue Lagoon.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=17664068344945197056">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.3972,63.8737,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Geldingadalir Parking P1</name>
+        <description><![CDATA[<p>Main trailhead for the Fagradalsfjall hike — 6km round trip, ~2–3 hrs. Flat gravel road to start, then volcanic terrain. No facilities at the lot. Arrive early in summer to avoid crowds. The hike begins here.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=3644700717953852418">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.31685,63.86611,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Fagradalsfjall Volcano</name>
+        <description><![CDATA[<p>The 2021 eruption site that captivated the world — solidified lava rivers, craters, and scorched earth stretching across the valley. Eerie, silent, and unlike anything else on the trip. Hike from P1 parking (~2–3 hrs round trip). Bring wind layers.</p><p><b>Day 1:</b> Arrive → Reykjavik (Fri 19 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=4844571338864366451">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-1</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>1</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.26972,63.89333,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 1 (Fri 19 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 2 — Reykjavik → South Coast (Sat 20 Jun)</name>
+      
+      <Placemark>
+        <name>Harpa Concert Hall</name>
+        <description><![CDATA[<p>Award-winning glass façade concert hall on the harbour, designed with Olafur Eliasson. Free to walk through the stunning geometric interior — a masterpiece of modern architecture.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=13975404356062013019">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9323,64.1502,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>National Museum of Iceland</name>
+        <description><![CDATA[<p>Traces Iceland&apos;s history from Viking settlement to modern independence. Excellent exhibits on Norse artefacts, medieval church art, and 20th-century daily life.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=15636188015941270677">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9486,64.1416,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Perlan Museum</name>
+        <description><![CDATA[<p>Futuristic glass dome atop Öskjuhlíð hill with 360° panoramic views and Iceland&apos;s only indoor ice cave. Interactive exhibitions on glaciers, geysers, and the Northern Lights.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=8218787666086281001">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9189,64.1293,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Tjörnin Lake</name>
+        <description><![CDATA[<p>Picturesque city lake in the heart of Reykjavik, ringed by colourful houses and the city hall. Home to 40+ bird species. Perfect for a morning stroll.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=16406978327853298951">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.942,64.1436,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hlemmur Mathöll (Food Hall)</name>
+        <description><![CDATA[<p>Trendy food hall in a converted bus terminal — Icelandic street food, craft beer, lamb dishes, skyr desserts, and fresh seafood under one roof. Great lunch stop.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1430691204288632127">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9143,64.1432,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Seljalandsfoss</name>
+        <description><![CDATA[<p>One of Iceland&apos;s most magical waterfalls — a unique path leads all the way behind the 60m curtain of water. Bring a waterproof jacket!</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=12538555864065841037">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.9886,63.6156,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Skógafoss</name>
+        <description><![CDATA[<p>Massive 60m wide, 25m tall waterfall on the south coast. Climb 370 steps for a stunning view from the top, walk behind the mist at the base.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1108104447747062088">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.5114,63.5321,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Sólheimajökull Glacier</name>
+        <description><![CDATA[<p>An outlet glacier of Mýrdalsjökull — streaked with black volcanic ash. Join a guided glacier walk across the ice (crampons &amp; harness provided). A dramatic lesson in climate change.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=6569487264573684022">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.2924,63.5708,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gljúfrabúi</name>
+        <description><![CDATA[<p>Hidden waterfall tucked inside a narrow canyon slot — you wade in to see it. Literally right next to Seljalandsfoss. Rated 4.9/5. Waterproof shoes essential.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=10838569697353686830">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.9864,63.6209,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Kvernufoss</name>
+        <description><![CDATA[<p>Beautiful gorge waterfall near Skógar — you can walk behind it. Far less crowded than Skógafoss just minutes away. 45–60 min.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=15525068533114820617">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.4814,63.5289,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Nauthúsagil Ravine</name>
+        <description><![CDATA[<p>Mossy, lush ravine with a small waterfall. Feels genuinely off-the-beaten-path near the main south coast waterfalls. 45–75 min, ~15 min detour.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=15445588603679994640">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.859,63.6739,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Urriðafoss</name>
+        <description><![CDATA[<p>Iceland&apos;s most voluminous waterfall by flow rate — almost nobody stops here. Just 200m off the Ring Road past Selfoss, 15 min visit. Genuinely impressive and completely uncrowded.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=60993200540927108">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.6722,63.9246,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Seljavallalaug Pool</name>
+        <description><![CDATA[<p>Built in 1923, this spring-fed pool in a hidden valley is 20 min walk in from parking. Lukewarm rather than hot, but the setting is magical — old changing rooms, mountains, total solitude. Bring a towel.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> swimming</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=16010630847282236105">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>swimming</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.6091,63.566,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Drangurinn í Drangshlíð</name>
+        <description><![CDATA[<p>Huge elf boulder with turf-roofed farmhouses built into its base near Skógar. Quick 10-min photo stop on the Route 1 corridor. Quintessentially Icelandic folklore landscape.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=9421989822767358347">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.5547,63.5241,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gluggafoss (Merkjárfoss)</name>
+        <description><![CDATA[<p>&quot;Window Falls&quot; — geothermal water has carved the soft palagonite rock into arches, tunnels and windows. Completely different from the big vertical falls, genuinely uncrowded, drone-friendly, and only 15 km inland from Route 1. 45 min, ~20 min detour.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=15680122139174637853">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.8926,63.7209,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Inside the Volcano – Meeting Point</name>
+        <description><![CDATA[<p>Descend 120m inside Þríhnúkagígur — the only volcano in the world you can enter. The magma chamber is the size of 3 football fields, walls streaked with vivid mineral colours. ~6 hrs total including hike and cable lift. ⚠️ Book months ahead, very limited slots. Open May–Oct.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=6257931666999311226">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.6528,63.9827,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Raufarhólshellir Lava Tunnel</name>
+        <description><![CDATA[<p>One of Iceland&apos;s longest and most accessible lava tubes — 1.4km of underground channel formed 5,200 years ago, with ice formations in the deepest sections. Standard and Adventure tours. 30 min from Reykjavik on Route 39 — ideal stop on the drive south toward the coast.</p><p><b>Day 2:</b> Reykjavik → South Coast (Sat 20 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=10650965313631296376">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-2</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>2</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.3956,63.9399,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 2 (Sat 20 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 3 — Vík → Skaftafell (Sun 21 Jun)</name>
+      
+      <Placemark>
+        <name>Reynisfjara Black Sand Beach</name>
+        <description><![CDATA[<p>Iceland&apos;s most dramatic beach — towering hexagonal basalt columns, powerful Atlantic waves, and puffin nesting cliffs in June. ⚠️ Never turn your back on the sea here.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🌊 Beaches</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=16175052599839648725">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>beach</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.0716,63.4057,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Skaftafell (Vatnajökull NP)</name>
+        <description><![CDATA[<p>Part of Europe&apos;s largest national park. Hike to Svartifoss — a stunning waterfall framed by hexagonal basalt columns that inspired Reykjavik&apos;s Hallgrímskirkja.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=8857140141983806672">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.9752,64.0704,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Dyrhólaey Viewpoint</name>
+        <description><![CDATA[<p>Dramatic arch rock peninsula near Vík with puffin colonies, sea cliffs and views over Reynisfjara. 30–60 min, ~15 min detour.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=18295927306667369195">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.1284,63.4015,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Fjaðrárgljúfur Canyon</name>
+        <description><![CDATA[<p>One of Iceland&apos;s most dramatic canyons — 2km long, 100m deep, with winding river at the bottom. Rated 4.8/5 (6,000+ reviews). ~15–20 min detour near Kirkjubæjarklaustur.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=11826712937050256829">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.1718,63.7713,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Dverghamrar Basalt Columns</name>
+        <description><![CDATA[<p>Small but unusual basalt column formation right off the Ring Road near Klaustur. Quick 15–25 min stop with ~5 min detour.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=14740390038063140833">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-17.8613,63.8492,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Svínafellsjökull Viewpoint</name>
+        <description><![CDATA[<p>Rugged glacier tongue viewpoint near Skaftafell — often quieter than the main NP trails. Used as Game of Thrones filming location. ~10 min detour.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=6345698109810054430">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.8807,64.0015,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Reynisfjall Observation Deck</name>
+        <description><![CDATA[<p>Drive the gravel road up Reynisfjall to get a top-down view of the basalt sea stacks and Reynisfjara beach — 4x4 only (which you have). Stunning reverse perspective of the coast. 30 min, ~15 min detour.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> viewpoint</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=15187677899646400539">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>viewpoint</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.035,63.4022,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Mælifell</name>
+        <description><![CDATA[<p>A perfectly conical black volcanic mountain rising from Mælifellssandur — one of Iceland&apos;s most dramatic and photogenic landscapes. Vivid green moss on jet-black lava flanks against grey glacial desert. Access via F208 (4x4 required). A significant inland detour from the south coast, but unforgettable.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=1829305192282847895">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.9384,63.7995,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hólmsárfossar</name>
+        <description><![CDATA[<p>A series of powerful waterfalls on the Hólmsá river cutting through the Fjallabak nature reserve. Raw, remote, and rarely visited — accessible via F208 near Mælifell. Pair with Mælifell on the same inland loop. Pristine highland scenery with no crowds.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=1127693666928303046">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.8452,63.8383,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Svínafellsjökull Glacier</name>
+        <description><![CDATA[<p>A spectacular outlet glacier of Vatnajökull right beside Skaftafell — crevassed ice flowing down from the icecap to a black moraine lake. Walk to the ice edge on a guided glacier hike or just admire the scale from the viewpoint. Used as a Game of Thrones filming location.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=2841112753321465755">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.8215,64.0186,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Katla Ice Cave</name>
+        <description><![CDATA[<p>Guided super-jeep tours into the ice cave inside Mýrdalsjökull glacier, directly above the sleeping Katla volcano. The cave glows with deep blue ice streaked with black volcanic ash — unlike any other cave on the trip. Departs from Vík. Runs year-round. Book ahead.</p><p><b>Day 3:</b> Vík → Skaftafell (Sun 21 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=10564932662858852847">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-3</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>3</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.0028,63.4176,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 3 (Sun 21 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 4 — Glaciers → Höfn (Mon 22 Jun)</name>
+      
+      <Placemark>
+        <name>Fjallsárlón Glacier Lagoon</name>
+        <description><![CDATA[<p>The quieter sister of Jökulsárlón — a stunning glacial lagoon with floating icebergs right below the Fjallsjökull glacier. Kayak tours available. Fewer crowds and equally breathtaking.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=14358833805190700364">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.3949,64.0218,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Jökulsárlón Glacier Lagoon</name>
+        <description><![CDATA[<p>Iceland&apos;s most iconic glacier lagoon — massive icebergs calved from Breiðamerkurjökull float in brilliant blue water. Boat tours weave between icebergs. An absolute must.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=14773435540523009705">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.2306,64.0784,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Diamond Beach</name>
+        <description><![CDATA[<p>Gleaming ice blocks from Jökulsárlón wash up on this jet-black sand beach, sparkling like diamonds in the sun. One of the most photogenic spots in Iceland.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🌊 Beaches</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=4756619681124025434">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>beach</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.1777,64.0443,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Vestrahorn / Stokksnes</name>
+        <description><![CDATA[<p>Jagged 454m peaks rising sharply from black sand dunes with a mirror-like tidal lagoon. A photographer&apos;s dream. Small fee at the Viking café gate.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=4598181961024405865">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.9699,64.2464,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hofskirkja Turf Church</name>
+        <description><![CDATA[<p>One of Iceland&apos;s last traditional turf-roofed churches, still in use. A quick and beautiful cultural stop near the Ring Road. Rated 4.6/5.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=12575493992831724068">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.7068,63.907,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Múlagljúfur Canyon</name>
+        <description><![CDATA[<p>Hidden gem hike in the southeast — towering canyon walls, twin waterfalls, and glacier views. 2–3 hr hike, ~20–30 min gravel detour. Highly recommended if weather is clear.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=10277931512084989662">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.4639,63.9891,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hoffell Hot Tubs</name>
+        <description><![CDATA[<p>Three small natural hot tubs with a direct glacier view — much more intimate than the big thermal pools. Just 3km off Route 1 near Höfn. Book for an afternoon soak after Stokksnes/Vestrahorn.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> swimming</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=794539079886103023">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>swimming</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-15.3434,64.3969,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Jökulsárlón Boat Tours and Cafe</name>
+        <description><![CDATA[<p>Amphibious boat or zodiac tours weaving between icebergs calved from Breiðamerkurjökull. Get close enough to touch thousand-year-old ice. 30–40 min tours run throughout the day. The café serves glacier-cooled drinks right on the water&apos;s edge. Book online or on-site.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=18125175578784253788">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.1793,64.0485,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Crystal Blue Ice Cave Tours</name>
+        <description><![CDATA[<p>Year-round guided tours into the blue-ice glacier above Jökulsárlón — one of the most vivid blues you will ever see, layers of compressed millennium-old ice. Small groups, crampons provided, departs from the lagoon car park. Operated by Troll Expeditions — book well in advance.</p><p><b>Day 4:</b> Glaciers → Höfn (Mon 22 Jun)</p><p><b>Category:</b> 🧊 Glaciers &amp; Lagoons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=2239303169198867838">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-4</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>4</value></Data>
+          <Data name="category"><value>glacier</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.1785,64.0483,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 4 (Mon 22 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 5 — East Fjords → Egilsstaðir (Tue 23 Jun)</name>
+      
+      <Placemark>
+        <name>Teigarhorn</name>
+        <description><![CDATA[<p>A beautifully preserved 19th-century trading post in the East Fjords — historic buildings in a stunning fjord setting. Known for its exceptional zeolite mineral specimens.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=9965232436243594080">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.3447,64.6759,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hvalnes Lighthouse</name>
+        <description><![CDATA[<p>Solitary lighthouse with jaw-dropping Eystrahorn mountain views rising behind black sand. Incredibly photogenic and usually quiet. 5–10 min detour east of Höfn.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=12466336735184411539">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.5402,64.4023,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Djúpivogur — Eggs of Merry Bay</name>
+        <description><![CDATA[<p>Charming fishing village with a striking sculpture walk — 34 giant stone eggs representing local bird species. Good lunch stop at Langabúð. No real detour.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=4399200018046669904">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.2948,64.6618,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hengifoss &amp; Litlanesfoss</name>
+        <description><![CDATA[<p>Iceland&apos;s third tallest waterfall (128m) with striking red clay striations. On the way up you pass Litlanesfoss — a gorgeous basalt-column waterfall. Steep but well-marked, 2–2.5 hrs round trip. ~20 min detour from Ring Road.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=5364779151147367125">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.8892,65.0951,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Petra&apos;s Stone Collection</name>
+        <description><![CDATA[<p>A local woman&apos;s lifelong mineral and rock collection in her private garden in Stöðvarfjörður. Charmingly eccentric and genuinely impressive. Town is right on Route 96 — no detour needed.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=14764760489831463443">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-13.8806,64.8354,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Fáskrúðsfjörður</name>
+        <description><![CDATA[<p>Village with a unique French heritage — former French fishermen&apos;s hospital, bilingual French/Icelandic street signs. Stop for coffee at Café Sumarlína. 20–30 min, no real detour on the east fjords route.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=7856055705569297975">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.0005,64.9265,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Vök Baths</name>
+        <description><![CDATA[<p>Floating geothermal pools on Lake Urriðavatn just outside Egilsstaðir. A more rustic, quieter alternative to the Mývatn baths. Great way to end a long drive day — 1.5–2 hrs, ~5 min detour.</p><p><b>Day 5:</b> East Fjords → Egilsstaðir (Tue 23 Jun)</p><p><b>Category:</b> swimming</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=17928448918323733450">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-5</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>5</value></Data>
+          <Data name="category"><value>swimming</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.447,65.3031,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 5 (Tue 23 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 6 — Egilsstaðir → Mývatn (Wed 24 Jun)</name>
+      
+      <Placemark>
+        <name>Seyðisfjörður</name>
+        <description><![CDATA[<p>The most charming town in East Iceland — a rainbow-painted road leads to the iconic blue church, surrounded by twin waterfalls cascading down fjord walls. Artsy and bohemian.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=14505028790674872562">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.0098,65.2612,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hallormsstaður Forest</name>
+        <description><![CDATA[<p>Iceland&apos;s largest forest — a surprisingly lush mix of birch and conifer along the shores of Lagarfljót lake. A peaceful morning walk before the long drive north.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=6605361049656742884">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.6979,65.1234,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gufufoss</name>
+        <description><![CDATA[<p>Beautiful two-tiered waterfall on the descent road into Seyðisfjörður. Easy 15–25 min stop on the way in or out. Rated 4.7/5.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=9858517351923267188">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.0576,65.2399,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Stuðlagil Canyon</name>
+        <description><![CDATA[<p>Striking basalt-column canyon with a vivid blue glacial river. One of Iceland&apos;s newest highlights. Best east-side access adds ~30–45 min. Leave early if doing this.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=6751152119643672543">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-15.3069,65.1633,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Rjúkandi Waterfall</name>
+        <description><![CDATA[<p>Quick roadside waterfall directly off Route 1 heading north from Egilsstaðir. Easy 15–25 min leg-stretch with no real detour.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=455227389951919620">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-15.081,65.3344,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Möðrudalur / Fjalladýrð</name>
+        <description><![CDATA[<p>Highest farm in Iceland at 469m — turf-roofed church, traditional kleinur pastries and lamb soup in the café. Genuinely good food on a very remote stretch. A must-stop on the way north.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=8046386681952528841">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-15.8833,65.3741,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Fjarðarheiði Pass</name>
+        <description><![CDATA[<p>The dramatic mountain pass on Route 93 down into Seyðisfjörður — you&apos;re already driving it. Multiple pull-offs offer panoramic views of the winding road, cascading sub-glacial waterfalls, and the fjord town below. 20 min of stops, no detour.</p><p><b>Day 6:</b> Egilsstaðir → Mývatn (Wed 24 Jun)</p><p><b>Category:</b> viewpoint</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=7156492103192836254">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-6</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>6</value></Data>
+          <Data name="category"><value>viewpoint</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-14.2028,65.2456,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 6 (Wed 24 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 7 — North + Mývatn Loop (Thu 25 Jun)</name>
+      
+      <Placemark>
+        <name>Ásbyrgi Canyon</name>
+        <description><![CDATA[<p>A spectacular horseshoe-shaped canyon 3.5km long and 100m deep. Norse legend says it was formed by the hoofprint of Odin&apos;s eight-legged horse Sleipnir. Lush birch forest and a peaceful pond inside.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=405252472245769707">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.5055,66.0178,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Dettifoss</name>
+        <description><![CDATA[<p>Europe&apos;s most powerful waterfall — 45m high, 100m wide, carrying 500m³/s of glacial meltwater. Access via F862 on the east bank (4x4) for the closest views.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=4630395813349565306">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.3846,65.8147,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hverir (Námafjall)</name>
+        <description><![CDATA[<p>An alien landscape of boiling mud pots, hissing steam vents, and sulfur-crusted orange earth right beside Lake Mývatn. Otherworldly and unmissable.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1156424893914739452">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.8093,65.6409,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Dimmuborgir</name>
+        <description><![CDATA[<p>&apos;Dark Castles&apos; — eerie twisted lava pillars, arches, and formations created 2,300 years ago. Easy looped walking paths through the landscape.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=9232183107340346134">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.9123,65.5912,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Mývatn Nature Baths</name>
+        <description><![CDATA[<p>Geothermal pools in a dramatic volcanic setting at Lake Mývatn. Milky blue-green mineral-rich water at 36–40°C. The quieter, more affordable alternative to the Blue Lagoon.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1162941672749829613">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.8476,65.6309,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hljóðaklettar</name>
+        <description><![CDATA[<p>Eerie &apos;echo rocks&apos; — bizarre honeycomb and spiral basalt formations in Jökulsárgljúfur, just south of Ásbyrgi. 45–90 min walk. Far less visited than Dettifoss.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=7839175782056582730">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.5373,65.9359,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Selfoss Waterfall</name>
+        <description><![CDATA[<p>Wider, more elegant cousin of Dettifoss just 1km upstream. Free if you&apos;re already parked at Dettifoss. The walk along the gorge rim is stunning.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=18210734123969076348">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.3827,65.7984,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Grjótagjá Cave</name>
+        <description><![CDATA[<p>Small atmospheric lava cave near Mývatn with a geothermal pool inside (too hot to swim now). Famous as a Game of Thrones filming location. 15–25 min, minimal detour.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=8784542488376218897">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.883,65.6264,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Leirhnjúkur Lava Field</name>
+        <description><![CDATA[<p>Active lava field walk at Krafla volcano — steaming vents, jet-black lava, otherworldly silence. Way fewer people than Hverir despite being just 10 min further. 1–1.5 hrs. The most raw volcanic landscape of the trip.</p><p><b>Day 7:</b> North + Mývatn Loop (Thu 25 Jun)</p><p><b>Category:</b> geothermal</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=2515877910473097195">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-7</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>7</value></Data>
+          <Data name="category"><value>geothermal</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-16.7941,65.7208,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 7 (Thu 25 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 8 — Húsavík + Akureyri → Highlands (Fri 26 Jun)</name>
+      
+      <Placemark>
+        <name>Húsavík Whale Watching</name>
+        <description><![CDATA[<p>The whale watching capital of Europe. Late June is peak humpback whale season in Skjálfandi Bay. 3-hour traditional oak boat tours. Up to 23 whale species spotted here.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 🐋 Wildlife</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=12504508166036718458">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>wildlife</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-17.3435,66.0462,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Goðafoss</name>
+        <description><![CDATA[<p>The &apos;Waterfall of the Gods&apos; — in 1000 AD Iceland&apos;s lawspeaker threw his Norse idols here to mark conversion to Christianity. Wide, horseshoe-shaped, accessible from both banks.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=9132118800761429307">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-17.5502,65.6828,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Forest Lagoon</name>
+        <description><![CDATA[<p>Stunning new geothermal spa near Akureyri — infinity pools in a birch forest with panoramic views over Eyjafjörður fjord. More scenic than Mývatn Baths, less crowded than Sky Lagoon.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=14646379289265275165">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.0421,65.6701,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Akureyri</name>
+        <description><![CDATA[<p>Iceland&apos;s charming &apos;capital of the north&apos; at the head of a stunning fjord. Botanical gardens, colourful houses, great restaurants, and iconic heart-shaped traffic lights.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=13670169216558431697">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.0907,65.6826,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hveravellir Hot Springs</name>
+        <description><![CDATA[<p>A remote geothermal oasis in Iceland&apos;s highland wilderness — a perfect natural hot spring pool (40°C) surrounded by steaming vents and stark lava fields along the F35 Kjölur Route.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=3755926879447884567">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.55,64.8672,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Laufás Turf Farm</name>
+        <description><![CDATA[<p>19th-century turf farmhouse museum on the fjord between Húsavík and Akureyri. One of Iceland&apos;s best-preserved traditional farms. 30–60 min, ~10–15 min detour.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=205745275708844254">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-18.0717,65.8941,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Hvítárnesskáli Mountain Hut</name>
+        <description><![CDATA[<p>Iceland&apos;s oldest mountain hut (1930) on F35 beside Hvítárvatn glacier lake. A quiet atmospheric stop during the highland drive — worth 20 min to stretch and take in the desolate highland scenery under the midnight sun.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=5852249096376190587">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.7578,64.618,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Glaumbær Turf Farm</name>
+        <description><![CDATA[<p>The best-preserved turf farmstead in Iceland — a sprawling 18th–19th century agricultural estate with multiple interconnected turf buildings. Explains how wealthy Icelandic farms actually functioned before industrialization. 1 hr, ~20 min detour off Route 75 toward F35.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=8566850017960750423">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.5044,65.6104,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Geosea – Geothermal Sea Baths</name>
+        <description><![CDATA[<p>Geothermal infinity pools perched on a lava cliff overlooking Skjálfandi Bay in Húsavík — the same bay where humpback whales breach. 38°C mineral-rich seawater, open ocean horizon. The perfect wind-down after whale watching. Book in advance.</p><p><b>Day 8:</b> Húsavík + Akureyri → Highlands (Fri 26 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=9715055065922277332">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-8</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>8</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-17.3605,66.0522,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 8 (Fri 26 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 9 — Kerlingarfjöll + Golden Circle (Sat 27 Jun)</name>
+      
+      <Placemark>
+        <name>Kerlingarfjöll</name>
+        <description><![CDATA[<p>A rhyolite mountain range glowing in shades of orange, red, yellow, and green. The Hveradalir valley steams with geothermal activity — hiking trails wind through rainbow-coloured ridges.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=11506736062081509497">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.2694,64.6366,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gullfoss</name>
+        <description><![CDATA[<p>The &apos;Golden Falls&apos; — a majestic two-tiered waterfall where the Hvítá river plunges 32m into a dramatic gorge. The spray often creates rainbows.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=9733895860422816869">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.1199,64.3271,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Geysir &amp; Strokkur</name>
+        <description><![CDATA[<p>The original geyser that gave all geysers their name. Strokkur erupts every 5–10 minutes shooting water 20–30m high — stand upwind! The whole geothermal field is fascinating to explore.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1440659917364923363">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.3007,64.3127,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Þingvellir National Park</name>
+        <description><![CDATA[<p>UNESCO World Heritage Site — walk in the rift valley between the North American and Eurasian tectonic plates. Site of Iceland&apos;s ancient parliament (Alþingi) founded in 930 AD.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=7743214478716723954">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.0764,64.2822,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Brúarhlöð Canyon</name>
+        <description><![CDATA[<p>Hidden canyon near Gullfoss with vivid blue glacial river and twisted rock formations. Much quieter than the main Golden Circle stops. 25–45 min, ~10–15 min detour.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🏞️ Nature &amp; Canyons</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=10425614892280424678">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>nature</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.2244,64.2598,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Friðheimar Greenhouse</name>
+        <description><![CDATA[<p>Unique geothermally-heated tomato greenhouse restaurant. Lunch is served inside among the plants — tomato soup, fresh bread, horse show. Book ahead! Open 11:30–16:00.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=16061791164616054191">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.4449,64.1775,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Faxafoss (Faxi)</name>
+        <description><![CDATA[<p>Wide, relaxed waterfall between Geysir and Gullfoss. Salmon ladder visible in season. Much quieter than the main Golden Circle stops. 20–35 min, 5 min detour.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=1033311253945280370">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.3367,64.2251,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Kerið Crater</name>
+        <description><![CDATA[<p>Vivid volcanic crater lake with red, black and green slopes descending to a turquoise lake. Walk around the rim or down to the water. 30–45 min, small entrance fee.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 🌋 Volcanic &amp; Geothermal</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=5862073597080557831">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>volcano</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.8851,64.0413,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Gýgjarfoss</name>
+        <description><![CDATA[<p>Small but pretty waterfall right at the Kerlingarfjöll turnoff back onto F35. 15 min stop with no detour — a gentle farewell to the highlands before the Golden Circle drive.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=10747668517101548172">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.3972,64.7042,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Brúarfoss</name>
+        <description><![CDATA[<p>The famous electric-blue waterfall — fed by pure glacial water with extraordinary color. ⚠️ Now a 7km round-trip hike (old shortcut was closed by landowner). Worth it if you have the time and energy after the highlands.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=2743231041036274305">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.5157,64.2643,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Secret Lagoon (Gamla Laugin)</name>
+        <description><![CDATA[<p>Iceland&apos;s oldest swimming pool — rustic, naturally hot, much cheaper and less crowded than Sky Lagoon. In Flúðir, right between Geysir and Selfoss. A good swap if you want your soak today instead of Day 10.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> swimming</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=13439904606286230697">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>swimming</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-20.3097,64.1374,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Háifoss</name>
+        <description><![CDATA[<p>One of Iceland&apos;s tallest waterfalls at 122m — a thundering double drop into a deep gorge in Þjórsárdalur valley near Hekla. Nearby Granni waterfall is visible from the same viewpoint. Access via Route 32 from Route 35, fits naturally between the F35 highlands exit and Gullfoss on Day 9.</p><p><b>Day 9:</b> Kerlingarfjöll + Golden Circle (Sat 27 Jun)</p><p><b>Category:</b> 💧 Waterfalls</p><p><b>Type:</b> Must-visit</p><p><a href="https://maps.google.com/?cid=11473390806728169956">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_ylw-9</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>9</value></Data>
+          <Data name="category"><value>waterfall</value></Data>
+          <Data name="priority"><value>must</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-19.6868,64.2079,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 9 (Sat 27 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Day 10 — Reykjavik + Sky Lagoon → Depart (Sun 28 Jun)</name>
+      
+      <Placemark>
+        <name>Reykjavik — Grandi District</name>
+        <description><![CDATA[<p>The hip regenerated harbour area — Marshall House contemporary art, the Whales of Iceland exhibition, street food trucks, and the famous Sea Baron lobster soup restaurant.</p><p><b>Day 10:</b> Reykjavik + Sky Lagoon → Depart (Sun 28 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=1215328711851288750">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-10</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>10</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9441,64.1546,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Kolaportið Flea Market</name>
+        <description><![CDATA[<p>Reykjavik&apos;s colourful weekend flea market — second-hand Icelandic wool sweaters (lopapeysa), vintage finds, and local food stalls. Only open Sat–Sun.</p><p><b>Day 10:</b> Reykjavik + Sky Lagoon → Depart (Sun 28 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=4147423350858819269">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-10</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>10</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9388,64.1489,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Sky Lagoon</name>
+        <description><![CDATA[<p>The perfect send-off — an infinity geothermal pool built into the seaside cliffs with panoramic Atlantic views. The 7-step Skjól ritual includes cold plunge, sauna, steam, and scrub. 10 min from KEF airport.</p><p><b>Day 10:</b> Reykjavik + Sky Lagoon → Depart (Sun 28 Jun)</p><p><b>Category:</b> ♨️ Hot Springs &amp; Spas</p><p><b>Type:</b> Planned</p><p><a href="https://maps.google.com/?cid=3079010116632733968">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_blu-10</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>10</value></Data>
+          <Data name="category"><value>spa</value></Data>
+          <Data name="priority"><value>original</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-21.9463,64.1165,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>Viking World Museum</name>
+        <description><![CDATA[<p>Museum near KEF airport housing the Íslendingur — a full-scale replica 9th-century Viking ship that sailed the Atlantic to New York in 2000. Useful option after the 09:00 van return if skipping the Flybus back to Reykjavik. Open from 10:00. ~5 min taxi from terminal.</p><p><b>Day 10:</b> Reykjavik + Sky Lagoon → Depart (Sun 28 Jun)</p><p><b>Category:</b> 🏛️ City &amp; Culture</p><p><b>Type:</b> Suggested detour</p><p><a href="https://maps.google.com/?cid=5825045170254617226">Open in Google Maps</a></p>]]></description>
+        <styleUrl>#poi_wht-10</styleUrl>
+        <ExtendedData>
+          <Data name="day"><value>10</value></Data>
+          <Data name="category"><value>culture</value></Data>
+          <Data name="priority"><value>suggested</value></Data>
+        </ExtendedData>
+        <Point><coordinates>-22.529,63.976,0</coordinates></Point>
+      </Placemark>
+      <Placemark>
+        <name>🛏 </name>
+        <description><![CDATA[
+          <p><b>Overnight:</b> Day 10 (Sun 28 Jun)</p>
+          <p><b>Where:</b> </p>
+          <p><b>Type:</b> </p>
+          
+        ]]></description>
+        <styleUrl>#stay_hotel</styleUrl>
+        <Point><coordinates>undefined,undefined,0</coordinates></Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

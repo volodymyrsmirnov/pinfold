@@ -1,0 +1,1864 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Iceland</name>
+    <description/>
+    <Style id="icon-1899-0288D1-normal">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+    </Style>
+    <Style id="icon-1899-0288D1-highlight">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+    </Style>
+    <StyleMap id="icon-1899-0288D1">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1899-0288D1-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1899-0288D1-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="icon-1899-0288D1-nodesc-normal">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <Style id="icon-1899-0288D1-nodesc-highlight">
+      <IconStyle>
+        <color>ffd18802</color>
+        <scale>1</scale>
+        <Icon>
+          <href>https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png</href>
+        </Icon>
+        <hotSpot x="32" xunits="pixels" y="64" yunits="insetPixels"/>
+      </IconStyle>
+      <LabelStyle>
+        <scale>1</scale>
+      </LabelStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <StyleMap id="icon-1899-0288D1-nodesc">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#icon-1899-0288D1-nodesc-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#icon-1899-0288D1-nodesc-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="line-FF0000-4000-nodesc-normal">
+      <LineStyle>
+        <color>ff0000ff</color>
+        <width>4</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <Style id="line-FF0000-4000-nodesc-highlight">
+      <LineStyle>
+        <color>ff0000ff</color>
+        <width>6</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <StyleMap id="line-FF0000-4000-nodesc">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#line-FF0000-4000-nodesc-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#line-FF0000-4000-nodesc-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Folder>
+      <name>Must See</name>
+      <Placemark>
+        <name>Skógafoss</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5Bl696kROiTbxEpy-rgrpGVd0i8JEa3c_mgZfAiKQVjm_-Gw0G_Qi6DofQpoWhwFcbKU4RUz42-aFyOraln4RExPadtggyZFperFfSslsqXZyQ1GBYG9YnZg67GRvrvKVvQRjW7MLrj_9eQ7u7jDEkRRPB2COuey7M79t4EPxZaSfjvUnyTZOP8jI0P8J9YwdSle0rRVL5nEYhGNRaCtXfg99ezgQZ-FBnUiSoazroXWOshiiu3q_u23oXXj-sMc3tCA" height="200" width="auto" /><br><br>Iconic Icelandic Waterfall]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5Bl696kROiTbxEpy-rgrpGVd0i8JEa3c_mgZfAiKQVjm_-Gw0G_Qi6DofQpoWhwFcbKU4RUz42-aFyOraln4RExPadtggyZFperFfSslsqXZyQ1GBYG9YnZg67GRvrvKVvQRjW7MLrj_9eQ7u7jDEkRRPB2COuey7M79t4EPxZaSfjvUnyTZOP8jI0P8J9YwdSle0rRVL5nEYhGNRaCtXfg99ezgQZ-FBnUiSoazroXWOshiiu3q_u23oXXj-sMc3tCA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.511371,63.532052,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hallgrimskirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6qRxwg-rAejC_dx6LFqU5ECYN6VwUsn_IZco9-AnRV6vAm7Op-rh9f54YX0Kyl1YMi78IbDGY08skfqhYJRYgED-fW-MlBppfzyKaSfaGupU-uvUgo1qlX6yiIWskNN3j2E2_abUYoucwpkdAVATKRl5RdWX_1JBvqZuvYDXKLCiaFBEJvP-vKh2mLx1XPzDSgPlwspRC8pdScipAub5BaU3_G3O7P4FjvEg2x-wZJv13-gR6UgSHi4N_tVqNwSx5ZZsM" height="200" width="auto" /><br><br>Famous church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6qRxwg-rAejC_dx6LFqU5ECYN6VwUsn_IZco9-AnRV6vAm7Op-rh9f54YX0Kyl1YMi78IbDGY08skfqhYJRYgED-fW-MlBppfzyKaSfaGupU-uvUgo1qlX6yiIWskNN3j2E2_abUYoucwpkdAVATKRl5RdWX_1JBvqZuvYDXKLCiaFBEJvP-vKh2mLx1XPzDSgPlwspRC8pdScipAub5BaU3_G3O7P4FjvEg2x-wZJv13-gR6UgSHi4N_tVqNwSx5ZZsM</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.926549,64.142023,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Blue Lagoon</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5cE2RlRnowws_lFnNXnnzI6_b0CxlIiRRabBEJptuEM7s_S8RpIOXUgVxd845gaqqXfgHjx8_Wi6CokANFVAFW88wLUPFqQ-Hx-t_aRgtzxOyqoaYc60m6dealMJ50iDeVnolOnZpHj07i0Rv9-viDlAk8jW0bvs7jVDpmHH42Zq03gQNIccynqO5tImB4cDzoPdVZ7VDhpGIFOcPzaAG2CVVcfMmTu1xRfa5dv8d3ZF9w7qd7UzcxMQpaUjrJ5mB8NOQ" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5cE2RlRnowws_lFnNXnnzI6_b0CxlIiRRabBEJptuEM7s_S8RpIOXUgVxd845gaqqXfgHjx8_Wi6CokANFVAFW88wLUPFqQ-Hx-t_aRgtzxOyqoaYc60m6dealMJ50iDeVnolOnZpHj07i0Rv9-viDlAk8jW0bvs7jVDpmHH42Zq03gQNIccynqO5tImB4cDzoPdVZ7VDhpGIFOcPzaAG2CVVcfMmTu1xRfa5dv8d3ZF9w7qd7UzcxMQpaUjrJ5mB8NOQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.445296,63.879078,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Litli-Hrútur Eruption 2023</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5Ny_lZx_1dcX0O49K4dCNBdGUH088WTq0zGHf1WNU6ipg1I4nPplrInm7XfbooDsCf_ofXKVj1OHUgLJWbBQsrzpPLGY4g197WCejnAad9mQE5DLITL630sm21TzbN5uhVHqmIW1Dme3pwsAcmcM5maUmTXAXMrlIYhF3W0SRAkbCuI4NJruk5svONRg_n6o20PCZuDhh09ZcPIFT1b7rVTxIWt8z2XGyzElCC7Aykos_Crw7lDzP0yjCeXc8" height="200" width="auto" /><br><br>Spectacular volcanic eruption]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5Ny_lZx_1dcX0O49K4dCNBdGUH088WTq0zGHf1WNU6ipg1I4nPplrInm7XfbooDsCf_ofXKVj1OHUgLJWbBQsrzpPLGY4g197WCejnAad9mQE5DLITL630sm21TzbN5uhVHqmIW1Dme3pwsAcmcM5maUmTXAXMrlIYhF3W0SRAkbCuI4NJruk5svONRg_n6o20PCZuDhh09ZcPIFT1b7rVTxIWt8z2XGyzElCC7Aykos_Crw7lDzP0yjCeXc8</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.202775,63.917107,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Jökulsárlón</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4m71mcKY9M5gzk-DUOL9DDLtOPjawPxL7qPLKdjCEwNtP0T2esGt6Wv6iIOKuFJBSKbPUmLYs7Mws2rE_raQWocfpqBLdaS0f-DbZD6fWF8bCF2yI-asNHsMP7002kw_yIVZ4Raj9V_MAy53RVF3BEE4BZTlH-kkegt9pzkfZ7hlkQbVjUTQEo0kk7wG7xEIKi74euswJQqUYYEnEoS6g5kzkpilXXsnUKSacsxDDTNxAvi7g7wrWSjnJeq3XiwjT_-cM" height="200" width="auto" /><br><br>Famous Glaier Lagoon]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4m71mcKY9M5gzk-DUOL9DDLtOPjawPxL7qPLKdjCEwNtP0T2esGt6Wv6iIOKuFJBSKbPUmLYs7Mws2rE_raQWocfpqBLdaS0f-DbZD6fWF8bCF2yI-asNHsMP7002kw_yIVZ4Raj9V_MAy53RVF3BEE4BZTlH-kkegt9pzkfZ7hlkQbVjUTQEo0kk7wG7xEIKi74euswJQqUYYEnEoS6g5kzkpilXXsnUKSacsxDDTNxAvi7g7wrWSjnJeq3XiwjT_-cM</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.230554,64.078446,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Mývatn Nature Baths</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6tV68ivXptI-Q7b5bvV221aiSb3LR5LzZelip7M9P4hnG0ckp1nm_dhcFAKmkLSPQtG60pESCsgflATcFDd-89llhrgTgaJePVZlyrYaoViByxasFEDMw4zdfUFUg-VLSVYWAb23iIi8qxrHucvVj9ydlty25_JHsaIG2GPJ52Hl0q689tt4v5OoWx4FY-D5zZgGRnZnrSLF63nNg6KdHit088iTScRb3-y7hjsH8EHUt3HZdl-s1mc1Y7fCa4Dh5UT9E" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6tV68ivXptI-Q7b5bvV221aiSb3LR5LzZelip7M9P4hnG0ckp1nm_dhcFAKmkLSPQtG60pESCsgflATcFDd-89llhrgTgaJePVZlyrYaoViByxasFEDMw4zdfUFUg-VLSVYWAb23iIi8qxrHucvVj9ydlty25_JHsaIG2GPJ52Hl0q689tt4v5OoWx4FY-D5zZgGRnZnrSLF63nNg6KdHit088iTScRb3-y7hjsH8EHUt3HZdl-s1mc1Y7fCa4Dh5UT9E</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.847521,65.630898,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Seljalandsfoss</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6bJPA8pMvNMyRiHvse7ps-jWLXMZkIcR3UCp9uDEXbURAlTH_WS6dY5dcviqnKNYXnMmtliAybreh2WLEmfRDU9fE0hOxtsmf5G7YGPH2GZsEjLK2vvuU0rf1K4GGOCNMCk146pg-m_mn-5CwomxefOzNjDhNu5KPQ8Uz2viZU6ymWC3CnmjTYZ7mUEJOCk-D8dlmZkXnp1Eii8mW2PX8VQAnwXPynzfUbiPfXCChYSXbDzmN04Aj78FpWVXfHDS-7Qeo" height="200" width="auto" /><br><br>One of the most famous waterfalls in Iceland]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6bJPA8pMvNMyRiHvse7ps-jWLXMZkIcR3UCp9uDEXbURAlTH_WS6dY5dcviqnKNYXnMmtliAybreh2WLEmfRDU9fE0hOxtsmf5G7YGPH2GZsEjLK2vvuU0rf1K4GGOCNMCk146pg-m_mn-5CwomxefOzNjDhNu5KPQ8Uz2viZU6ymWC3CnmjTYZ7mUEJOCk-D8dlmZkXnp1Eii8mW2PX8VQAnwXPynzfUbiPfXCChYSXbDzmN04Aj78FpWVXfHDS-7Qeo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.988569,63.615623,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Þingvellir National Park</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4W8FXGsRxYKA2UiGAMj5uhvtrlr7mfrliVH5eYcn3CB5g4WoHYg3WAfzAIF-zHI_xe_vnetmqMTmhS7mMSlOX9RfkfyHIkA0ocdLVRAhpfmcEUOoO87tG8A4PeQnz1zR4gJj0R7zLFX-KFhYAnov8b5gClVy8U-2WoQxbjFPTCGJMXYbP9I5o32lEGFdH4BNsDitZLLubG6czKCp4AC1fg1S4U-TiTv1YS608h89vya5CtbXm9i2go2VhGJNoHcHt16vk" height="200" width="auto" /><br><br>National park]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4W8FXGsRxYKA2UiGAMj5uhvtrlr7mfrliVH5eYcn3CB5g4WoHYg3WAfzAIF-zHI_xe_vnetmqMTmhS7mMSlOX9RfkfyHIkA0ocdLVRAhpfmcEUOoO87tG8A4PeQnz1zR4gJj0R7zLFX-KFhYAnov8b5gClVy8U-2WoQxbjFPTCGJMXYbP9I5o32lEGFdH4BNsDitZLLubG6czKCp4AC1fg1S4U-TiTv1YS608h89vya5CtbXm9i2go2VhGJNoHcHt16vk</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.12955,64.25592,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Geysir</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7pGOtOpnHQSp-uQb59Jd-8LFPN8_YsGcfzF-HybvE3CsJALkilhAuHchEuW5tIPApl0M9qBKedZ7z9osMP3qzILX2wrQC5ef9H8BmxMspsMRtcjAsg841Spzl_8QhMJXHfQm0ZIGxddRw4KMi0r0WIyIpP-GHB6itruuLsG1UMojZSrRyRdBm73w2K37W9AL6I1D6B-bf8DsBQzPN5SFhx587CEwqmcE-rgjH9uoKxoMBLF1U2EfWYQeaTmxbagUP1EGI" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7pGOtOpnHQSp-uQb59Jd-8LFPN8_YsGcfzF-HybvE3CsJALkilhAuHchEuW5tIPApl0M9qBKedZ7z9osMP3qzILX2wrQC5ef9H8BmxMspsMRtcjAsg841Spzl_8QhMJXHfQm0ZIGxddRw4KMi0r0WIyIpP-GHB6itruuLsG1UMojZSrRyRdBm73w2K37W9AL6I1D6B-bf8DsBQzPN5SFhx587CEwqmcE-rgjH9uoKxoMBLF1U2EfWYQeaTmxbagUP1EGI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.30236,64.310372,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gullfoss Falls</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v68xlH3tbxM-Hk0QZGwqCv2PanCWvQKhTZrqcJn5yELnc3izeYdKqcT_LHEtKPZxfL1XyD5CXKpuyWATmYqk5968_Xy_B8FGBb9egbeWHPy49f1Gn7FyDF7rQcNLWXotBTNdBV9NW2KWJAQquAshemlUixh_F4k8DvKI18_gtj6gds4EQnSHx3MXEl1rfd1-K83dZ8OR5OF_JwGqX817HDFTFtcWoF0bhZ7acilnLAMEl1sQEgIn2YhEzP8ZiUEMzgY8T4" height="200" width="auto" /><br><br>Waterfall]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v68xlH3tbxM-Hk0QZGwqCv2PanCWvQKhTZrqcJn5yELnc3izeYdKqcT_LHEtKPZxfL1XyD5CXKpuyWATmYqk5968_Xy_B8FGBb9egbeWHPy49f1Gn7FyDF7rQcNLWXotBTNdBV9NW2KWJAQquAshemlUixh_F4k8DvKI18_gtj6gds4EQnSHx3MXEl1rfd1-K83dZ8OR5OF_JwGqX817HDFTFtcWoF0bhZ7acilnLAMEl1sQEgIn2YhEzP8ZiUEMzgY8T4</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.119948,64.327072,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Ásbyrgi</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6-WprrCkQN5brtZz6RJggY6TuuWqXwl8iMCXIyS0tzZHhhb53p9csdQJGKEu731FKt7bD29Z20WBedM3qa8Cfq2yTpZUOqr0X13d6fHrUxdkTtOUZsfvjlPckl7hRWiezf_lDCu8Wc-1iCqvAPZ0rYlmcGUBOEENrnHYNuh4CRHUNVZl0xuEyv4l_KALPayEjf-L_8KfPcMTCvvE4KxQKHclTrb6OGmcJ8mhHF1vQjDO16X-i5hQdjLwhzHn3KwRziTyw" height="200" width="auto" /><br><br>Natural gem]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6-WprrCkQN5brtZz6RJggY6TuuWqXwl8iMCXIyS0tzZHhhb53p9csdQJGKEu731FKt7bD29Z20WBedM3qa8Cfq2yTpZUOqr0X13d6fHrUxdkTtOUZsfvjlPckl7hRWiezf_lDCu8Wc-1iCqvAPZ0rYlmcGUBOEENrnHYNuh4CRHUNVZl0xuEyv4l_KALPayEjf-L_8KfPcMTCvvE4KxQKHclTrb6OGmcJ8mhHF1vQjDO16X-i5hQdjLwhzHn3KwRziTyw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.505538,66.017772,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Sólheimajökull</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6vgsTOy54N4bxSw6kxyISnjAQ_AaEdCP3B8H9wuwDsHwpTlpt4dK2yKCkLUroa939MGnpp1IKfi9B6_StEKylkyMNlj8h5KiDNLbioI5Cv5b1P3MKVnKf7kA5JPtk98llNUJNNclD3ObQEh_DfeZQ7IT8qWkA6iFe5orkaz3AhFuOIvWCTEFiTS3mUwPH8jYZLCrunQFkjAWRvKuj9HDGY7r7BrX9eeCDbr3Ky1HTHL1aJ6P_fL-zZE0IS5fkF" height="200" width="auto" /><br><br>Glacier]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6vgsTOy54N4bxSw6kxyISnjAQ_AaEdCP3B8H9wuwDsHwpTlpt4dK2yKCkLUroa939MGnpp1IKfi9B6_StEKylkyMNlj8h5KiDNLbioI5Cv5b1P3MKVnKf7kA5JPtk98llNUJNNclD3ObQEh_DfeZQ7IT8qWkA6iFe5orkaz3AhFuOIvWCTEFiTS3mUwPH8jYZLCrunQFkjAWRvKuj9HDGY7r7BrX9eeCDbr3Ky1HTHL1aJ6P_fL-zZE0IS5fkF</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.302778,63.556944,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fagradalsfjall</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5Bkp02tfAYJ0G-p3PZuDxyBV758yMU7x2Luw84-1e0EczfwBmRtXZeKy0fgGrRv9wBwd3Dy1xVoKdBBGOg1SKwqVcGHrzOriVv1RN6ShxTXBYRlf0vK4y_EbsGvNwpvqtA8sxTCUBndK4T4QaLV3RGgvwTb4Y-Npt8BaVAsHUrEBRXb4qgl67nf0C_AadkzQtJmbZzaF6xgPcCjem96zSkYof3FaLxAO84Yw4rVmiYbru5b7IJeyhBf4EIFzGMp9i9mlI" height="200" width="auto" /><br><br>2021 volcano]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5Bkp02tfAYJ0G-p3PZuDxyBV758yMU7x2Luw84-1e0EczfwBmRtXZeKy0fgGrRv9wBwd3Dy1xVoKdBBGOg1SKwqVcGHrzOriVv1RN6ShxTXBYRlf0vK4y_EbsGvNwpvqtA8sxTCUBndK4T4QaLV3RGgvwTb4Y-Npt8BaVAsHUrEBRXb4qgl67nf0C_AadkzQtJmbZzaF6xgPcCjem96zSkYof3FaLxAO84Yw4rVmiYbru5b7IJeyhBf4EIFzGMp9i9mlI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.269722,63.893333,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Askja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6Yis4IcL-AdANj3uHpvDZxb9UVc6Cj-syv8bLftDSCq5zHjja7boBW8WUNb0LSl-jbXdA_omXVrAf7LmCp0WheFA-WStwhORjVYsKwCVemRb6d-O08eoFJ3Yq6etWvIHbEHGg73QRpnnXF22YMa_GpYAUxWYtwNRi5BxsvYRZrv0kqE-EyKR3w6XhIXNYO70zC0aN0lMfPLqXH9R1AwvtQ-Ot-Igm8PtQU5TZdEzLzdui8anWtl_5boS-70DFogyw3OPE" height="200" width="auto" /><br><br>Deepest lake and volcanic crater]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6Yis4IcL-AdANj3uHpvDZxb9UVc6Cj-syv8bLftDSCq5zHjja7boBW8WUNb0LSl-jbXdA_omXVrAf7LmCp0WheFA-WStwhORjVYsKwCVemRb6d-O08eoFJ3Yq6etWvIHbEHGg73QRpnnXF22YMa_GpYAUxWYtwNRi5BxsvYRZrv0kqE-EyKR3w6XhIXNYO70zC0aN0lMfPLqXH9R1AwvtQ-Ot-Igm8PtQU5TZdEzLzdui8anWtl_5boS-70DFogyw3OPE</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.748528,65.011054,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Good to Visit</name>
+      <Placemark>
+        <name>Vök Baths</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4kmE6hukCxgZjvfEH540Ehn7NqYZ_YJ30m5KJb0cDkYg5Q89wqznQUpcwNUm3VCWTAZUIe_mlNMsPCrFl45E89r9lt5toewZKtST7kMeCWc5BENWKRtp4Wrx2ByjzpkqBW5T66BL6kMYNgYL5eH_W77RoF2sbahOSFLVmrAQjq5LqiDpkr1bR0x916o2_hp2n6T2Qx0NlfnTQAl_PeXU34_uiDMPSkPN0s8TJ_PS2JKsZvyS_NzdMZ1ZWmbNsYKYEfqRA" height="200" width="auto" /><br><br>Vök Baths - Unique geothermal pool in East Iceland]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4kmE6hukCxgZjvfEH540Ehn7NqYZ_YJ30m5KJb0cDkYg5Q89wqznQUpcwNUm3VCWTAZUIe_mlNMsPCrFl45E89r9lt5toewZKtST7kMeCWc5BENWKRtp4Wrx2ByjzpkqBW5T66BL6kMYNgYL5eH_W77RoF2sbahOSFLVmrAQjq5LqiDpkr1bR0x916o2_hp2n6T2Qx0NlfnTQAl_PeXU34_uiDMPSkPN0s8TJ_PS2JKsZvyS_NzdMZ1ZWmbNsYKYEfqRA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.446987,65.303064,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Geosea - Geothermal Sea Baths</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6l9WzDjmhThnSgpBc1ReL2qRHeC-pKTW5qneY2oDn6QRslUTIbNE3JSZf8vEd4IJ5ScalY6yZP2SxX6TlVnDMwIpa9g1VDOdIm59frVWNu5h2JUpbX4NqZRadY0w0zAjEPKIRMBrOPcIJw6mtLazccwsDNR9tvkOSUIh_oYYsff8hxYMxdghTPxEbhM4iG1Ihc73z8QvsiKOBbKEolCGvOXpfUqDegvdA2HD6k0x8TnwPl6mWNPCmCK9MGwF-AC46DMsI" height="200" width="auto" /><br><br>Hot Spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6l9WzDjmhThnSgpBc1ReL2qRHeC-pKTW5qneY2oDn6QRslUTIbNE3JSZf8vEd4IJ5ScalY6yZP2SxX6TlVnDMwIpa9g1VDOdIm59frVWNu5h2JUpbX4NqZRadY0w0zAjEPKIRMBrOPcIJw6mtLazccwsDNR9tvkOSUIh_oYYsff8hxYMxdghTPxEbhM4iG1Ihc73z8QvsiKOBbKEolCGvOXpfUqDegvdA2HD6k0x8TnwPl6mWNPCmCK9MGwF-AC46DMsI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -17.360522,66.052193,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Sky Lagoon</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6-pjOYXoaelCPue32C2JBTOg5GeOaBK4svNj-N7DsTkwYGaSJG-pT5IFdDlBy_PEXVwcFrAhZbCb99MIisGI0oPSbmTpWC_naEWxFpy-v3p9GXH10IuTDloCgYCbBWYGIUgZUxeNB2szA1-f_WVZMWeiHmtPkjArBarmMGwLdZl43ly8Xs4poYQxcW4aRKNyVqLACRZxufz8Im6_siIJhsfoESpNdM_PHSCqw57Bwp59YRgZzZKMZTTQ7GCqmM7_tDtPQ" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6-pjOYXoaelCPue32C2JBTOg5GeOaBK4svNj-N7DsTkwYGaSJG-pT5IFdDlBy_PEXVwcFrAhZbCb99MIisGI0oPSbmTpWC_naEWxFpy-v3p9GXH10IuTDloCgYCbBWYGIUgZUxeNB2szA1-f_WVZMWeiHmtPkjArBarmMGwLdZl43ly8Xs4poYQxcW4aRKNyVqLACRZxufz8Im6_siIJhsfoESpNdM_PHSCqw57Bwp59YRgZzZKMZTTQ7GCqmM7_tDtPQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.946291,64.116489,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Husafell Canyon Baths</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v70OShLVKUgO0T6VD7BdetJhtIT3j9NHdsNfyWO7W8ZMSCM1YaNWGUCzGup7yARQQJie0OeE8TTwg81GjYOfLMdFF8YH6kPK0fzio11evXwvJiFiOR85hKSyF1ndG33bx7paSvVDqzblQtbKttQcTEs260AjERvQK5geWNj3TzSE6xzF3SiboOz86fsf-IKlLKv7jPnnQcvBpuGsR6IWouoaeAgbkmwXhM0USHu_ShmjlkjCuz4_fxiuMlAneo4GwBFx4U" height="200" width="auto" /><br><br>Canyon baths]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v70OShLVKUgO0T6VD7BdetJhtIT3j9NHdsNfyWO7W8ZMSCM1YaNWGUCzGup7yARQQJie0OeE8TTwg81GjYOfLMdFF8YH6kPK0fzio11evXwvJiFiOR85hKSyF1ndG33bx7paSvVDqzblQtbKttQcTEs260AjERvQK5geWNj3TzSE6xzF3SiboOz86fsf-IKlLKv7jPnnQcvBpuGsR6IWouoaeAgbkmwXhM0USHu_ShmjlkjCuz4_fxiuMlAneo4GwBFx4U</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.868582,64.699259,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Sun Voyager</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7_0E3hy4jky8oVx5UqW9nty1xoJDN8Nwp--Rz3dYNgVn3m9v1opYQE0eP1VrTpmDbBRy9u5E12efd3w8ooF0r7QJmhf7f3cvbMejVt_ktqgxTsHsRc_3ih5Q8lNl-Wbc-FzCz_gkj6p_X5iVuda1Tcg0Zc-xaSrb2NY5BT_3IQj6UzjU8Cw_riAl77qNPRtsk2shZ-g5rlOblqk8YhSWvHDLEP-psYBxd8Jpp3BO8Sz51w5fbL6qYpbJYHAbtb4RjR_A" height="200" width="auto" /><br><br>Big attraction]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7_0E3hy4jky8oVx5UqW9nty1xoJDN8Nwp--Rz3dYNgVn3m9v1opYQE0eP1VrTpmDbBRy9u5E12efd3w8ooF0r7QJmhf7f3cvbMejVt_ktqgxTsHsRc_3ih5Q8lNl-Wbc-FzCz_gkj6p_X5iVuda1Tcg0Zc-xaSrb2NY5BT_3IQj6UzjU8Cw_riAl77qNPRtsk2shZ-g5rlOblqk8YhSWvHDLEP-psYBxd8Jpp3BO8Sz51w5fbL6qYpbJYHAbtb4RjR_A</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.922285,64.147631,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Forest Lagoon</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5gPUnOpyLunm9f3EK5FMp4aud0YVfn0yg6f3L9fwGA0TsCFr_09j4bzbtDWqNAaZwV1oyyUIPSZgTLtAT48KxXCVjyqcBK6CK7M_gAjwDcSwlQD4ZzGXsQoIP4bxgdt2luyjHxVT3oO3cZzBoOPHnVScxbZTG1XjbyKDZUvOXeQfFumEmQ99rz9zeuOJSnx4FnWVtH6aR4AdqCdQ6NbUPbScUJKoXJBYmwm4sxUsbaiKTowz2oHdExhvD-M4t_yl2DFxY" height="200" width="auto" /><br><br>Hot Spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5gPUnOpyLunm9f3EK5FMp4aud0YVfn0yg6f3L9fwGA0TsCFr_09j4bzbtDWqNAaZwV1oyyUIPSZgTLtAT48KxXCVjyqcBK6CK7M_gAjwDcSwlQD4ZzGXsQoIP4bxgdt2luyjHxVT3oO3cZzBoOPHnVScxbZTG1XjbyKDZUvOXeQfFumEmQ99rz9zeuOJSnx4FnWVtH6aR4AdqCdQ6NbUPbScUJKoXJBYmwm4sxUsbaiKTowz2oHdExhvD-M4t_yl2DFxY</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.042069,65.670087,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Snorrastofa</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v58ysyb7iPTEp8px8DF4BlTWAmdDWvh_Ljz-plOADaTRMqwc4O4F03j28B0jFvieJIgjgejvLxvGBnStVC0jimafJGLHx5ZbyrMFc4ERkrXorzmnS66RGuNEd_rKL74UFlgBj91dwfCqpXjHvGzP2tPDp5v3Rt1h3zfum8LF6y-3ZSIEro8lfB9mdZbHLJAKT0ehcj_rG52ID3a46Fvt-fWMxcNkj4uXFXSshTkGPmbhcYRTztL4jxQrljU04KqVTfZzfU" height="200" width="auto" /><br><br>Cultural center]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v58ysyb7iPTEp8px8DF4BlTWAmdDWvh_Ljz-plOADaTRMqwc4O4F03j28B0jFvieJIgjgejvLxvGBnStVC0jimafJGLHx5ZbyrMFc4ERkrXorzmnS66RGuNEd_rKL74UFlgBj91dwfCqpXjHvGzP2tPDp5v3Rt1h3zfum8LF6y-3ZSIEro8lfB9mdZbHLJAKT0ehcj_rG52ID3a46Fvt-fWMxcNkj4uXFXSshTkGPmbhcYRTztL4jxQrljU04KqVTfZzfU</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.2939,64.664711,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Harpa Concert Hall and Conference Centre</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v611lQUVLunI072F9DuGG-EnuZDQWS_IW3tpmiskf9rWGU6BpFals-C4PQpHwZluYl2Go3IlSdGYUzbonx-mblRfUUpwYBYQlTD5xK801BzvRVseMctckkOh9t8woUxeuXV6dvMgRVz7l-iODpJWx9fnCwNFz3gSc5gLmolqDGYHa_tVZFZ496uNz1vAGYmSAGqrQPOW6s2d21ARvZWbT6KrkeGDh9vJeabPnsyUTGRDpg5m-o-vdfiR7ns40Gnsr5jug" height="200" width="auto" /><br><br>Conference hall]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v611lQUVLunI072F9DuGG-EnuZDQWS_IW3tpmiskf9rWGU6BpFals-C4PQpHwZluYl2Go3IlSdGYUzbonx-mblRfUUpwYBYQlTD5xK801BzvRVseMctckkOh9t8woUxeuXV6dvMgRVz7l-iODpJWx9fnCwNFz3gSc5gLmolqDGYHa_tVZFZ496uNz1vAGYmSAGqrQPOW6s2d21ARvZWbT6KrkeGDh9vJeabPnsyUTGRDpg5m-o-vdfiR7ns40Gnsr5jug</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.93228,64.150246,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hofsós Sundlaug</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6RIoeX6VpNfwtNJjw6NDgdyQ98swnV8ys3kETrNYrYZUcDv3zDAc6iC841QE7uuBikw4zl552vv6RhNn95m84WiuIVxaOxExrZ2LLsfwQTdoGqBsxb-0QRjV1Nn1yM982pqOu-Oyp0AleCn40tLMF_6u_zyfGDyRzPpKu0ZPBTqQW5KmRXShSNyXJnPaM3-9aIGqbTS3PtWRdQtgTz3H4_XA9CYSr3ynxoUgyTC0MVydDZ3XyJ_ZvMc4-SLkuOuKDPXIg" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6RIoeX6VpNfwtNJjw6NDgdyQ98swnV8ys3kETrNYrYZUcDv3zDAc6iC841QE7uuBikw4zl552vv6RhNn95m84WiuIVxaOxExrZ2LLsfwQTdoGqBsxb-0QRjV1Nn1yM982pqOu-Oyp0AleCn40tLMF_6u_zyfGDyRzPpKu0ZPBTqQW5KmRXShSNyXJnPaM3-9aIGqbTS3PtWRdQtgTz3H4_XA9CYSr3ynxoUgyTC0MVydDZ3XyJ_ZvMc4-SLkuOuKDPXIg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.410835,65.895784,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Secret Lagoon Iceland</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v67hMnOyE-6t7HArogVS0nB6YtbwwcctPJ7nInIRMP89o7-BWlKuGNRzny4W70eHy8CnvY_NQwY2atPyUP7DSYdR9QQCfitXIiKHbcdOzoeDjyeWyEOHpc5ovxTnlhVPv1fj_zLMcWcleuT7FSr86qa4ujXQBGBbcdUvGN62bmWEoXNKdSZjBmTi_9RM3RGURXyl0nmpv_tPOyQ2GAmrkV3Cc0cujDWNZ8MU3Tu7hbdraHDuorFQ5reY95JrzHJobOA0EM" height="200" width="auto" /><br><br>Iceland's oldest natural pool]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v67hMnOyE-6t7HArogVS0nB6YtbwwcctPJ7nInIRMP89o7-BWlKuGNRzny4W70eHy8CnvY_NQwY2atPyUP7DSYdR9QQCfitXIiKHbcdOzoeDjyeWyEOHpc5ovxTnlhVPv1fj_zLMcWcleuT7FSr86qa4ujXQBGBbcdUvGN62bmWEoXNKdSZjBmTi_9RM3RGURXyl0nmpv_tPOyQ2GAmrkV3Cc0cujDWNZ8MU3Tu7hbdraHDuorFQ5reY95JrzHJobOA0EM</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.309539,64.137751,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Akureyrarkirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5THHhFWCjEu87_JdjMbS2myGPfWylEHAgb_xv6z3orZdL02jA7kGg1IlFe4v0gkM4HaVzZI8ypxCCWcsWSO72zvB1SJc6klz_s9zmErPdGWfeSFt148igwbAAbNh8FiixzNEvLIHYc3CEf1fSYuLWq9whnPqd-EFFkAj1Ov7V_SdrdTdctX6Dzg6qN7agTjdtTlXsTnJv1bKkrKrn87zL86nZ636HkVXWJ4bvI7kzaE2-wMzb8CeNkJBwbA9_8kWVlYcI" height="200" width="auto" /><br><br>Church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5THHhFWCjEu87_JdjMbS2myGPfWylEHAgb_xv6z3orZdL02jA7kGg1IlFe4v0gkM4HaVzZI8ypxCCWcsWSO72zvB1SJc6klz_s9zmErPdGWfeSFt148igwbAAbNh8FiixzNEvLIHYc3CEf1fSYuLWq9whnPqd-EFFkAj1Ov7V_SdrdTdctX6Dzg6qN7agTjdtTlXsTnJv1bKkrKrn87zL86nZ636HkVXWJ4bvI7kzaE2-wMzb8CeNkJBwbA9_8kWVlYcI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.090781,65.679912,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Wes Anderson Lighthouse</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4UNx5JKY7Vk5mCEQCr9StGn8NvoPHsFxplCpjpx8P77m422c1QXkYPLlQDgiP2UqzuvDqcXHk3AKJZ7s56HvWqx2CzFPEBMqYCpHS_1ItYuiorhvOAdkfZuQ3yshXWc6_VT9vHw0fPEyn9F11EaszGmxaHj3sghGs4j1w_DXxy7na_X064RVQxUWfqw8rr-WxZpNu4Nfk_ZKZBuhnhBsD6paTsaTNi0aNWGOyBnc-9FeiEbP9NXJNPXzzNiZgnVUdvnd4" height="200" width="auto" /><br><br>Wes Anderson Style Lighthouse]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4UNx5JKY7Vk5mCEQCr9StGn8NvoPHsFxplCpjpx8P77m422c1QXkYPLlQDgiP2UqzuvDqcXHk3AKJZ7s56HvWqx2CzFPEBMqYCpHS_1ItYuiorhvOAdkfZuQ3yshXWc6_VT9vHw0fPEyn9F11EaszGmxaHj3sghGs4j1w_DXxy7na_X064RVQxUWfqw8rr-WxZpNu4Nfk_ZKZBuhnhBsD6paTsaTNi0aNWGOyBnc-9FeiEbP9NXJNPXzzNiZgnVUdvnd4</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -17.362217,66.052159,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>The Settlement Center</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7_3aTkwgYWfFm-yKOy3I6Q9apF9xKmTTRDc7waoteFDgQiXekw7m8ICIT_BbjYuFRUn3eptUDWob8sbTsCjp_oYtCvYlEXwtIbC010K_MCdPXxBQhetq4SL4Hv-L3kUhtbpobfYWxF0l_5ZiilFrTK3N6Ow2Dec3E985Aa5cfZcAk2Zxz6ALZUphftuusKBeKX-4IHHISNLTc1ux5wJ2TCZv61w5WIQnVBXHzPuOAUtNGT4TwNVnGgJdrB1JgxgshPpA" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7_3aTkwgYWfFm-yKOy3I6Q9apF9xKmTTRDc7waoteFDgQiXekw7m8ICIT_BbjYuFRUn3eptUDWob8sbTsCjp_oYtCvYlEXwtIbC010K_MCdPXxBQhetq4SL4Hv-L3kUhtbpobfYWxF0l_5ZiilFrTK3N6Ow2Dec3E985Aa5cfZcAk2Zxz6ALZUphftuusKBeKX-4IHHISNLTc1ux5wJ2TCZv61w5WIQnVBXHzPuOAUtNGT4TwNVnGgJdrB1JgxgshPpA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.923155,64.535744,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hallormsstaður Forest</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4PEmaLd3iPQl81xHwp8Whr0EGNPDc_SggEflghWDXpateUVnxKvVSIaUev0IIPjA_irbaP0La0RP5gGcTNpRYe62l0ULyPnA6vm3zLsfQZvPNqdAyJjSa8LSAt2ELUtMhw2plKph3ZY5L_cNBE6NbFUDjxpvGcAgE7WRt4opPZpq2Ca7ulVrQl4I1l7w4ok3Jm2DtAbL7CTPgPWd4eShrtcNrk7laMRNMkicTLRELshaPjJA41GvFBBBzpo4QDNQNOspo" height="200" width="auto" /><br><br>Forest]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4PEmaLd3iPQl81xHwp8Whr0EGNPDc_SggEflghWDXpateUVnxKvVSIaUev0IIPjA_irbaP0La0RP5gGcTNpRYe62l0ULyPnA6vm3zLsfQZvPNqdAyJjSa8LSAt2ELUtMhw2plKph3ZY5L_cNBE6NbFUDjxpvGcAgE7WRt4opPZpq2Ca7ulVrQl4I1l7w4ok3Jm2DtAbL7CTPgPWd4eShrtcNrk7laMRNMkicTLRELshaPjJA41GvFBBBzpo4QDNQNOspo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.697949,65.123428,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Teigarhorn Natural Monument and Nature Preserve</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v741I7JOVwqLNGYuGl4bqxlmmk2N4uhQ9Ld009ZsCBz39sYgS9Tjcllej4YkGugasxir-3GB3N1L4PGEKD38vv1tmqeeD8ot8u4pDN7saFMZ2xk_NZI4DBAaSRuqSDKUy7DD_BKVOoHKCA05DYYaRpCSV2ZR5oJ3I9a_iulOzgz0l4bQmvkJTf33Ik2es7LKU7nO1uqDjvAQITFKZvJLGjJRLMJf3IBHC0V9506Vwna6tyBNXjxOMT6V3d2H8_iw5ziKQ" height="200" width="auto" /><br><br>Photogenic old house]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v741I7JOVwqLNGYuGl4bqxlmmk2N4uhQ9Ld009ZsCBz39sYgS9Tjcllej4YkGugasxir-3GB3N1L4PGEKD38vv1tmqeeD8ot8u4pDN7saFMZ2xk_NZI4DBAaSRuqSDKUy7DD_BKVOoHKCA05DYYaRpCSV2ZR5oJ3I9a_iulOzgz0l4bQmvkJTf33Ik2es7LKU7nO1uqDjvAQITFKZvJLGjJRLMJf3IBHC0V9506Vwna6tyBNXjxOMT6V3d2H8_iw5ziKQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.344736,64.675927,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Krossneslaug</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5j-BfI_iSRWS_arNYYYwknPsO-OomEjYN6Q0ujBBiBGs8oCCwnZP0AHQUUhpezLjWdc7KOtBaBAIqLoCGIqbbBvPO8VsfmDkN0KMr1zcGCQ6LJSyWudypkXt_2P6TMCTYKVuKr6hlARISkXWhoYLoIrVZBpEIR6Kz9UpNDiDDWnGFJfHB15G_Ty2d3Uq4wWb49_Ei53Z-JnYhTykcbmHgsSoziD2vkn4De7pJKn75nbP5tfjfjop8Rhq7ickbIPGd5h_I" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5j-BfI_iSRWS_arNYYYwknPsO-OomEjYN6Q0ujBBiBGs8oCCwnZP0AHQUUhpezLjWdc7KOtBaBAIqLoCGIqbbBvPO8VsfmDkN0KMr1zcGCQ6LJSyWudypkXt_2P6TMCTYKVuKr6hlARISkXWhoYLoIrVZBpEIR6Kz9UpNDiDDWnGFJfHB15G_Ty2d3Uq4wWb49_Ei53Z-JnYhTykcbmHgsSoziD2vkn4De7pJKn75nbP5tfjfjop8Rhq7ickbIPGd5h_I</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.508141,66.055688,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Grótta Island Lighthouse</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7kc-7qQtXt_WiF0UD-mJ1H_McEJXrty0X5HbYSTjZaO6mzKcAlJ4ZfE6emZj5_X_bS0dyhopziGEo_o7ypbdSCM-TTPgIHYkn7xmQXVxavJ6XQvzRN0P_h5kGtEQn1Fu2MMc2JkGkS7w0jllmgJWiBHuJWY7fJ06I2PmSgr8CMABmg_8PlW3m81aicQ8MJctctymbLLGbnJ8LQt2igT5FH7A12Of3xHDr916JlncgAoxx38bdxT3OnxmeWmCyaSYShtnA" height="200" width="auto" /><br><br>Lighthouse]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7kc-7qQtXt_WiF0UD-mJ1H_McEJXrty0X5HbYSTjZaO6mzKcAlJ4ZfE6emZj5_X_bS0dyhopziGEo_o7ypbdSCM-TTPgIHYkn7xmQXVxavJ6XQvzRN0P_h5kGtEQn1Fu2MMc2JkGkS7w0jllmgJWiBHuJWY7fJ06I2PmSgr8CMABmg_8PlW3m81aicQ8MJctctymbLLGbnJ8LQt2igT5FH7A12Of3xHDr916JlncgAoxx38bdxT3OnxmeWmCyaSYShtnA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.022,64.164977,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[Glaumbær Farm & Museum]]></name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6TGMe5a07t0IrzPwMLzfw2RULZxwqlkA3Hu7ZFgRZ8ynHOk4aK2APiL1_-LmILJre-aHgnVJg98dP4PL3TzhErP0qywUIA5b73D53yzhxiWeXHaJ3KnBXxZsETy5WB_tW276JJP_RVPREG9CcTBRKeIBBlrAt-NbjYEGT4ULT0BgZloSlhx8IsjogPQPjkLIs8NuppFXKnoq2tnZYvpH11L4hydFiULz88-TMtZ_O_F45tBxqfLpLvHQCVnlGKZzaAWIg" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6TGMe5a07t0IrzPwMLzfw2RULZxwqlkA3Hu7ZFgRZ8ynHOk4aK2APiL1_-LmILJre-aHgnVJg98dP4PL3TzhErP0qywUIA5b73D53yzhxiWeXHaJ3KnBXxZsETy5WB_tW276JJP_RVPREG9CcTBRKeIBBlrAt-NbjYEGT4ULT0BgZloSlhx8IsjogPQPjkLIs8NuppFXKnoq2tnZYvpH11L4hydFiULz88-TMtZ_O_F45tBxqfLpLvHQCVnlGKZzaAWIg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.504389,65.610397,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Listasafn Samúels Jónssonar</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5jiAOwdvA7PDSxhVcXl9JQaFrEUWWXgEyZmaDKUXV1QfhVnJH3z7i2TbGEuU2NfYMedVbFSbcjutpevzKvmchxj5sDmhGtPpMcG3dGyddyJ0kN0MtDo7n94ruI0yQtnJ5HI5BlIEQQL5SzK2QyaRiPbFftRsKxMkviWBKLsKViiK5oEzdENCmXLeOGf8Jo2whJe3KRJL96U8VBrLIywTdSNYUKx5QrhZh1TJSrsh23TPs5kEiPZqAZj28CULv__hxofuU" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5jiAOwdvA7PDSxhVcXl9JQaFrEUWWXgEyZmaDKUXV1QfhVnJH3z7i2TbGEuU2NfYMedVbFSbcjutpevzKvmchxj5sDmhGtPpMcG3dGyddyJ0kN0MtDo7n94ruI0yQtnJ5HI5BlIEQQL5SzK2QyaRiPbFftRsKxMkviWBKLsKViiK5oEzdENCmXLeOGf8Jo2whJe3KRJL96U8VBrLIywTdSNYUKx5QrhZh1TJSrsh23TPs5kEiPZqAZj28CULv__hxofuU</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -24.003751,65.777428,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Wilderness Center</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v45k_wIz1G86BbcqxijmGXBO6llQp2fE_2AoeVW8TpPTFiJ-s82GsAompZ9jkxfI4RJGSSSOxfomgHhvQxoclWZqHB1IXKyhhw78OldRjbdnKbLLD5ED7EXS1YvMNASBDgA20sxcLAFo3y2jesaePXkjnuDi4NRuRUD4wiMB1oVAcgx4iY22JFtUU2UDtfr-Ur5qxJvI7-AAhLRYCzc0_XDM5Xtl4RoBaGB7FDjaQeYmq77hZRkvMQMAmMF6N9xSwuA3A" height="200" width="auto" /><br><br>Total gem]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v45k_wIz1G86BbcqxijmGXBO6llQp2fE_2AoeVW8TpPTFiJ-s82GsAompZ9jkxfI4RJGSSSOxfomgHhvQxoclWZqHB1IXKyhhw78OldRjbdnKbLLD5ED7EXS1YvMNASBDgA20sxcLAFo3y2jesaePXkjnuDi4NRuRUD4wiMB1oVAcgx4iY22JFtUU2UDtfr-Ur5qxJvI7-AAhLRYCzc0_XDM5Xtl4RoBaGB7FDjaQeYmq77hZRkvMQMAmMF6N9xSwuA3A</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -15.153656,64.964607,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Árbær Open Air Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7ACDlCGf-WCqIyM9PhDA8NQNN1zgHghe6ZQJCvEWp4j9eRv1WznQlbIqeO2tr1Kct0NZusJNpcamfBt92_3SF3a2vcz-4I4gh8GBpjvS6HlBF30VlCv0s5qaq9lkgCKGuta7RqbkLGQlD90bMJYeba84a1DYeq2bSP0TGSSAwYTA4DIKvJiQeO2_o5H5dTOqofYnfJHybYtjnpw47nxA6wMHxr7m3M7cU-qlIYXifR_rrmV1tSI9Ab1tbVMCXrUklhoNA" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7ACDlCGf-WCqIyM9PhDA8NQNN1zgHghe6ZQJCvEWp4j9eRv1WznQlbIqeO2tr1Kct0NZusJNpcamfBt92_3SF3a2vcz-4I4gh8GBpjvS6HlBF30VlCv0s5qaq9lkgCKGuta7RqbkLGQlD90bMJYeba84a1DYeq2bSP0TGSSAwYTA4DIKvJiQeO2_o5H5dTOqofYnfJHybYtjnpw47nxA6wMHxr7m3M7cU-qlIYXifR_rrmV1tSI9Ab1tbVMCXrUklhoNA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.816208,64.118855,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fischersund</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7bE619zyEJ8BKEENzDklVNlvSIzJNx09EQGPkenI-lKNu8Sgu0IiyxVtbjnEH5MflY37HbTeij9-jEPbIWGXWxsfHT8XRXZx8JGWRmHWyGyi-Fmkuv4y9J0HYyTCqyxQyOkwFKxxfhNn0kGE3tt0auk5_XCUhbnURq4H4MF5OuiKKcEIMxvjTEgFul7gr4JAk2dR9tGkORG7dslw5sqH31OMp0cqoRFqZHI5HoOLypIKuuXAUQwooXYPV2rmJf68mc71s" height="200" width="auto" /><br><br>Perfume house]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7bE619zyEJ8BKEENzDklVNlvSIzJNx09EQGPkenI-lKNu8Sgu0IiyxVtbjnEH5MflY37HbTeij9-jEPbIWGXWxsfHT8XRXZx8JGWRmHWyGyi-Fmkuv4y9J0HYyTCqyxQyOkwFKxxfhNn0kGE3tt0auk5_XCUhbnURq4H4MF5OuiKKcEIMxvjTEgFul7gr4JAk2dR9tGkORG7dslw5sqH31OMp0cqoRFqZHI5HoOLypIKuuXAUQwooXYPV2rmJf68mc71s</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.942638,64.148523,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Seyðisfjarðarkirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v627hD5MYOW4T2RB0d6DSPuKeKSraKaSymoWeTVF-_AIw5kTfj4JVrBCZvisjLs-BuESCnTdFRMDbBg3pYOcN1kwx-3muBLdhJeUUUezzuGK3Pe6oGMYbsB5wEk3ZkfrmfpO_UtFPDfsz7g6UdWMYtSMy4rUqAW-h8MS1xFiWkbJPv4cTQMuDHVM2hewA44zrtLL4Tm3zAp6znEHYHzWUW8Y8U82KVtDmeiiatwnOI1GNgDXEh9rb4NslAZU1nDTiGjJw" height="200" width="auto" /><br><br>Famous blue church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v627hD5MYOW4T2RB0d6DSPuKeKSraKaSymoWeTVF-_AIw5kTfj4JVrBCZvisjLs-BuESCnTdFRMDbBg3pYOcN1kwx-3muBLdhJeUUUezzuGK3Pe6oGMYbsB5wEk3ZkfrmfpO_UtFPDfsz7g6UdWMYtSMy4rUqAW-h8MS1xFiWkbJPv4cTQMuDHVM2hewA44zrtLL4Tm3zAp6znEHYHzWUW8Y8U82KVtDmeiiatwnOI1GNgDXEh9rb4NslAZU1nDTiGjJw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.01048,65.261236,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Ósvör Maritime Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5SZmejjGbO4ukQOCwUvaGFKR3Vp_lmFYHUqHQnzEGz2yZVBOe_Y_CObi5aiUphIctNIF-w8CfKLVoeeM1rcYK-Jm1eHkt6rD92oc6OAM6hFcj9OJ3WbmNWhh_32DzFMNmcBIgZKfAhsLSOiR1cSAUHH6XTla18_Anbn5yK141lBzXCVmajZNFBdJcU9ieC3jNfuKfjyM4XAWdx_Vjp4XNJZ7juPzCDlDw8Ci_VEZEIKY5v61f-BNf1CpNm_kP6zxv1VVs" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5SZmejjGbO4ukQOCwUvaGFKR3Vp_lmFYHUqHQnzEGz2yZVBOe_Y_CObi5aiUphIctNIF-w8CfKLVoeeM1rcYK-Jm1eHkt6rD92oc6OAM6hFcj9OJ3WbmNWhh_32DzFMNmcBIgZKfAhsLSOiR1cSAUHH6XTla18_Anbn5yK141lBzXCVmajZNFBdJcU9ieC3jNfuKfjyM4XAWdx_Vjp4XNJZ7juPzCDlDw8Ci_VEZEIKY5v61f-BNf1CpNm_kP6zxv1VVs</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.215973,66.150093,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Stafkirkjan</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5MxjruqLIn9wBVXmhQ_4Y9RHlyoo7lX-cHV35LgyXrMvXAiwewJWmC8Pj0q8WVfayzF_2m9NBnOUqhKC76rfGpk_0TTcWEBDMCCzDUqdzFrp-0u4Paj4EC-_a_As_zH-8G4nyKzk857yIZP7uDe3WGTlgTiryzGhel0Vv3PkCLppyCQvFVsnBp5wsO6841jhiQwNg6_KyJ5D1nVEiHddyHkBnacy9ubPRmjDsxSdE7CC6j1JbyS9fKN6SMs1uADjo3rjA" height="200" width="auto" /><br><br>Black church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5MxjruqLIn9wBVXmhQ_4Y9RHlyoo7lX-cHV35LgyXrMvXAiwewJWmC8Pj0q8WVfayzF_2m9NBnOUqhKC76rfGpk_0TTcWEBDMCCzDUqdzFrp-0u4Paj4EC-_a_As_zH-8G4nyKzk857yIZP7uDe3WGTlgTiryzGhel0Vv3PkCLppyCQvFVsnBp5wsO6841jhiQwNg6_KyJ5D1nVEiHddyHkBnacy9ubPRmjDsxSdE7CC6j1JbyS9fKN6SMs1uADjo3rjA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.261242,63.444324,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Perlan</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6clX0a9sCkB7ZZDfMYrJe-L5vSnrBT84P8PCuHop2iyTBTboReG5gwmYtn34P7KX7DPB-ubqgGcPuDuZW8Jyve0rl9azqa-1Hl68MBTBO415kqm6b8cLw0VeloMJXLPXOpJC-NAfb4gPgTeweXwnEJIaTb5J-7SMvySfjHDb-_DHSnNAyrfumx49IVZet8sbVti-LgZEtyCpmqyzKOzZevTCPvfxVIMhvnBNwmbyxaREzq_AFK6bXeuUjWX0jr9z71oCQ" height="200" width="auto" /><br><br>Exhibition space, coffee-house and view point]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6clX0a9sCkB7ZZDfMYrJe-L5vSnrBT84P8PCuHop2iyTBTboReG5gwmYtn34P7KX7DPB-ubqgGcPuDuZW8Jyve0rl9azqa-1Hl68MBTBO415kqm6b8cLw0VeloMJXLPXOpJC-NAfb4gPgTeweXwnEJIaTb5J-7SMvySfjHDb-_DHSnNAyrfumx49IVZet8sbVti-LgZEtyCpmqyzKOzZevTCPvfxVIMhvnBNwmbyxaREzq_AFK6bXeuUjWX0jr9z71oCQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.919051,64.129213,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Eldheimar</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4IhMI0ygGORVYn2UbwQmajNcNV68udUbf7HW1m6b_FSzkH8jHiavoXtoW0yuShKh0nzS8D4Tyls8y0fa2c4jk96TmK-ZgDrD2xBY-AblTPz7tWynB96mcGLXk9fjccEJSBbqVxjy1-hIwXOnPlNGXXeQ_jf10oCl4EKKM9a_Mhi8d6uXBVrKahiPRSX14Eh1ml2op0AOBa838DXs2ok37GYndNZJzDGmjm4A2B-PQIX7s4lwDk222kINJzWRIRj2RD6vg" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4IhMI0ygGORVYn2UbwQmajNcNV68udUbf7HW1m6b_FSzkH8jHiavoXtoW0yuShKh0nzS8D4Tyls8y0fa2c4jk96TmK-ZgDrD2xBY-AblTPz7tWynB96mcGLXk9fjccEJSBbqVxjy1-hIwXOnPlNGXXeQ_jf10oCl4EKKM9a_Mhi8d6uXBVrKahiPRSX14Eh1ml2op0AOBa838DXs2ok37GYndNZJzDGmjm4A2B-PQIX7s4lwDk222kINJzWRIRj2RD6vg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.259828,63.434978,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Þingvallakirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7ObgbeXFh-qWj489kf9_dOAmvAqvtnDy23bTDAiagahrY73hwUdYzrQzhGqHzpK0ShzgDu2NaON8ec__6NYlgXedeZFdbdzvxc7w5uG1ppnkOzL5BbPaIFdSqFifsQL-XW-jccLis8TxOeZWMe8BwKGeD6h_5ExuJvPpaP4CT8GxEvtdDOhuRsxLKV6UWQ88i9AaIHYY6V08pcZZj8DTwJ7gpVTnV201yPYDy3mglMMxCqJjPAbkCDfbe8KvfVSlJlyDY" height="200" width="auto" /><br><br>History church in National Park]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7ObgbeXFh-qWj489kf9_dOAmvAqvtnDy23bTDAiagahrY73hwUdYzrQzhGqHzpK0ShzgDu2NaON8ec__6NYlgXedeZFdbdzvxc7w5uG1ppnkOzL5BbPaIFdSqFifsQL-XW-jccLis8TxOeZWMe8BwKGeD6h_5ExuJvPpaP4CT8GxEvtdDOhuRsxLKV6UWQ88i9AaIHYY6V08pcZZj8DTwJ7gpVTnV201yPYDy3mglMMxCqJjPAbkCDfbe8KvfVSlJlyDY</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.121226,64.257349,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Laufás Museum and heritage site</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7CnSGxBpZa4re1GM57QDtixQgs1RpH3ibRMmQvlvlT6KbUa2zWn5rAvUcPgA8frjHvySleLrJ3KfT4Bk9rKl5Bo_L4K7V2wFtA6V6WV2AFejAAIXu4_Yt-nxXcp8E74LDBhFA-NDfuU82xZtC12OthjwayAH-_R9R21KoJAP02gDh1F4-jgJiWgzxmOKOMuU1UL00C5IwBPegUf-5IXS115E39E8eF-FVl5xTDFRZvjhREcUmUZ6Y7sX-7qswnyyx54mQ" height="200" width="auto" /><br><br>Historic museum in North Iceland]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7CnSGxBpZa4re1GM57QDtixQgs1RpH3ibRMmQvlvlT6KbUa2zWn5rAvUcPgA8frjHvySleLrJ3KfT4Bk9rKl5Bo_L4K7V2wFtA6V6WV2AFejAAIXu4_Yt-nxXcp8E74LDBhFA-NDfuU82xZtC12OthjwayAH-_R9R21KoJAP02gDh1F4-jgJiWgzxmOKOMuU1UL00C5IwBPegUf-5IXS115E39E8eF-FVl5xTDFRZvjhREcUmUZ6Y7sX-7qswnyyx54mQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.071667,65.89405,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Vatnsskardh</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7grN6zRlapMC0wWJsnQqMpxgPpWYgwAnXuJ1-rJpC-uMY13R0uUo2owSfTsYduSQI38TcFE_ZIJEhQ5I6O02p9z7EJZpiVi6rB1FGeKHvuax6LVW2J_YPmtvwMsrCN7DjU-ou4mMm0rT_EbCrRQOXKkhvqxEgGnZGDx87jyK-gVxxAtYX9LtKt7PT0fisARBnhxvcmj-Sb50q6tKQvAqFot6Auo7UKoxBF9Dzls3RrpAw3w0HpAdOKz7gzWY93Dd7zokg" height="200" width="auto" /><br><br>Varnsskarð hiking trail]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7grN6zRlapMC0wWJsnQqMpxgPpWYgwAnXuJ1-rJpC-uMY13R0uUo2owSfTsYduSQI38TcFE_ZIJEhQ5I6O02p9z7EJZpiVi6rB1FGeKHvuax6LVW2J_YPmtvwMsrCN7DjU-ou4mMm0rT_EbCrRQOXKkhvqxEgGnZGDx87jyK-gVxxAtYX9LtKt7PT0fisARBnhxvcmj-Sb50q6tKQvAqFot6Auo7UKoxBF9Dzls3RrpAw3w0HpAdOKz7gzWY93Dd7zokg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.032087,65.558343,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Húsavík Wooden Church</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7sPeoVMQjdmsniEy8w2gU7wzMUON1JZ3Pb6qSkfTL6DgrK1JllA5cI4cZTeMNm_g3XVIjALxbuyBRpf5ewxeahljoLcP5UJo_uUEyZhCdkDnZCXe64RRbKQh29KjkzmkEbdQ4qzYGWSwYqRDL-LCe2e-UVl4Kp0TVzuhkMZ0YLLoHV5sypYzy-7tpehgQXtCufoGPVgVQW8SJDgjCWHSZCkRxMfroPADAt_WUNGUZcfUKhd-3enNm1ZEWtwSV-nTQq7w" height="200" width="auto" /><br><br>Cute church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7sPeoVMQjdmsniEy8w2gU7wzMUON1JZ3Pb6qSkfTL6DgrK1JllA5cI4cZTeMNm_g3XVIjALxbuyBRpf5ewxeahljoLcP5UJo_uUEyZhCdkDnZCXe64RRbKQh29KjkzmkEbdQ4qzYGWSwYqRDL-LCe2e-UVl4Kp0TVzuhkMZ0YLLoHV5sypYzy-7tpehgQXtCufoGPVgVQW8SJDgjCWHSZCkRxMfroPADAt_WUNGUZcfUKhd-3enNm1ZEWtwSV-nTQq7w</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -17.342306,66.045951,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>The Herring Era Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4NM0nGHCHWlOZul_TNsXrAykhbRLqciSB56ZfTYc0JE9NBiuZcS80Va_0e9VejZKNcQqorG5Xc93K4X22t9BFcICC_c-TSWHoGB-cPywoZeVFwgxFaP0WowlV34jId7X-QnOiXfYqxkWTGzWmX9zbbJTrqB5y5vMr8CSw93GNyYkDKUdqrpCrpTZ9sPv0CoMIxacArDWCQWQz-OzKbGHqc1XBt9-KqyaP4e0XzoD-XYhLln0ZZYVtIfSczNt7gOszRaM4" height="200" width="auto" /><br><br>One of the best museums of Iceland]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4NM0nGHCHWlOZul_TNsXrAykhbRLqciSB56ZfTYc0JE9NBiuZcS80Va_0e9VejZKNcQqorG5Xc93K4X22t9BFcICC_c-TSWHoGB-cPywoZeVFwgxFaP0WowlV34jId7X-QnOiXfYqxkWTGzWmX9zbbJTrqB5y5vMr8CSw93GNyYkDKUdqrpCrpTZ9sPv0CoMIxacArDWCQWQz-OzKbGHqc1XBt9-KqyaP4e0XzoD-XYhLln0ZZYVtIfSczNt7gOszRaM4</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.912735,66.148078,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gluggafoss</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v60CSxiw57Ui5fCJgkUYeu22pewAZ_VcSIEibSbrEU-pZBHyU2IoOBdrfrZtXf7IP8uVCyG8FAqa1sqvVMD9SRhB8b644G0EpYsVQKa1PVxNLQuqdlolUbHEUFup4ikInQtpM7VTzTn8FWzgRvSnvM9iAjs0EB9gEOMeExmWZwer7MM-VtWIO26Wymbaha4kAvjA5c6vRkjje4HE1BUlCHB46Oaypmv6Nu6aOSn90cKvYng_lYpnYlchNgkyS7vL8MhyRI" height="200" width="auto" /><br><br>"Window Waterfall"]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v60CSxiw57Ui5fCJgkUYeu22pewAZ_VcSIEibSbrEU-pZBHyU2IoOBdrfrZtXf7IP8uVCyG8FAqa1sqvVMD9SRhB8b644G0EpYsVQKa1PVxNLQuqdlolUbHEUFup4ikInQtpM7VTzTn8FWzgRvSnvM9iAjs0EB9gEOMeExmWZwer7MM-VtWIO26Wymbaha4kAvjA5c6vRkjje4HE1BUlCHB46Oaypmv6Nu6aOSn90cKvYng_lYpnYlchNgkyS7vL8MhyRI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.893716,63.721026,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[Vestrahorn Camping & Viking Café Accommodation]]></name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7WcNH3V58BB7U7cvUW-DwSRcemAyZXB-qvJAN4Q-6v4VYXPiDPu6K7MOscwHwnxd7N45UiZupdZuhqoWhJp0lbApfTFauagnSJQp8l2Q7MPZW-GAdUfku2K7SEvAp_6TQeKnBDQChEDsyy3fl4SFhxdKTbi1yAZ2_LaO_mj_O4t4YuV5p66nYchkvTXYpaIsr7MkN6oujt1WsN5Me_cYMUImpON113id2DQQPs36t2NilZN0Nms3LyZ8b3eQs" height="200" width="auto" /><br><br>Awesome Location for an overnight stay]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7WcNH3V58BB7U7cvUW-DwSRcemAyZXB-qvJAN4Q-6v4VYXPiDPu6K7MOscwHwnxd7N45UiZupdZuhqoWhJp0lbApfTFauagnSJQp8l2Q7MPZW-GAdUfku2K7SEvAp_6TQeKnBDQChEDsyy3fl4SFhxdKTbi1yAZ2_LaO_mj_O4t4YuV5p66nYchkvTXYpaIsr7MkN6oujt1WsN5Me_cYMUImpON113id2DQQPs36t2NilZN0Nms3LyZ8b3eQs</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.993904,64.255283,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Skaftafell Campground</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4jO8sGir1WE6l1TMEwXtC2FiIuMeVrmPIFbiq-nMxtBltIjGkgUmeyf6RvNKauUa8qjI1wIihAX2TNXR5UB5rqqf5zlsPRsKoeXCeBJmJLx9x2jboBkDh8T-hol1Uap_RpPFk_x-4y32ZTdbX7jKN5FwNBW1IVIHyVk9SLRrajruBsSZddn03EyXSJp-ku__WUFMXkj8kMdrmHYjnJS-PIZqNC12ROWAHrsihPLnAOsZd7ysdFWwbJZhgVZYCV" height="200" width="auto" /><br><br>Campsite]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4jO8sGir1WE6l1TMEwXtC2FiIuMeVrmPIFbiq-nMxtBltIjGkgUmeyf6RvNKauUa8qjI1wIihAX2TNXR5UB5rqqf5zlsPRsKoeXCeBJmJLx9x2jboBkDh8T-hol1Uap_RpPFk_x-4y32ZTdbX7jKN5FwNBW1IVIHyVk9SLRrajruBsSZddn03EyXSJp-ku__WUFMXkj8kMdrmHYjnJS-PIZqNC12ROWAHrsihPLnAOsZd7ysdFWwbJZhgVZYCV</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.971625,64.015526,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Reykjavík Maritime Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6pm93ivjK2_dd_zXh_VbwKGCz6TDSa2MZPX3tHzke79ahFRFZ7z7LfK6-keG99mjmKY6KV0pygLYmpcYuEzU3_kzcYtKzNdNAFM35M-d6vEUGSavdFX-6C7hwlsgKXI9-rRWghxa8bPk4zWrkhoEH-DN7ItkrggX31XbUpLrHNol38ipKIojJEE8coUHi-5cSPp8pf5JZuFlBwAqGUoqqHwK_QWPPDv80G79WNSb45CgHWVWbyfiUU4W6yBHA9YjRKa0Y" height="200" width="auto" /><br><br>Learn more about Icelandic fisherman culture and life]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6pm93ivjK2_dd_zXh_VbwKGCz6TDSa2MZPX3tHzke79ahFRFZ7z7LfK6-keG99mjmKY6KV0pygLYmpcYuEzU3_kzcYtKzNdNAFM35M-d6vEUGSavdFX-6C7hwlsgKXI9-rRWghxa8bPk4zWrkhoEH-DN7ItkrggX31XbUpLrHNol38ipKIojJEE8coUHi-5cSPp8pf5JZuFlBwAqGUoqqHwK_QWPPDv80G79WNSb45CgHWVWbyfiUU4W6yBHA9YjRKa0Y</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.948615,64.153222,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>The Geothermal Exhibition</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5Bb6stc_3pXo0By_OTUx5uGFQb5GRcct8wnr41nAyDGmc7DPTFxHOjIUcZEFCeVQfki8fhKWI1sMuDU17qEZym_T38aQJA4IgBdNonC9ZKnYAUjTg3dBeUlHqDvEyJcqnyBK5AfpPgSwL604iQTC2jh9VcBLGT4ShUzXPESabbcHAHkAIoI-ZQ3mFWKzPvxyT1iA8oYJBgoPgO0PgAfdfmozW8uiPOUVfLFkHTmTaSY6JvLHQf8572Ef_8ubs1" height="200" width="auto" /><br><br>Learn about Iceland's geothermal energy]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5Bb6stc_3pXo0By_OTUx5uGFQb5GRcct8wnr41nAyDGmc7DPTFxHOjIUcZEFCeVQfki8fhKWI1sMuDU17qEZym_T38aQJA4IgBdNonC9ZKnYAUjTg3dBeUlHqDvEyJcqnyBK5AfpPgSwL604iQTC2jh9VcBLGT4ShUzXPESabbcHAHkAIoI-ZQ3mFWKzPvxyT1iA8oYJBgoPgO0PgAfdfmozW8uiPOUVfLFkHTmTaSY6JvLHQf8572Ef_8ubs1</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.401608,64.037295,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Helgufoss</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4g_fr895bOpzkRF_-nQaC4BfCT9xkHr0RgmWsSI3szb6XmYK9CCpzU1fq4gC4u_-iylmqdTOEaMAHWY20OFqaFfKH0lf_B9ISquM5tMKamcCfX9bZld55wzL6AUUqlFRPqzgjov4MxpM9E8Hi3001XGIp4n2PontfyxpAfoVU7A3JvKpnnBo505aXZd679-bYzFk2Nr8GokpQJhhoDRvE1C53cUN_y_KzZf5fBCvQSXP8LA-G7GPticyJZ4lA" height="200" width="auto" /><br><br>Tranquil waterfall near Reykjavik]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4g_fr895bOpzkRF_-nQaC4BfCT9xkHr0RgmWsSI3szb6XmYK9CCpzU1fq4gC4u_-iylmqdTOEaMAHWY20OFqaFfKH0lf_B9ISquM5tMKamcCfX9bZld55wzL6AUUqlFRPqzgjov4MxpM9E8Hi3001XGIp4n2PontfyxpAfoVU7A3JvKpnnBo505aXZd679-bYzFk2Nr8GokpQJhhoDRvE1C53cUN_y_KzZf5fBCvQSXP8LA-G7GPticyJZ4lA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.531741,64.174959,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Can Skip</name>
+      <Placemark>
+        <name>The Retreat at Blue Lagoon Iceland</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7nCO9S4ChBVC28CQqskHyheIml-Eka2w8q6oEZBVbRubRwCrm0GvnmNHUNnN48JvTBYUFcn_1jZXg4sMuq81X0Rs7pYeYLpT7wW5o7blxcyrGN-1bOT_U6v824wEFiqvWVAf12NC7-ytFVJxd7_wowXW5o4jrSvRL1TZAJ1Wq7DYPmPeGV-PIqe64uYkuYz0lI7QoLupS8fZPTNv9Cr7SSGlznTlQ7DBEYzdZ8lHU8a6V3N63Q-xu6kvb3aYeV9XZCjxs" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7nCO9S4ChBVC28CQqskHyheIml-Eka2w8q6oEZBVbRubRwCrm0GvnmNHUNnN48JvTBYUFcn_1jZXg4sMuq81X0Rs7pYeYLpT7wW5o7blxcyrGN-1bOT_U6v824wEFiqvWVAf12NC7-ytFVJxd7_wowXW5o4jrSvRL1TZAJ1Wq7DYPmPeGV-PIqe64uYkuYz0lI7QoLupS8fZPTNv9Cr7SSGlznTlQ7DBEYzdZ8lHU8a6V3N63Q-xu6kvb3aYeV9XZCjxs</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.451283,63.879659,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Önundarfjörður Pier</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5HX97ktCRIS5JfEdo9HinwdA32jZ25O4RI9UasL6I27DA0-l9SxLSdrzwLwfA1pGaZrX_fS0NbNWezu8MtLVOPivRT-3xnLVSEBUfdyewJbpJO6C28l78u65P92LzscfHaeqEEb0jVCvoWCUbkACEcL7i4v9ScptlW0UoPDdQ32X2EJR6iciVeuOxwD6x7EolH9ZTOyEZdD-qlpSmyeyWoJh1HS0Rcd1H4Y1KZDMdlqtUtPLl_UZgVXy2Xej4oWlLVpQ" height="200" width="auto" /><br><br>Pier]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5HX97ktCRIS5JfEdo9HinwdA32jZ25O4RI9UasL6I27DA0-l9SxLSdrzwLwfA1pGaZrX_fS0NbNWezu8MtLVOPivRT-3xnLVSEBUfdyewJbpJO6C28l78u65P92LzscfHaeqEEb0jVCvoWCUbkACEcL7i4v9ScptlW0UoPDdQ32X2EJR6iciVeuOxwD6x7EolH9ZTOyEZdD-qlpSmyeyWoJh1HS0Rcd1H4Y1KZDMdlqtUtPLl_UZgVXy2Xej4oWlLVpQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.447839,66.016884,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Skriduklaustur</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7oAevQXV1Eki7Q2yWKO_kczEXvPqu7y3eT7GZcphOqIfkt7XZuD_-wDm0ySWrU1m7xVmuHpLqv_hWkkVDjLkWyDiDSNo6E__8M0moQJ8NKTilHP8sAxv6vEMLubFKcXtbhJtdWIOcMSz4S0GKUBLXC6qSMF24J32HoI4Ym3HFogm82WFwm1LhdXZuMFe_ZO89tLFQjwrMTTH8j2_CYFaNTHvQTswKdEbzSb2RXjWX_PF7R56LecsCQi7Zb2S6v5LJTyMg" height="200" width="auto" /><br><br>Historic place]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7oAevQXV1Eki7Q2yWKO_kczEXvPqu7y3eT7GZcphOqIfkt7XZuD_-wDm0ySWrU1m7xVmuHpLqv_hWkkVDjLkWyDiDSNo6E__8M0moQJ8NKTilHP8sAxv6vEMLubFKcXtbhJtdWIOcMSz4S0GKUBLXC6qSMF24J32HoI4Ym3HFogm82WFwm1LhdXZuMFe_ZO89tLFQjwrMTTH8j2_CYFaNTHvQTswKdEbzSb2RXjWX_PF7R56LecsCQi7Zb2S6v5LJTyMg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.952735,65.040912,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Flatey</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6xcRWeMsECasqqg1W3n0bnxyiTXLNJuH_eKlVaBd1z1qNdAV2gUl5HzvCXRikhve7iDSkuNoo7SW93zT4MuvDOc-4v8RRYpH89o3a01CU49TLGQXc5D7GLDdB50wQPBSr1A05DCY7iSvVW1mc_IQZNglyiWagfcVYLMAMyvYIUhz4Pd2-bnRhdb6MXBl8g3PY1ocD_wlXJE6kI02TmmcAS5pCY3B5rkQdp2zBvpBaYBItQnvdMjY9QHCwcC7YfZwspgBo" height="200" width="auto" /><br><br>Island]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6xcRWeMsECasqqg1W3n0bnxyiTXLNJuH_eKlVaBd1z1qNdAV2gUl5HzvCXRikhve7iDSkuNoo7SW93zT4MuvDOc-4v8RRYpH89o3a01CU49TLGQXc5D7GLDdB50wQPBSr1A05DCY7iSvVW1mc_IQZNglyiWagfcVYLMAMyvYIUhz4Pd2-bnRhdb6MXBl8g3PY1ocD_wlXJE6kI02TmmcAS5pCY3B5rkQdp2zBvpBaYBItQnvdMjY9QHCwcC7YfZwspgBo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.915958,65.376335,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Reykjafjarðarlaug Hot Pool</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6N5rg0iaOB33KHY4tIa1OQpIZF47seVuJxEHtSLkFaprdlezX10i0yOQALQEKF3PShSZml117bijeL2weXWN3-qpmnm70JhMIOPO99bSzOm2HRRdHnPrnffODjOZzd7tPH6_X2keqY_ABCq2BF19l7-HNC9IvZM8BB7lwYoygI20qwwj5Y1q2-cazJj0UL0yTBAQaw9JKiMxaskQ13DA5J9vOugGk0nN23maL75c4OHHqjBcFbQDzJawBc6kxFSKgpKw" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6N5rg0iaOB33KHY4tIa1OQpIZF47seVuJxEHtSLkFaprdlezX10i0yOQALQEKF3PShSZml117bijeL2weXWN3-qpmnm70JhMIOPO99bSzOm2HRRdHnPrnffODjOZzd7tPH6_X2keqY_ABCq2BF19l7-HNC9IvZM8BB7lwYoygI20qwwj5Y1q2-cazJj0UL0yTBAQaw9JKiMxaskQ13DA5J9vOugGk0nN23maL75c4OHHqjBcFbQDzJawBc6kxFSKgpKw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.469111,65.623116,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Þakgil</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4R7nu71NIatYBua1vrpr2MhxulX7l3a639MQ35V8ZD1JCidDilIZV1doruGIp8HHpqrFxSfXqE_j8NWNIr1UVFdr0H80rkA0UsmK9hMbVggAcbvO7IMo8UVpGLUvJ2IusGCRZrK2oIqGZGfuhdqvReYQNdRaqgsCm5uO8Y88saX22T2npKACMkIm3wkLQVWG4StaBszEXEpfqb5uH_WN-6YE8Pq44ug8fESZgkNTqENZul61jEnFYhGe9yonHm0Al5CQ" height="200" width="auto" /><br><br>Beautiful campsite]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4R7nu71NIatYBua1vrpr2MhxulX7l3a639MQ35V8ZD1JCidDilIZV1doruGIp8HHpqrFxSfXqE_j8NWNIr1UVFdr0H80rkA0UsmK9hMbVggAcbvO7IMo8UVpGLUvJ2IusGCRZrK2oIqGZGfuhdqvReYQNdRaqgsCm5uO8Y88saX22T2npKACMkIm3wkLQVWG4StaBszEXEpfqb5uH_WN-6YE8Pq44ug8fESZgkNTqENZul61jEnFYhGe9yonHm0Al5CQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.888744,63.530939,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gamla Bókabúðin á Flateyri</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7bp8Z8yrhjYfXdwNW9Eyx9e5h88t6kKgShXOMo1s_BO_2XkeNeYKhbAVXZMDFWQpInzsP8PXPqNsyTaUcUuVYyAJZFOzy8snxn_KKOZ-5bXZYYq8bRS0YYh3Z20Ziy_Cy-1OgYyVUtxE65qSZ68AmMH4i_M6DHYi3VVhjWrueN2RwwaLa5Lf2mU2J1vn0tlKjpCpmHSo75NPwfySiCCfqz1YW2mNvEuiy-tgfR1akv7FUFoSeVJIvSjLy9e3s-fDF4jJc" height="200" width="auto" /><br><br>Old bookstore]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7bp8Z8yrhjYfXdwNW9Eyx9e5h88t6kKgShXOMo1s_BO_2XkeNeYKhbAVXZMDFWQpInzsP8PXPqNsyTaUcUuVYyAJZFOzy8snxn_KKOZ-5bXZYYq8bRS0YYh3Z20Ziy_Cy-1OgYyVUtxE65qSZ68AmMH4i_M6DHYi3VVhjWrueN2RwwaLa5Lf2mU2J1vn0tlKjpCpmHSo75NPwfySiCCfqz1YW2mNvEuiy-tgfR1akv7FUFoSeVJIvSjLy9e3s-fDF4jJc</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.511829,66.047736,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Lóndrangar</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5MHNH0O9A97DK5M9m9hEC4Xk9uC0nAtPIWWkxakN2W8ZfCGVIARyu9xmX5jaWpn3fN1FrTcfHqlda4e8_wpuk7wG0gGYbyrGDrH0a4fv2wXhR92NYuwaz1O6btcGn3xhd6LhirZF0DqtXNKTZLAmwwHeYY9_uxbbotOigrxv6EzN-0-9rZSOFSjUAhwqbYmFMV2j54B8QiUYTXUN4LC5bTRKy46Grt2CiyCemYdp9l9m9WoZ2beTl94HGsW5cMTT5GUY4" height="200" width="auto" /><br><br>Cliffs]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5MHNH0O9A97DK5M9m9hEC4Xk9uC0nAtPIWWkxakN2W8ZfCGVIARyu9xmX5jaWpn3fN1FrTcfHqlda4e8_wpuk7wG0gGYbyrGDrH0a4fv2wXhR92NYuwaz1O6btcGn3xhd6LhirZF0DqtXNKTZLAmwwHeYY9_uxbbotOigrxv6EzN-0-9rZSOFSjUAhwqbYmFMV2j54B8QiUYTXUN4LC5bTRKy46Grt2CiyCemYdp9l9m9WoZ2beTl94HGsW5cMTT5GUY4</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.784609,64.732527,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Sundhöllin</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7YJSY_qCZ2bqIWSrEqJJkiMBYth_p7m9j6o0wTpOPzFEd74GbZLEATtm8C1C0LXMdqDWbTjscJIQ6vuc4tEHZHF68RJduX2YcNxUlzSRGGpu8Q1kMuzSiz7pzav7tmM6oX8lejYuZ3KkC2JrFqX1GO3xvhZ33M8stoQ4nIQOtX5S1Apa2YP2A8cVQW3YHj906KLGZyvhO8P-flCjGoIzzaH_IdQGmkQGSoFHMBCO8Xdy6vRe7LDxiRrG0b2IowvZzhuus" height="200" width="auto" /><br><br>Swimming pool]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7YJSY_qCZ2bqIWSrEqJJkiMBYth_p7m9j6o0wTpOPzFEd74GbZLEATtm8C1C0LXMdqDWbTjscJIQ6vuc4tEHZHF68RJduX2YcNxUlzSRGGpu8Q1kMuzSiz7pzav7tmM6oX8lejYuZ3KkC2JrFqX1GO3xvhZ33M8stoQ4nIQOtX5S1Apa2YP2A8cVQW3YHj906KLGZyvhO8P-flCjGoIzzaH_IdQGmkQGSoFHMBCO8Xdy6vRe7LDxiRrG0b2IowvZzhuus</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.920652,64.141829,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Nautholsvik Geothermal Beach</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v57iym3KNyun1VzvCOaAFVrXU2tTFcY69CQGLGvLX6vRnNQi1pLnfRo4j_zFQucKSIR8mhfjAP16NW86mSOB0M2U043LpRZHIdHBY3K_GeBVSg5QqXKfqa9GfRXmoT0ou1SiIT4Jhdgehn6uix7Ps9EcnkqOiEncph5NAwL0_10g2P-lynOapsuO5m5sZiMZ-Yi7iBB0An2f9uUZzzxEP_ZBCHTzE8kA-1q3hynwidh-ZgM7892Hhvhdpcjk44ax35iD8U" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v57iym3KNyun1VzvCOaAFVrXU2tTFcY69CQGLGvLX6vRnNQi1pLnfRo4j_zFQucKSIR8mhfjAP16NW86mSOB0M2U043LpRZHIdHBY3K_GeBVSg5QqXKfqa9GfRXmoT0ou1SiIT4Jhdgehn6uix7Ps9EcnkqOiEncph5NAwL0_10g2P-lynOapsuO5m5sZiMZ-Yi7iBB0An2f9uUZzzxEP_ZBCHTzE8kA-1q3hynwidh-ZgM7892Hhvhdpcjk44ax35iD8U</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.930204,64.12151,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hvammsvik Hot Springs</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v78r0DMWGeFlM-K4noOTNFrkSzy-Xq5d5NSJjXXQ3bHjbhHGfQRjq-TJLNjW40H1518eTyBSz82YpI7bycb4MUoxxy4cGNisnt-8vrlCpQelILjhnVF-Wk3NHZXuGwQbqx8teAOxKuTeNqW5Cl5_ASmzsSC0t8yulUDRyu5FuTj24S1_Eb6Zy2318qsSpT_rHO69kEd7n9Xr9a6EEqDFJHL9a4tv1y-Pp_KN4Xf4PrbFrPkTpxqUQ6XYdyxZ9rRS9IO6Q" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v78r0DMWGeFlM-K4noOTNFrkSzy-Xq5d5NSJjXXQ3bHjbhHGfQRjq-TJLNjW40H1518eTyBSz82YpI7bycb4MUoxxy4cGNisnt-8vrlCpQelILjhnVF-Wk3NHZXuGwQbqx8teAOxKuTeNqW5Cl5_ASmzsSC0t8yulUDRyu5FuTj24S1_Eb6Zy2318qsSpT_rHO69kEd7n9Xr9a6EEqDFJHL9a4tv1y-Pp_KN4Xf4PrbFrPkTpxqUQ6XYdyxZ9rRS9IO6Q</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.56433,64.373568,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Blönduóskirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6n0cUQs0Cm9_lXKYcrqEPKj15OJ9vds5ShoSUQAzY4bg8BWkR0kJVCrAfwTcJKKg9nr1zd2xjzOZ4yk4IRLSHN4HkVb7UHi32Zzv97g0iI0XHoeHetuSNd3udt0Nac7xqsI5YpiqKHQyYeen6Tk72sY3TxJJVIfqW8LdYdprbJ77_yiU8BM5ZsndLgNBT-Hl5EuJlPnz6HsS-DvtAajAXBFcS8WQcjn3BSJTGdX9Ko6HOFHLr-BxZbrqg34-xW33g6wg" height="200" width="auto" /><br><br>Church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6n0cUQs0Cm9_lXKYcrqEPKj15OJ9vds5ShoSUQAzY4bg8BWkR0kJVCrAfwTcJKKg9nr1zd2xjzOZ4yk4IRLSHN4HkVb7UHi32Zzv97g0iI0XHoeHetuSNd3udt0Nac7xqsI5YpiqKHQyYeen6Tk72sY3TxJJVIfqW8LdYdprbJ77_yiU8BM5ZsndLgNBT-Hl5EuJlPnz6HsS-DvtAajAXBFcS8WQcjn3BSJTGdX9Ko6HOFHLr-BxZbrqg34-xW33g6wg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.280548,65.659734,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Stykkishólmur</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7G0i542Kc1XJOCsfaW_dAY0FW-xqBHz1HzmDzaK6-kJP3m-vtP_lX7ImBFv8qNtO-Ixi9wrunPs7ZUC2P9OHEcJy7kA5o_XPFklxgTT2ZGg4Xy2dVyaaQnHUwgoXzLI_2he9ZjGFtnGY0jjyKD-x80NJHsYseMYUZ4rHDTo30jiCgja-8A9s13LJ0cQl1mUTAQ6T4Jb04Q20D7wGfGvjn3eN4FEmz2ypt5u1UwAaWIjDjHsmYYCDPvQoK2EcdeBHYuoDs" height="200" width="auto" /><br><br>Town]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7G0i542Kc1XJOCsfaW_dAY0FW-xqBHz1HzmDzaK6-kJP3m-vtP_lX7ImBFv8qNtO-Ixi9wrunPs7ZUC2P9OHEcJy7kA5o_XPFklxgTT2ZGg4Xy2dVyaaQnHUwgoXzLI_2he9ZjGFtnGY0jjyKD-x80NJHsYseMYUZ4rHDTo30jiCgja-8A9s13LJ0cQl1mUTAQ6T4Jb04Q20D7wGfGvjn3eN4FEmz2ypt5u1UwAaWIjDjHsmYYCDPvQoK2EcdeBHYuoDs</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.735731,65.072898,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Skógar Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7df0oQgWxUB3QmQkrcH8UcYffMSj5lWtrmd02LfKJE27eCGq6MQmmkdtaHduwyF2iU39trKqayDnaEa6_sZ_7_3n1e8OnPe2FZGP4xaLoSn1fVyxBPqbWAZhWShD_Mv8q88D-Nu5aiAPiBAGzaxiR9UnFALCGXjZKc4xo7zO7Z5k9gqNTI3Mn4qwXAa-79nJqKLX6VWfTEcKPXxxdlyowcoOgF8NFPNJenPGoMKZG2vbP8s1OpBzMrZH98IHDcD5gGZw" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7df0oQgWxUB3QmQkrcH8UcYffMSj5lWtrmd02LfKJE27eCGq6MQmmkdtaHduwyF2iU39trKqayDnaEa6_sZ_7_3n1e8OnPe2FZGP4xaLoSn1fVyxBPqbWAZhWShD_Mv8q88D-Nu5aiAPiBAGzaxiR9UnFALCGXjZKc4xo7zO7Z5k9gqNTI3Mn4qwXAa-79nJqKLX6VWfTEcKPXxxdlyowcoOgF8NFPNJenPGoMKZG2vbP8s1OpBzMrZH98IHDcD5gGZw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.49321,63.525906,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Vik</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7mn34lQOXaot5y-LQyP4Q_xJXeR2o6rYhSI8YrmupaH85IvLaFRMRsztS3mYwGdqmwi2COHUC-yoSGldvkartLh2IHs12gzNTT9vo_PYykBZUDDXd2InyWEnVbUP1xO4dFRQf8eZ8c1cXJQ_MX1FI2rJHUVFNvLPSJhtFP66He6uo9Rgi0Khlce7heI6hu3tArXf3XRuWx-JywXSjPQNb-xBNtm-Ij1KyEaMhdxhf5U3B1HoANBf9UqcyyGjCbH1fdxdQ" height="200" width="auto" /><br><br>Town]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7mn34lQOXaot5y-LQyP4Q_xJXeR2o6rYhSI8YrmupaH85IvLaFRMRsztS3mYwGdqmwi2COHUC-yoSGldvkartLh2IHs12gzNTT9vo_PYykBZUDDXd2InyWEnVbUP1xO4dFRQf8eZ8c1cXJQ_MX1FI2rJHUVFNvLPSJhtFP66He6uo9Rgi0Khlce7heI6hu3tArXf3XRuWx-JywXSjPQNb-xBNtm-Ij1KyEaMhdxhf5U3B1HoANBf9UqcyyGjCbH1fdxdQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.006048,63.418632,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Ingjaldshóll</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v56Both8em71FhWZo1GGzXdU8_bkJbT3x5zuaRwkNQJyo9VAPZKQouMi7VVn9woWdf6l2OfkhgTjUB7OISE2tpNaKZFa3JOMZqM4f0m79aBEfFrLk3TdStOJMyyEFIjP_9-zkUfCe4lmaxElnn2vYr80-5CUTQchPjUWFxXgM-7kncr5AxBRo0YOaohCFM9o0N0y1enKdT4f4CsIUKM7kKkKOCIG9S3rHQjT4Uw0HPnH0r2obnUGwHJeKq7ZWF2fzrq33s" height="200" width="auto" /><br><br>Epic looking church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v56Both8em71FhWZo1GGzXdU8_bkJbT3x5zuaRwkNQJyo9VAPZKQouMi7VVn9woWdf6l2OfkhgTjUB7OISE2tpNaKZFa3JOMZqM4f0m79aBEfFrLk3TdStOJMyyEFIjP_9-zkUfCe4lmaxElnn2vYr80-5CUTQchPjUWFxXgM-7kncr5AxBRo0YOaohCFM9o0N0y1enKdT4f4CsIUKM7kKkKOCIG9S3rHQjT4Uw0HPnH0r2obnUGwHJeKq7ZWF2fzrq33s</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.852653,64.908065,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Minnibakki Beach</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6Nv0rmwEv6vETyDhUYumziDqKhpkjPF_eaWUFNmx2GoYFDNcwM-fwKyWQ-7PaB_uG0ryl7-kvdstZliI5cE5GxQS5MgQ9ATC_lE9G9c42zq3jvhVd8HW8-B0FLeLF0SZatGj2d1zI-Y8pPLmsCuRrCb0ns9-Sx_CIPXxQ5i4ADTxazF6Vy9vgVEGTn6q-J1wX4UHx3txEqh0b45wyhAix0YfKi8IidDjSSI7nsWJQMTFHV_wnpu8KmeuLx9tuXLEANcHI" height="200" width="auto" /><br><br>Beach]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6Nv0rmwEv6vETyDhUYumziDqKhpkjPF_eaWUFNmx2GoYFDNcwM-fwKyWQ-7PaB_uG0ryl7-kvdstZliI5cE5GxQS5MgQ9ATC_lE9G9c42zq3jvhVd8HW8-B0FLeLF0SZatGj2d1zI-Y8pPLmsCuRrCb0ns9-Sx_CIPXxQ5i4ADTxazF6Vy9vgVEGTn6q-J1wX4UHx3txEqh0b45wyhAix0YfKi8IidDjSSI7nsWJQMTFHV_wnpu8KmeuLx9tuXLEANcHI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.477133,66.181642,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Eldfell</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v72jv5Et4BgJ5oid250AL4XY4UqOqdWHKFM8TNEYRMz8t9k6wBYrg-YohWgOBZgqiItmp7KTpEHPVfmLKTYOU-vwmY6nYQyL-1qSfQHhABkFb4YaNXYOTCSUlnaqjjzh1l4dzpRgUu3Km6SuOSWztArk9DJoB9jHPzMH3bO-7_07sU1R4AsUwhtK_-iaoiTB1pZnUp4TDTLIsOfBun5PoTGaoRat6oS84hmYHtGn2VEMdFeTQ98WFx5UyE44NCD-f8Tbec" height="200" width="auto" /><br><br>Volcano]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v72jv5Et4BgJ5oid250AL4XY4UqOqdWHKFM8TNEYRMz8t9k6wBYrg-YohWgOBZgqiItmp7KTpEHPVfmLKTYOU-vwmY6nYQyL-1qSfQHhABkFb4YaNXYOTCSUlnaqjjzh1l4dzpRgUu3Km6SuOSWztArk9DJoB9jHPzMH3bO-7_07sU1R4AsUwhtK_-iaoiTB1pZnUp4TDTLIsOfBun5PoTGaoRat6oS84hmYHtGn2VEMdFeTQ98WFx5UyE44NCD-f8Tbec</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.249433,63.43205,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Bjarnarhöfn Shark Museum</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5fdFcr3XGaW-tCFxrg7Ce54_Id3ouQLn2vaOMSYZ-fi_erS87T-KXJYGN6uQFcf4bY8Zge4uuQ2_HSUYBHe6HQCB6INGXlC-I7lJVLewGAeFXuqrZc2VxjN2lql5zco65j6mDsv0vTXV5ItdeWZYQTGbOCRj-Kp5oCrMQXIQZShPr4d1c6W8V8o3clC3emJCWNyskIPIzi0aNnJ0JZHz0M-7Sl0pSgZ_iPjdDKX4jx_eILxvB4IHU5-qSxKfJ5pl2nleQ" height="200" width="auto" /><br><br>Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5fdFcr3XGaW-tCFxrg7Ce54_Id3ouQLn2vaOMSYZ-fi_erS87T-KXJYGN6uQFcf4bY8Zge4uuQ2_HSUYBHe6HQCB6INGXlC-I7lJVLewGAeFXuqrZc2VxjN2lql5zco65j6mDsv0vTXV5ItdeWZYQTGbOCRj-Kp5oCrMQXIQZShPr4d1c6W8V8o3clC3emJCWNyskIPIzi0aNnJ0JZHz0M-7Sl0pSgZ_iPjdDKX4jx_eILxvB4IHU5-qSxKfJ5pl2nleQ</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.963538,64.997753,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Bolafjall</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7l9UHgGKEQpC5DRJctsh1yYE3-M2E4QunLFkFDXcZI1VAehCC6HU_JMsZQHKSFGmBNXrMvl_BIlWIqdM2wQqML3NnTf2FJ5PfimbNAQrdi8iPcudn3aTImsoMFhf_eqiwsJsQey3NwDDoLgG0LUl2TBI5hk6qYyR2HIL-tKjtYdewKg2xaGKPXBf-BvcMNbTtcCWZEgmiLhCMZjioLRZddpJ95NGNOE1yTkmB4QxX_FE3hzBBVyuabGtpNiSxvqItAqqg" height="200" width="auto" /><br><br>Drive to the top of a mountain]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7l9UHgGKEQpC5DRJctsh1yYE3-M2E4QunLFkFDXcZI1VAehCC6HU_JMsZQHKSFGmBNXrMvl_BIlWIqdM2wQqML3NnTf2FJ5PfimbNAQrdi8iPcudn3aTImsoMFhf_eqiwsJsQey3NwDDoLgG0LUl2TBI5hk6qYyR2HIL-tKjtYdewKg2xaGKPXBf-BvcMNbTtcCWZEgmiLhCMZjioLRZddpJ95NGNOE1yTkmB4QxX_FE3hzBBVyuabGtpNiSxvqItAqqg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.331184,66.177711,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Pollurinn Hot Pool</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4C8PZVAPTM2X-xkUrcDk-VcF69rMxzPI6lTV-dmOKfhJkecb6Qf6aU6hfAmVdlF5-TCgEUmWi-n-8ce08GQItuGJ2N5mUQ2ZqAbOdshRTdrA6pAzh0HT-9wwmAsXbo4YsBDM-wmUnnHYQMXbNcaFH-sA1wDaYJ1xhE5IIObP9dywdXeZmN7zSl24Ev4tV2aKWVVxNOKL-0pudDeeySzD6hMApqSyVuikHsEMXkTifg4ErHNx_zy2VjQpnHJC9CVVyyQVo" height="200" width="auto" /><br><br>Hot spring]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4C8PZVAPTM2X-xkUrcDk-VcF69rMxzPI6lTV-dmOKfhJkecb6Qf6aU6hfAmVdlF5-TCgEUmWi-n-8ce08GQItuGJ2N5mUQ2ZqAbOdshRTdrA6pAzh0HT-9wwmAsXbo4YsBDM-wmUnnHYQMXbNcaFH-sA1wDaYJ1xhE5IIObP9dywdXeZmN7zSl24Ev4tV2aKWVVxNOKL-0pudDeeySzD6hMApqSyVuikHsEMXkTifg4ErHNx_zy2VjQpnHJC9CVVyyQVo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.894863,65.649086,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Laugardalslaug</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4Yovdx8wxiQTRefKccKJDUUzO1Kt0oIkcpGavR70ityQ83aR8rmMqDddZRNS5wjsmJ7dUhABSGbP5dctIYbl36eQSKRfFEtMdSjBbTxraZjhz8w63PM-lEX7z0nBzO7uxz6MIU0tYECded2q1lzPNJx990PHxiA-zQmwEh0wq258dqhwX_a5whc_R_yzijd8oIkRRD-erSilVxg3wPFzzyXrR3VwxknxUedZNTeZuycY8lRx1HArokX8Uk2x4EmEstxZw" height="200" width="auto" /><br><br>Main swimming pool]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4Yovdx8wxiQTRefKccKJDUUzO1Kt0oIkcpGavR70ityQ83aR8rmMqDddZRNS5wjsmJ7dUhABSGbP5dctIYbl36eQSKRfFEtMdSjBbTxraZjhz8w63PM-lEX7z0nBzO7uxz6MIU0tYECded2q1lzPNJx990PHxiA-zQmwEh0wq258dqhwX_a5whc_R_yzijd8oIkRRD-erSilVxg3wPFzzyXrR3VwxknxUedZNTeZuycY8lRx1HArokX8Uk2x4EmEstxZw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.880056,64.146112,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gallerý GIMLI Icelandic Handkraft</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6o9-MoeIEI3js8HMisaQ7Q3ecYyohlFDnGw7hTnke3rtxbK5ZCcfbS11Dm_X0X94H6HSZlTYeVXsCnKFy6u6-4MYCX8rqBSKM1Q8JoqiaLpimXhzkyd9od5v6erAjBD2ArF3WGwsQNpGjav4YgoFJUvayZ1nnxeQ7xB2pOKeLc3TeKnZ6NRlWBSM5dS1iBqAIcDI-SbSA-XcOsn2RigfAwZW0Ou4WVOg07Dtix0m4kSH3KCTzfdIZDCA6T3fAy5WFor5w" height="200" width="auto" /><br><br>Best knit wear shop]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6o9-MoeIEI3js8HMisaQ7Q3ecYyohlFDnGw7hTnke3rtxbK5ZCcfbS11Dm_X0X94H6HSZlTYeVXsCnKFy6u6-4MYCX8rqBSKM1Q8JoqiaLpimXhzkyd9od5v6erAjBD2ArF3WGwsQNpGjav4YgoFJUvayZ1nnxeQ7xB2pOKeLc3TeKnZ6NRlWBSM5dS1iBqAIcDI-SbSA-XcOsn2RigfAwZW0Ou4WVOg07Dtix0m4kSH3KCTzfdIZDCA6T3fAy5WFor5w</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.065102,63.836963,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>The Handknitting Association of Iceland</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5bnKo_9uwUpgN-NGfm5mjM0_yGgmIedwpxcSYOYkkd187zw9RjF2bA1toobF4r8_nstNbVkq-y36BG_UaqAQ_GdE9yWfPs9Zy9esb64bF1cxsqoh09lUdiMd5sczgwXyVnJVGr1lGpN-wm8I0NkbQD0op68P_08wtddNw_ogvZ8uCj50XkyXXe-3vZxbzK-Fmd8XJvZzMB4hBACTAPuC-SZu6TNV_SsOaEItIRGr8Dd_97MnaaVuaMhglVm_j8bUiMRoI" height="200" width="auto" /><br><br>Icelandic sweaters]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5bnKo_9uwUpgN-NGfm5mjM0_yGgmIedwpxcSYOYkkd187zw9RjF2bA1toobF4r8_nstNbVkq-y36BG_UaqAQ_GdE9yWfPs9Zy9esb64bF1cxsqoh09lUdiMd5sczgwXyVnJVGr1lGpN-wm8I0NkbQD0op68P_08wtddNw_ogvZ8uCj50XkyXXe-3vZxbzK-Fmd8XJvZzMB4hBACTAPuC-SZu6TNV_SsOaEItIRGr8Dd_97MnaaVuaMhglVm_j8bUiMRoI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.930372,64.144562,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Flateyri</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6kFoaEVhhrHi0GBOAk_Memkq8jHlRXWkzxt0c2iIKZRNrNG93DDhhSAF6UJfXRLq3QKVKjDRAN6u5L_L2cPEmbxyX3Iu6NgpkBPp6TpeOF4YDMnZxkSukb50qJrR7dGGQIkiK4dfhFAEzKnO__1RoyTragmvQfYNMGIx3oMVr8Vf-xGsS-7htOFBjth2rzpclG22Ev-IRKzIBhLI9_wAGDrNgjUgLVfRk13mTf5nnkJEjZ7zlYUKIMYOSXV9ApsEscCro" height="200" width="auto" /><br><br>Coziest town in the Westfjords]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6kFoaEVhhrHi0GBOAk_Memkq8jHlRXWkzxt0c2iIKZRNrNG93DDhhSAF6UJfXRLq3QKVKjDRAN6u5L_L2cPEmbxyX3Iu6NgpkBPp6TpeOF4YDMnZxkSukb50qJrR7dGGQIkiK4dfhFAEzKnO__1RoyTragmvQfYNMGIx3oMVr8Vf-xGsS-7htOFBjth2rzpclG22Ev-IRKzIBhLI9_wAGDrNgjUgLVfRk13mTf5nnkJEjZ7zlYUKIMYOSXV9ApsEscCro</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.513773,66.051771,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Háafell - Goat farm</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5s7tJwd1g6lelPiHaWKAfx6ctWVUb13Ls8D2vPcONDHyvEnXbAKScF0r0TFSHAP1YES2tZBUoMYpK-gdVxpZbsf0Hm7Px3KWtSlfA1Z2swtk3Knoot5d2Evd3ED-r1XwMbyAkGUqIigDxinYHiJpKV4M3aAtCJkqUhbSjyoTIndHsnm-6wyym4N8thuCfyq4vEzF04CJFDh9HyMIBvyaVfpyonm39o6lQMPttpQxTeyMcscQb0shkq1775qUORM7-bCz0" height="200" width="auto" /><br><br>Goat farm - come say hallo to the goats]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5s7tJwd1g6lelPiHaWKAfx6ctWVUb13Ls8D2vPcONDHyvEnXbAKScF0r0TFSHAP1YES2tZBUoMYpK-gdVxpZbsf0Hm7Px3KWtSlfA1Z2swtk3Knoot5d2Evd3ED-r1XwMbyAkGUqIigDxinYHiJpKV4M3aAtCJkqUhbSjyoTIndHsnm-6wyym4N8thuCfyq4vEzF04CJFDh9HyMIBvyaVfpyonm39o6lQMPttpQxTeyMcscQb0shkq1775qUORM7-bCz0</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.251912,64.708957,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Viking World</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v407-kLFqhVWs4kTlbN0QwmGsmErxmEeeohvlkTiFRURwE8jfb_KvUS7GUTObKSa_wzplETmL7GsR4QaMSb5ncJaLukl0J19NESg5AP5nAheuCRGS40guhbTXtLSAhVYMuyCNfPpJENyj4b5GIq9lpkpxbPZ3jPTGbl5XRG0iE-4Q9psVFu-0ZZwZbdZjU8w-NCtdeM_NH8ppDAwsoOkx06bdC_JKV_1IAK7QVcG5AbkTq79bbIhpVEglwjpJRiBF8Z9mk" height="200" width="auto" /><br><br>Viking Museum]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v407-kLFqhVWs4kTlbN0QwmGsmErxmEeeohvlkTiFRURwE8jfb_KvUS7GUTObKSa_wzplETmL7GsR4QaMSb5ncJaLukl0J19NESg5AP5nAheuCRGS40guhbTXtLSAhVYMuyCNfPpJENyj4b5GIq9lpkpxbPZ3jPTGbl5XRG0iE-4Q9psVFu-0ZZwZbdZjU8w-NCtdeM_NH8ppDAwsoOkx06bdC_JKV_1IAK7QVcG5AbkTq79bbIhpVEglwjpJRiBF8Z9mk</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.528981,63.97597,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Höfði House</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6MXOP3E39IqCPBGXr8-ZMtLahQXyHSLnqPVIMJE_QEUVut282FlndHfHHqeL5zgtHMpZwXBCHD3YAJ3srEgG0ql6WsCb7YNLj-IiNv3jHJ1_8Fs2qqL4RJE5tibSWzrFNRKVi81I7lwsKF1N1jqijkltUtphifpkE2zdI_lh2k948DHw1ut9-KD8xffml6iueHD852QXszfHSoIjU9ibPwWyXcWFFrMuQvuyrpKlGZdnM2MP17_rXYGyaAwlus5D5Fob0" height="200" width="auto" /><br><br>Place that helped end the Cold War]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6MXOP3E39IqCPBGXr8-ZMtLahQXyHSLnqPVIMJE_QEUVut282FlndHfHHqeL5zgtHMpZwXBCHD3YAJ3srEgG0ql6WsCb7YNLj-IiNv3jHJ1_8Fs2qqL4RJE5tibSWzrFNRKVi81I7lwsKF1N1jqijkltUtphifpkE2zdI_lh2k948DHw1ut9-KD8xffml6iueHD852QXszfHSoIjU9ibPwWyXcWFFrMuQvuyrpKlGZdnM2MP17_rXYGyaAwlus5D5Fob0</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.906336,64.146549,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Langjökull Glacier</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7yT-3qi5pZhe9lHvz_BuP9VFnom7HX0mtnoVJBfmoCIXrBRU5wMd1_oxaHiPodpYpRKrlw7tl7Whje7vYwycCksJ6sbTxc-m-JdJQ5cTBKaxMvafpSC7L2zHrMtan60_M8lYmArx7ijZO46C6KzbK73T8zGKCjJmgxRKjZ_C4aF2ncrcN8cacfDnS6emNHlmdo9quBrRZKBJm3LHWOWhZi1R8dwpFRSVBTkIn4a1h2nOTqAQrDyC392Yp3AaTA7-KH9g" height="200" width="auto" /><br><br>Glacier]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7yT-3qi5pZhe9lHvz_BuP9VFnom7HX0mtnoVJBfmoCIXrBRU5wMd1_oxaHiPodpYpRKrlw7tl7Whje7vYwycCksJ6sbTxc-m-JdJQ5cTBKaxMvafpSC7L2zHrMtan60_M8lYmArx7ijZO46C6KzbK73T8zGKCjJmgxRKjZ_C4aF2ncrcN8cacfDnS6emNHlmdo9quBrRZKBJm3LHWOWhZi1R8dwpFRSVBTkIn4a1h2nOTqAQrDyC392Yp3AaTA7-KH9g</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.153148,64.656187,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Church of Skeggjastaðir</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5W19U_z9qP26jHlaJGwR59gdJfQqtmrDZGnuPTKkbWycXJ4-aB-P3oSr-jq14d-MJTAossUQNDS0G82I-P6cKxxsBOKN_t-6njKdeLXzTxDUu3RH5-ZNgqxrmh-wwb89M6UUQ9HfDo8nPvYt4EWfDsegYsj_AR0SY4k_xeyd8U39giyTc-kjFyXuE8B5zaJOu37XL3RViq6tiN8Ta8lzMzxTx7AInmaQswu8ROtC2HJT8lyikx3GRszrmzlt1ORb4B-g" height="200" width="auto" /><br><br>One of the strangest churches in Iceland.]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5W19U_z9qP26jHlaJGwR59gdJfQqtmrDZGnuPTKkbWycXJ4-aB-P3oSr-jq14d-MJTAossUQNDS0G82I-P6cKxxsBOKN_t-6njKdeLXzTxDUu3RH5-ZNgqxrmh-wwb89M6UUQ9HfDo8nPvYt4EWfDsegYsj_AR0SY4k_xeyd8U39giyTc-kjFyXuE8B5zaJOu37XL3RViq6tiN8Ta8lzMzxTx7AInmaQswu8ROtC2HJT8lyikx3GRszrmzlt1ORb4B-g</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.89505,66.015282,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Meradalir Volcano</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6ejDJSQeD-bv7QXSJIflLvEOtYJsX4nX2NnR4cq3gfwvFB45q55hAUU0bf9iKAOGfKudzB5Y86sw-cFCEPrbqmWL9FkioA1Nnutz-E3_7K-mvDNvgg5vVJUXxXbzCWnZHy_nX2hLZ6qaF3nlmCQoWE_8N-tTWB46F6Tfk44y1_nHjtv4p-e2uLUKKJRGiPmnn2NSLR_jJFagZGue8ELGlCJLB2ljP1ZSpYT9V4p4tz9eoPSRwjlImWdIQHf_RjOv6qhl0" height="200" width="auto" /><br><br>2022 Volcanic eruption site]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6ejDJSQeD-bv7QXSJIflLvEOtYJsX4nX2NnR4cq3gfwvFB45q55hAUU0bf9iKAOGfKudzB5Y86sw-cFCEPrbqmWL9FkioA1Nnutz-E3_7K-mvDNvgg5vVJUXxXbzCWnZHy_nX2hLZ6qaF3nlmCQoWE_8N-tTWB46F6Tfk44y1_nHjtv4p-e2uLUKKJRGiPmnn2NSLR_jJFagZGue8ELGlCJLB2ljP1ZSpYT9V4p4tz9eoPSRwjlImWdIQHf_RjOv6qhl0</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -22.274328,63.896491,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Höfuðstöðin</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6MRGWhaSV4aqronQFHnqY-mQdvjW-WtUpKrjE0JYFxW5kUV33ze6nxPdnySdJQdcXPzZa_pNVfyr86j_ddJbZ_cRlZMp0c__hd2wjw9tq2DnfrlXTT9_8mdqIp9vlzAJ2_KZBTrmZC7Vx-xe6GpMHhJ6of19XUAwPpoAezrHK62SeaVEvyYY50nIeMi3e3qO0poiVO6CQJz25lEpsQpSCgTevyquNSY6lllXY4ycO6HUSAZ4-2tvafUZYYEtM1R3DPOTo" height="200" width="auto" /><br><br>Unreal exhibition made from recycled plastic]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6MRGWhaSV4aqronQFHnqY-mQdvjW-WtUpKrjE0JYFxW5kUV33ze6nxPdnySdJQdcXPzZa_pNVfyr86j_ddJbZ_cRlZMp0c__hd2wjw9tq2DnfrlXTT9_8mdqIp9vlzAJ2_KZBTrmZC7Vx-xe6GpMHhJ6of19XUAwPpoAezrHK62SeaVEvyYY50nIeMi3e3qO0poiVO6CQJz25lEpsQpSCgTevyquNSY6lllXY4ycO6HUSAZ4-2tvafUZYYEtM1R3DPOTo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.834111,64.123366,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Photo Exhibition - North Pole</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6nuH4-64aOasgWjSxg6DFv-29yDAWZiSpMa06o3XolcLlGM9-u5FkQZFwmfviqgMsDE1Mt1BghrcwJy7_TqNURYnWGOSlhAOnseX66VRJaJwt7obTLNMaeSSwVP9elFGgTSvhh_nMdWJkEBEyL1njuL_EOdwhozri5r04zAeF0lpP26SHydv_p3RYNFrjcXTDVX3eaHKj3rRrsCY_nicZrsKzNxDMuW9z7beQK6LlltllUAqWOpGBX8Kthxw-8" height="200" width="auto" /><br><br>Beautiful collection of my Friend's Work in the Westfjords]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6nuH4-64aOasgWjSxg6DFv-29yDAWZiSpMa06o3XolcLlGM9-u5FkQZFwmfviqgMsDE1Mt1BghrcwJy7_TqNURYnWGOSlhAOnseX66VRJaJwt7obTLNMaeSSwVP9elFGgTSvhh_nMdWJkEBEyL1njuL_EOdwhozri5r04zAeF0lpP26SHydv_p3RYNFrjcXTDVX3eaHKj3rRrsCY_nicZrsKzNxDMuW9z7beQK6LlltllUAqWOpGBX8Kthxw-8</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.120302,66.073271,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[Petra's Stone Collection]]></name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7r7bsoRB3RgKAfn1xversNKDdl1r5TKRhhHh0856eH5GkwJUaDrSYu4bGQ8nInOBNjVp5AbibdsCx7psmF9ifzLYupPgSIeaYE_msKTlTBl6u0W4gYtwAXxl7rq31vrLmy5cJ5agrIWEG8Im3GZuTwH9Pc0PQQlB55-pErVSyMZTygMCqwALUWcTPdldyjncwUbiMo5qLUlKXKt3TBXlvsEb3oygz4oIFK6-9ahl-mavNfojzMy_7sbhJHR5Z_ZqSIQg" height="200" width="auto" /><br><br>Stone collection]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7r7bsoRB3RgKAfn1xversNKDdl1r5TKRhhHh0856eH5GkwJUaDrSYu4bGQ8nInOBNjVp5AbibdsCx7psmF9ifzLYupPgSIeaYE_msKTlTBl6u0W4gYtwAXxl7rq31vrLmy5cJ5agrIWEG8Im3GZuTwH9Pc0PQQlB55-pErVSyMZTygMCqwALUWcTPdldyjncwUbiMo5qLUlKXKt3TBXlvsEb3oygz4oIFK6-9ahl-mavNfojzMy_7sbhJHR5Z_ZqSIQg</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -13.880521,64.83547,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fontur</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7eNKcWbqUZVZwtyRAiHyIOR20hXsUY4RUbQGS3PnMOZOeo4y3uAcbN_g-Nfzj9nfAebERNAQDdej9qU814_C6RT3JLm8JIs93ySj-_zjQ2ikbxC-kglEcfuDYPxHr_xwm23Wrpk0B5WJPcmCmFpOm7b73MrKcq6XLfX5G2qOoo3rNPJUebrwNZzk4AkCSbK6WWWRvg_aIgBHUPqIQhX6uBTEjz7QtDLNJ7fMwgY3hNAzJxjkR2jNGwpg_BA2fpt1DCGA" height="200" width="auto" /><br><br>The most remote corner of Iceland]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7eNKcWbqUZVZwtyRAiHyIOR20hXsUY4RUbQGS3PnMOZOeo4y3uAcbN_g-Nfzj9nfAebERNAQDdej9qU814_C6RT3JLm8JIs93ySj-_zjQ2ikbxC-kglEcfuDYPxHr_xwm23Wrpk0B5WJPcmCmFpOm7b73MrKcq6XLfX5G2qOoo3rNPJUebrwNZzk4AkCSbK6WWWRvg_aIgBHUPqIQhX6uBTEjz7QtDLNJ7fMwgY3hNAzJxjkR2jNGwpg_BA2fpt1DCGA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -14.533004,66.377991,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hellishólar Cottages</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v615gYTUNJ7EFFdLVjzfSyaeHJ_cQnebjgZCnfPCdRFs5fRRvgYjfbVXO-vy0mP-B3mMSwPI45qm6bbwPLtI0NAIR3ITW22GUSbye4d40QaGV6RHjAL_cS4RWqSfNIEFt5WR6H8KAl8JOCMxxvizd_rQXgHbvjpHcx1GBzaHKzyKIfJ69DqdnzVF3MfejQr9qWT15Y5xoUubcB3r_Tro0kPqK1CLZ0kD8tkz4OI6QsVgM3oEar76eELDXTrEkgciFj_mHk" height="200" width="auto" /><br><br>Campsite]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v615gYTUNJ7EFFdLVjzfSyaeHJ_cQnebjgZCnfPCdRFs5fRRvgYjfbVXO-vy0mP-B3mMSwPI45qm6bbwPLtI0NAIR3ITW22GUSbye4d40QaGV6RHjAL_cS4RWqSfNIEFt5WR6H8KAl8JOCMxxvizd_rQXgHbvjpHcx1GBzaHKzyKIfJ69DqdnzVF3MfejQr9qWT15Y5xoUubcB3r_Tro0kPqK1CLZ0kD8tkz4OI6QsVgM3oEar76eELDXTrEkgciFj_mHk</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.036049,63.726505,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Vík tjaldsvæði</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5xB-BgUybF2abKOxSDpNbY4B6d4rVTMM4XM8Ou-nH5QW8HpimFWqx6WxY6qVdN33qfDlKl7HbjMZLJoTlhsHPUlGLbsbeByQtTRwA5LOWgl1egluYHhyZswtr7tY3VcBN-s-Kmek43dKD43V1XnTTfycogTv9mpsfnOMRtRu9nSm1LHiMKKxSWcpqhF1BV4k0-87zIOCFzf4NoUDCQCVFlVgrfb0UtTrTBM6ZUW8RqJWDc13oqjePXRiEW7u8La5AY93o" height="200" width="auto" /><br><br>Campsite]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5xB-BgUybF2abKOxSDpNbY4B6d4rVTMM4XM8Ou-nH5QW8HpimFWqx6WxY6qVdN33qfDlKl7HbjMZLJoTlhsHPUlGLbsbeByQtTRwA5LOWgl1egluYHhyZswtr7tY3VcBN-s-Kmek43dKD43V1XnTTfycogTv9mpsfnOMRtRu9nSm1LHiMKKxSWcpqhF1BV4k0-87zIOCFzf4NoUDCQCVFlVgrfb0UtTrTBM6ZUW8RqJWDc13oqjePXRiEW7u8La5AY93o</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -18.995537,63.419288,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Úthlíd Cottages</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v77HGr2As2IkPf3p51Dfip9vxsnJHMyF2bSNN5jE58aPOM9tverpiIzSEKSbLGJGb_-AEN8E9aosIiOHaIA6LuF4XqwQu-YXabMC1utPXGq4PgzIv6vE7LXzqzrkL-pJ1O5vjmlLMBk3LqS_ygTf2BuamDqJToNmZv4wJWf7GGYmaI128YAgYJnMFGspPHFI_2NAT7srkJe-58alER6ZIp3hWJAKkn8e-mgKtgTXSW6uFy1CtPpPxJSpFn8YOuymheYIKw" height="200" width="auto" /><br><br>Campsite]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v77HGr2As2IkPf3p51Dfip9vxsnJHMyF2bSNN5jE58aPOM9tverpiIzSEKSbLGJGb_-AEN8E9aosIiOHaIA6LuF4XqwQu-YXabMC1utPXGq4PgzIv6vE7LXzqzrkL-pJ1O5vjmlLMBk3LqS_ygTf2BuamDqJToNmZv4wJWf7GGYmaI128YAgYJnMFGspPHFI_2NAT7srkJe-58alER6ZIp3hWJAKkn8e-mgKtgTXSW6uFy1CtPpPxJSpFn8YOuymheYIKw</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.444033,64.279193,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name><![CDATA[The Freezer Hostel, Apartments & Culture Centre]]></name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7WNQyvewwRNZ_wHGZKcBx6zpQ4Jhhu2BJIh1QI3NKNNKQsKRk96sfF9XOJsPH87MPqLvEup8e0Hbm4bNCLDvqNtw-WjVhMikvu01DNfgilt_clV-J5VhMNAdwS1AYngmHiv6lUREYBCal0LPI7WtxnoArgtN2jUcLARz766vsfgN7Lfd60kv_itFByxchbfBTrHg_ttQbdUnheIq1jzxu1bDxB76XLPl9GCoGY9iBiEu3Wb-7J2Hcy69NcDlaS" height="200" width="auto" /><br><br>Vibrant Social Experiences]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7WNQyvewwRNZ_wHGZKcBx6zpQ4Jhhu2BJIh1QI3NKNNKQsKRk96sfF9XOJsPH87MPqLvEup8e0Hbm4bNCLDvqNtw-WjVhMikvu01DNfgilt_clV-J5VhMNAdwS1AYngmHiv6lUREYBCal0LPI7WtxnoArgtN2jUcLARz766vsfgN7Lfd60kv_itFByxchbfBTrHg_ttQbdUnheIq1jzxu1bDxB76XLPl9GCoGY9iBiEu3Wb-7J2Hcy69NcDlaS</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.819448,64.922233,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Norðurflug Helicopter Tours</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7yJq4OqdYKwer09S89-Zk-UCXlaT7J9MWqPMId1lUyMCXpARfZ4oTrMWVSSGhwm96PtvoHX0VtnWLUhPb7RBchSu7GoCP-I2gkcyhd7_tMpa2crxnyhLPIKPiQinmYoADCBYVWVfu9w22XgWzZ9oVBkcOW_rCiWOrldc_w9u3V4C9ncQFZ2ds-lrn1pT6aiqpGJtp6SVzc_3VdHcnqsMj_sMPfrr59qtd33pXisS9ijO694TolTTe3m-ay0BEf" height="200" width="auto" /><br><br>Adventure in Iceland's beauty]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7yJq4OqdYKwer09S89-Zk-UCXlaT7J9MWqPMId1lUyMCXpARfZ4oTrMWVSSGhwm96PtvoHX0VtnWLUhPb7RBchSu7GoCP-I2gkcyhd7_tMpa2crxnyhLPIKPiQinmYoADCBYVWVfu9w22XgWzZ9oVBkcOW_rCiWOrldc_w9u3V4C9ncQFZ2ds-lrn1pT6aiqpGJtp6SVzc_3VdHcnqsMj_sMPfrr59qtd33pXisS9ijO694TolTTe3m-ay0BEf</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.933066,64.129367,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Icelandic Lava Show - Reykjavik</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7UAznf2WS4t2AjaJcZE1mA8Ks4Cd4ZObm0ChIph9Yd8AtMbcM4Cyf4fJOQylLcf56E9_tLkhZeQU3MJFwhFKsQ0vJdssvyXNqLDyAQn8SNEjSyjSa-P-SxIf07cg2CsdT2370dYk1iLpquFME3LF99k_iSBUdGtMTw74PNu1gxYOp07k2-vzYSzhonlnJf5rJAmKQsNIkWmuhw3Sh7kb3upRnNCSRWjXmV3BA-IyaAPJdBKPnzxuFhCTX6FuaI" height="200" width="auto" /><br><br>Hot lava show in Reykjavik]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7UAznf2WS4t2AjaJcZE1mA8Ks4Cd4ZObm0ChIph9Yd8AtMbcM4Cyf4fJOQylLcf56E9_tLkhZeQU3MJFwhFKsQ0vJdssvyXNqLDyAQn8SNEjSyjSa-P-SxIf07cg2CsdT2370dYk1iLpquFME3LF99k_iSBUdGtMTw74PNu1gxYOp07k2-vzYSzhonlnJf5rJAmKQsNIkWmuhw3Sh7kb3upRnNCSRWjXmV3BA-IyaAPJdBKPnzxuFhCTX6FuaI</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -21.943012,64.156965,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>LAVA Centre</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v5wc1x6c4dRdtZOiRrASdRfeiygTHARbiEygOLUr4hiSCswCTv7fYBwglR-YtQfRmi_OgHCsDnU1j8UVPov1ifX1DcGaFtGwZMaGW4iYYRKIHGChNWQGrNUi5ful3laCT3-SCZqn3pg31b1ezkzgmzOz7BkrrIlFE4r3qYku7GZ4BQk8QLSX16ItgZYf5OcfVeopclXwn-iwZyZ-Km12HWkxcyl6wm0tMomh9k8h183hvvmBIW5nvyQQMoJ9dew" height="200" width="auto" /><br><br>Interactive volcano and earthquake exhibition]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v5wc1x6c4dRdtZOiRrASdRfeiygTHARbiEygOLUr4hiSCswCTv7fYBwglR-YtQfRmi_OgHCsDnU1j8UVPov1ifX1DcGaFtGwZMaGW4iYYRKIHGChNWQGrNUi5ful3laCT3-SCZqn3pg31b1ezkzgmzOz7BkrrIlFE4r3qYku7GZ4BQk8QLSX16ItgZYf5OcfVeopclXwn-iwZyZ-Km12HWkxcyl6wm0tMomh9k8h183hvvmBIW5nvyQQMoJ9dew</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.236407,63.753122,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>1238 The Battle of Iceland</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v6Pqdq5Psvgw_rMsTfJYKA3YStLBp4oRFT_sB19OqNjOojgArLHlk-NQKuSLpZiJpMDMZNiAwxBZExEOiTbQkA29C8L7d8TcOzO_ATANrkEQDhyOoypwA48q_r6B18t_ag22yTsM6Zyp6hoA0rEh-75q-brbA5flzdhpyaQZ6dTzC2ITTE49hqF23MEbK5hQM7q5CQRhfm0nPtjf9sLz2mmMLBGDbhVeey7vHUVaXp0MmlT0COpbpfqSbvCgdo" height="200" width="auto" /><br><br>Viking Museum and VR Experience]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v6Pqdq5Psvgw_rMsTfJYKA3YStLBp4oRFT_sB19OqNjOojgArLHlk-NQKuSLpZiJpMDMZNiAwxBZExEOiTbQkA29C8L7d8TcOzO_ATANrkEQDhyOoypwA48q_r6B18t_ag22yTsM6Zyp6hoA0rEh-75q-brbA5flzdhpyaQZ6dTzC2ITTE49hqF23MEbK5hQM7q5CQRhfm0nPtjf9sLz2mmMLBGDbhVeey7vHUVaXp0MmlT0COpbpfqSbvCgdo</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.651717,65.752448,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Volcano Huts Húsadalur</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4Mx91O-eZI6iAK516K2Kl_1GSuwV5RDg_-Y4j8G2Ugm7LWtkSUFgBWAdlqVrOXEfVf4B4cL-SldP07fQvwZUQyjnGDGEVVcg0o_7lCjRn_s7x7s4BXhVOxg8MTCBfY8fLVB6Ufwz60CqkXfB42n0sH7JJOK7-f7_-qAaQZt4YkxSssX1-5D0WSbHo6XHAZGsRoOVuOm08n5gvCpCJuay7HNpxseCKO81j-N_CdFbFZ7dZjirg31tbV8zkRmW8C" height="200" width="auto" /><br><br>Base Camp, Restaurant, Campsite & Accommodation]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4Mx91O-eZI6iAK516K2Kl_1GSuwV5RDg_-Y4j8G2Ugm7LWtkSUFgBWAdlqVrOXEfVf4B4cL-SldP07fQvwZUQyjnGDGEVVcg0o_7lCjRn_s7x7s4BXhVOxg8MTCBfY8fLVB6Ufwz60CqkXfB42n0sH7JJOK7-f7_-qAaQZt4YkxSssX1-5D0WSbHo6XHAZGsRoOVuOm08n5gvCpCJuay7HNpxseCKO81j-N_CdFbFZ7dZjirg31tbV8zkRmW8C</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.540499,63.691036,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Kolgrafafjörður Bridge</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4uaIseXm38oYSFOIYUzpP5d_3JfJSC2pNWfXDUPR9qvksFsWWSDA" height="200" width="auto" /><br><br>Sword Road - Best for Drones]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4uaIseXm38oYSFOIYUzpP5d_3JfJSC2pNWfXDUPR9qvksFsWWSDA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -23.12651,64.9663,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Krossa River Crossing</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4uaIseXm38oYSFOIYUzpP5d_3JfJSC2pNWfXDUPR9qvksFsWWSDA" height="200" width="auto" /><br><br>Challenging River Crossing into Þórsmörk]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4uaIseXm38oYSFOIYUzpP5d_3JfJSC2pNWfXDUPR9qvksFsWWSDA</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -19.591095,63.681168,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hofskirkja</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v7FxNGJR5Xfe9KINTBeNyQFBKFQ9tljd73MHUNyIwj-wXa5iLHl6T34RWaQvReD1pMuC-hETs_vJSag3EHnzYrZ1PDkWO7FKMFvOUYAokc0LM0rNcMNS5HJs3v_1Wdc1ookyoHEp0r9vdMSCrsj0-pqm8_rSsCGhYXyfP7JXjo6GnheHGwtu1rEBesGGeHRfDynby5GLaYj2_v6-T_hJ7CdiBevhGjcf9xizCAe9HhOXuUT1w3YvreLzT8OHxM" height="200" width="auto" /><br><br>Cute turf church]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v7FxNGJR5Xfe9KINTBeNyQFBKFQ9tljd73MHUNyIwj-wXa5iLHl6T34RWaQvReD1pMuC-hETs_vJSag3EHnzYrZ1PDkWO7FKMFvOUYAokc0LM0rNcMNS5HJs3v_1Wdc1ookyoHEp0r9vdMSCrsj0-pqm8_rSsCGhYXyfP7JXjo6GnheHGwtu1rEBesGGeHRfDynby5GLaYj2_v6-T_hJ7CdiBevhGjcf9xizCAe9HhOXuUT1w3YvreLzT8OHxM</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -16.706905,63.906953,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Yellow River</name>
+        <description><![CDATA[<img src="https://lh3.googleusercontent.com/umsh/AN6v0v4LIn1u-XjlDy1jb7Wjk-HE998KLogwgvvVoGvgPPK5v9ArIQmxvf_syUJaNDIxAkaHpF6QkqYAuBnLqih_LuVjVBxrJrnt2V4M-fH-JFM3u9yUwv9Xbhu5r_XlY_AFUFPSUWNbnebrixl_4JEAvd5S1VSQI1AIUFKNzri5FgnFyywAGG7Y__DzkzgA3lzhNWp3Pu2iu1AhP-vsOqs1awmelDZ83QYysjebsCjoF_AcWBInN4GVgF7yoasmTlms" height="200" width="auto" /><br><br>Surreal, contrasting yellow river on black sand]]></description>
+        <styleUrl>#icon-1899-0288D1</styleUrl>
+        <ExtendedData>
+          <Data name="gx_media_links">
+            <value>https://lh3.googleusercontent.com/umsh/AN6v0v4LIn1u-XjlDy1jb7Wjk-HE998KLogwgvvVoGvgPPK5v9ArIQmxvf_syUJaNDIxAkaHpF6QkqYAuBnLqih_LuVjVBxrJrnt2V4M-fH-JFM3u9yUwv9Xbhu5r_XlY_AFUFPSUWNbnebrixl_4JEAvd5S1VSQI1AIUFKNzri5FgnFyywAGG7Y__DzkzgA3lzhNWp3Pu2iu1AhP-vsOqs1awmelDZ83QYysjebsCjoF_AcWBInN4GVgF7yoasmTlms</value>
+          </Data>
+        </ExtendedData>
+        <Point>
+          <coordinates>
+            -20.424684,63.639051,0
+          </coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Folder>
+      <name>Iceland Circle Route</name>
+      <Placemark>
+        <name>Seljalandsfoss</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -19.988569,63.615623,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Skógafoss</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -19.511371,63.532052,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Sólheimajökull</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -19.302778,63.556944,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fagradalsfjall</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -22.269722,63.893333,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Þakgil</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -18.888744,63.530939,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Skaftafell Campground</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.971625,64.015526,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Fjallsárlón Frost Restaurant</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.366341,64.016312,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Jökulsárlón</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.230554,64.078446,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Teigarhorn Natural Monument</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -14.344736,64.675927,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Seyðisfjörður</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -14.01048,65.261236,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hallormsstaður Forest</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -14.697949,65.123428,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Dettifoss (F862 area)</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.384,65.814,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Ásbyrgi</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.505538,66.017773,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Mývatn Nature Baths</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -16.847521,65.630898,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Húsavík Wooden Church</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -17.342306,66.045951,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Goðafoss (near Akureyri)</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -17.548,65.683,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Forest Lagoon</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -18.042069,65.670087,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hveravellir (F35)</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -19.552,64.866,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Kerlingarfjöll</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -19.274,64.672,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Gullfoss Falls</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -20.119948,64.327072,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Geysir</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -20.30236,64.310372,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Þingvellir National Park</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -21.12955,64.25592,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Hallgrimskirkja</name>
+        <styleUrl>#icon-1899-0288D1-nodesc</styleUrl>
+        <Point>
+          <coordinates>
+            -21.926549,64.142023,0
+          </coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>Route Path</name>
+        <styleUrl>#line-FF0000-4000-nodesc</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <coordinates>
+            -19.988569,63.615623,0
+            -19.511371,63.532052,0
+            -19.302778,63.556944,0
+            -22.269722,63.893333,0
+            -18.888744,63.530939,0
+            -16.971625,64.015526,0
+            -16.366341,64.016312,0
+            -16.230554,64.078446,0
+            -14.344736,64.675927,0
+            -14.01048,65.261236,0
+            -14.697949,65.123428,0
+            -16.384,65.814,0
+            -16.505538,66.017773,0
+            -16.847521,65.630898,0
+            -17.342306,66.045951,0
+            -17.548,65.683,0
+            -18.042069,65.670087,0
+            -19.552,64.866,0
+            -19.274,64.672,0
+            -20.119948,64.327072,0
+            -20.30236,64.310372,0
+            -21.12955,64.25592,0
+            -21.926549,64.142023,0
+          </coordinates>
+        </LineString>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

@@ -1,0 +1,43 @@
+# SwiftLint configuration for Pinfold.
+# Run: swiftlint lint   (or: swiftlint lint --quiet)
+
+included:
+  - App
+  - ShareExtension
+  - PinfoldCore/Sources
+
+excluded:
+  - .build
+  - PinfoldCore/.build
+  - Pinfold.xcodeproj
+  - samples
+
+disabled_rules:
+  - todo                 # in-progress markers are fine
+  - trailing_comma       # comma style is owned by SwiftFormat (avoids a format/lint fight)
+
+line_length:
+  warning: 120
+  error: 200
+
+# The codebase intentionally uses short identifiers (id, x, f, lat, lng).
+identifier_name:
+  min_length: 1
+  allowed_symbols: ["_"]
+
+type_name:
+  max_length: 50
+
+# A SAX parser's didEndElement switch is legitimately large; surface it as a warning,
+# not an error.
+cyclomatic_complexity:
+  warning: 20
+  error: 50
+
+# KML/SwiftUI views are naturally long; keep these as warnings, not errors.
+function_body_length:
+  warning: 80
+type_body_length:
+  warning: 400
+file_length:
+  warning: 500

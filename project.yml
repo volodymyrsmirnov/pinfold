@@ -1,0 +1,72 @@
+name: Pinfold
+options:
+  bundleIdPrefix: tech.inkhorn
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+packages:
+  PinfoldCore:
+    path: PinfoldCore
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # Automatic signing for local "Run on device/Mac" via Xcode. The build/test
+    # scripts pass CODE_SIGNING_ALLOWED=NO on the command line, which overrides
+    # this for the unsigned simulator builds used in CI.
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 3YS4G5GH27
+    GENERATE_INFOPLIST_FILE: "NO"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Pinfold:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.inkhorn.pinfold
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Pinfold.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: "YES"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+    dependencies:
+      - package: PinfoldCore
+      - target: PinfoldShareExtension
+  PinfoldShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShareExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.inkhorn.pinfold.ShareExtension
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+    dependencies:
+      - package: PinfoldCore
+  PinfoldTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AppTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.inkhorn.pinfold.Tests
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - target: Pinfold
+      - package: PinfoldCore
+schemes:
+  Pinfold:
+    build:
+      targets:
+        Pinfold: all
+        PinfoldTests: [test]
+    test:
+      targets:
+        - PinfoldTests
