@@ -31,6 +31,13 @@ struct PlacemarkRow: View {
     private var isFavorite: Bool { annotations?.isFavorite(placemark) ?? false }
     private var isVisited: Bool { annotations?.isVisited(placemark) ?? false }
 
+    private var accessibilityRowTitle: String {
+        var parts = [placemark.name ?? "Untitled"]
+        if isFavorite { parts.append("Favorite") }
+        if isVisited { parts.append("Visited") }
+        return parts.joined(separator: ", ")
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -47,12 +54,11 @@ struct PlacemarkRow: View {
 
     private var labelStack: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 if isFavorite {
                     Image(systemName: "star.fill")
                         .font(.footnote)
                         .foregroundStyle(.yellow)
-                        .accessibilityLabel("Favorite")
                 }
                 Text(placemark.name ?? "Untitled")
                     .font(.body)
@@ -60,6 +66,8 @@ struct PlacemarkRow: View {
                     .foregroundStyle(isVisited ? .secondary : .primary)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityRowTitle)
             if let html = placemark.descriptionHTML, !html.isEmpty {
                 let preview = AttributedHTML.plainText(html).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !preview.isEmpty {
