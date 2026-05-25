@@ -50,14 +50,29 @@ enum EmbeddedMapStyle: String, CaseIterable, Identifiable {
 /// (for selection lookup) and its pre-rendered pin image.
 final class PlacemarkAnnotation: NSObject, MKAnnotation {
     let placemarkID: String
+    let stableKey: String
     let coordinate: CLLocationCoordinate2D
     let title: String?
-    let image: UIImage
+    /// The un-decorated base image (loaded from disk or SF Symbol). Stored so
+    /// `updateUIView` can re-composite favorite/visited badges cheaply without re-reading disk.
+    let baseImage: UIImage
+    /// The currently decorated pin image. Updated in `updateUIView` when favorite/visited
+    /// state changes; the `viewFor` delegate reads this to set `view.image`.
+    var image: UIImage
 
-    init(placemarkID: String, coordinate: CLLocationCoordinate2D, title: String?, image: UIImage) {
+    init(
+        placemarkID: String,
+        stableKey: String,
+        coordinate: CLLocationCoordinate2D,
+        title: String?,
+        baseImage: UIImage,
+        image: UIImage
+    ) {
         self.placemarkID = placemarkID
+        self.stableKey = stableKey
         self.coordinate = coordinate
         self.title = title
+        self.baseImage = baseImage
         self.image = image
     }
 }
@@ -147,10 +162,12 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             )
             return PlacemarkAnnotation(
                 placemarkID: placemark.id,
+                stableKey: placemark.stableKey,
                 coordinate: CLLocationCoordinate2D(
                     latitude: coordinate.latitude, longitude: coordinate.longitude
                 ),
                 title: placemark.name,
+                baseImage: base,
                 image: image
             )
         }
@@ -175,6 +192,20 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             for annotation in mapView.selectedAnnotations where annotation is PlacemarkAnnotation {
                 mapView.deselectAnnotation(annotation, animated: true)
             }
+        }
+
+        // Re-decorate pins from their stored base images using the current favorite/visited
+        // sets. Runs on every SwiftUI update; safe because no file I/O is involved.
+        // `view(for:)` is nil for offscreen annotations — the annotation.image update
+        // still lands, so viewFor(_:) picks up the correct image on next reuse.
+        for annotation in mapView.annotations.compactMap({ $0 as? PlacemarkAnnotation }) {
+            let fresh = PlacemarkPinImage.decorated(
+                annotation.baseImage,
+                isFavorite: favoriteKeys.contains(annotation.stableKey),
+                isVisited: visitedKeys.contains(annotation.stableKey)
+            )
+            annotation.image = fresh
+            mapView.view(for: annotation)?.image = fresh
         }
     }
 

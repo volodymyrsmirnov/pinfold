@@ -55,21 +55,21 @@ enum PlacemarkPinImage {
         guard isFavorite || isVisited else { return base }
 
         let badge = dimension * 0.55
-        // Extend the canvas up-and-right so the badge isn't clipped.
-        let inset = isFavorite ? badge / 2 : 0
-        let canvas = CGSize(width: base.size.width + inset, height: base.size.height + inset)
+        // Symmetric padding so the base stays centred in the canvas — the map anchors
+        // pins by image centre (centerOffset = .zero), so asymmetric growth would shift
+        // favorite pins off their coordinate.
+        let pad = isFavorite ? badge / 2 : 0
+        let canvas = CGSize(width: base.size.width + 2 * pad, height: base.size.height + 2 * pad)
 
         let renderer = UIGraphicsImageRenderer(size: canvas)
         return renderer.image { _ in
-            let baseOrigin = CGPoint(x: 0, y: inset)
-            base.draw(in: CGRect(origin: baseOrigin, size: base.size),
+            base.draw(in: CGRect(x: pad, y: pad, width: base.size.width, height: base.size.height),
                       blendMode: .normal, alpha: isVisited ? 0.45 : 1.0)
-
             if isFavorite {
                 let starConfig = UIImage.SymbolConfiguration(pointSize: badge, weight: .bold)
                 let star = UIImage(systemName: "star.fill", withConfiguration: starConfig)?
                     .withTintColor(.systemYellow, renderingMode: .alwaysOriginal)
-                let starRect = CGRect(x: canvas.width - badge, y: 0, width: badge, height: badge)
+                let starRect = CGRect(x: canvas.width - badge - pad / 2, y: pad / 2, width: badge, height: badge)
                 star?.draw(in: starRect)
             }
         }
