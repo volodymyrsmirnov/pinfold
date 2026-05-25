@@ -65,7 +65,10 @@ struct KMLDetailView: View {
                 .disabled(mappablePlacemarks.isEmpty)
             }
         }
-        .task {
+        .task(id: entry.id) {
+            annotations = nil
+            document = nil
+            loadError = nil
             await loadDocument()
         }
         .environment(annotations)
@@ -83,9 +86,7 @@ struct KMLDetailView: View {
     // MARK: - Load document
 
     private func loadDocument() async {
-        if annotations == nil {
-            annotations = PlacemarkAnnotations(entry: entry, storage: storage)
-        }
+        annotations = PlacemarkAnnotations(entry: entry, storage: storage)
         let fileURL = storage.originalFile(for: entry)
         do {
             let parsedKML = try await Task.detached(priority: .userInitiated) {
