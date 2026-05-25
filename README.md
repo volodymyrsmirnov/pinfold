@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/icon.png" alt="Pinfold app icon" width="120" />
+<img src="App/Assets.xcassets/AppIcon.appiconset/icon-1024.png" alt="Pinfold app icon" width="120" />
 
 # Pinfold
 
