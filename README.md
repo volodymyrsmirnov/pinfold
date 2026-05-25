@@ -113,6 +113,6 @@ Pinfold collects **no data** and does **no tracking**. All your files live on yo
 
 ## License
 
-© 2026 Inkhorn. All rights reserved.
+Released under the [MIT License](LICENSE) — © 2026 Volodymyr Smirnov.
 
-This repository is the source for a commercial App Store application; no open-source license is granted. ZIPFoundation, the sole third-party dependency, is used under the MIT License.
+ZIPFoundation, the sole third-party dependency, is also distributed under the MIT License.
