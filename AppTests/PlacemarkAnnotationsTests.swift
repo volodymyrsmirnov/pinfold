@@ -34,6 +34,7 @@ import PinfoldCore
         #expect(store.isFavorite(p) == false)
         store.toggleFavorite(p)
         #expect(store.isFavorite(p) == true)
+        #expect(store.favoriteKeys.contains("id:a"))
 
         let reopened = PlacemarkAnnotations(entry: entry, storage: storage)
         #expect(reopened.isFavorite(p) == true)
@@ -50,6 +51,29 @@ import PinfoldCore
         store.toggleFavorite(p)
         #expect(store.isFavorite(p) == false)
         #expect(store.isVisited(p) == true)
+    }
+
+    @Test func corruptSidecarIsNotOverwritten() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storage = StorageLocations(root: base)
+        let folder = "entry-1"
+        try FileManager.default.createDirectory(
+            at: base.appendingPathComponent(folder, isDirectory: true), withIntermediateDirectories: true
+        )
+        let corruptBytes = Data("not json".utf8)
+        let metaURL = base.appendingPathComponent(folder).appendingPathComponent("metadata.json")
+        try corruptBytes.write(to: metaURL)
+
+        let entry = CatalogEntry(
+            id: UUID(), displayName: "T", sourceFilename: "t.kml",
+            importDate: Date(timeIntervalSince1970: 0), pointCount: 1,
+            contentSHA256: "x", storageFolderName: folder, trashedAt: nil
+        )
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        store.toggleFavorite(point("z"))
+
+        let bytesAfter = try Data(contentsOf: metaURL)
+        #expect(bytesAfter == corruptBytes)
     }
 
     @Test func writeThroughPreservesTrashedAt() throws {

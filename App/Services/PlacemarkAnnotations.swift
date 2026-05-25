@@ -10,21 +10,31 @@ import PinfoldCore
 ///
 /// Toggling mutates the in-memory set (instant UI via `@Observable`) and synchronously
 /// writes through to the sidecar via `StorageLocations.updateMetadata` — it never reloads
-/// the catalogue or re-parses the open document. The sidecar is sub-KB JSON, so the
-/// main-actor write is cheap and serializes concurrent toggles for free.
+/// the catalogue or re-parses the open document. The store is `@MainActor`-bound, so all
+/// toggles and writes are serialized; the sidecar is sub-KB JSON, making the synchronous
+/// write-through negligible in wall-clock time.
 @MainActor @Observable final class PlacemarkAnnotations {
     private(set) var favoriteKeys: Set<String>
     private(set) var visitedKeys: Set<String>
 
     @ObservationIgnored private let storage: StorageLocations
     @ObservationIgnored private let folderName: String
+    @ObservationIgnored private var canPersist = true
 
     init(entry: CatalogEntry, storage: StorageLocations) {
         self.storage = storage
         self.folderName = entry.storageFolderName
-        let meta = try? storage.readMetadata(forFolderNamed: entry.storageFolderName)
-        self.favoriteKeys = meta?.favoriteKeys ?? []
-        self.visitedKeys = meta?.visitedKeys ?? []
+        do {
+            let meta = try storage.readMetadata(forFolderNamed: entry.storageFolderName)
+            self.favoriteKeys = meta?.favoriteKeys ?? []
+            self.visitedKeys = meta?.visitedKeys ?? []
+        } catch {
+            // Sidecar exists but failed to decode (corrupt/truncated). Start empty but
+            // refuse to persist, so a toggle never overwrites recoverable data.
+            self.favoriteKeys = []
+            self.visitedKeys = []
+            self.canPersist = false
+        }
     }
 
     func isFavorite(_ placemark: KMLPlacemark) -> Bool { favoriteKeys.contains(placemark.stableKey) }
@@ -45,6 +55,10 @@ import PinfoldCore
     }
 
     private func persist() {
+        guard canPersist else { return }
+        // Write failure is intentionally swallowed: in-memory state stays updated for this
+        // session; a failed write (disk full / iCloud unavailable) will appear undone on next
+        // launch. Fine for a lightweight annotation store.
         try? storage.updateMetadata(forFolderNamed: folderName) { meta in
             meta.favoriteKeys = favoriteKeys
             meta.visitedKeys = visitedKeys
