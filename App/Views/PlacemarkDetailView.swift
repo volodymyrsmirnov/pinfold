@@ -67,7 +67,7 @@ struct PlacemarkDetailView: View {
             }
         }
         .navigationTitle(placemark.name ?? "Untitled")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
         .task {
             if let html = placemark.descriptionHTML, !html.isEmpty {
@@ -99,6 +99,7 @@ struct PlacemarkDetailView: View {
                 Text(placemark.name ?? "Untitled")
                     .font(.title3.bold())
                     .strikethrough(annotations?.isVisited(placemark) == true)
+                    .foregroundStyle(annotations?.isVisited(placemark) == true ? .secondary : .primary)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
