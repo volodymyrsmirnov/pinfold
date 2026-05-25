@@ -63,7 +63,10 @@ struct PlacemarkMapView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationDestination(item: $placemarkToOpenID) { id in
             if let placemark = placemarks.first(where: { $0.id == id }) {
+                // Re-inject the store: this map is itself a pushed view, so its own pushed
+                // destination does not inherit the environment store automatically.
                 PlacemarkDetailView(placemark: placemark, document: document, entry: entry)
+                    .environment(annotations)
             }
         }
         .task {
