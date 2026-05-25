@@ -46,4 +46,13 @@ struct StableKeyTests {
     @Test func placelessNamelessFallsBackToParseOrderID() {
         #expect(placemark(id: "p7").stableKey == "p:p7")
     }
+
+    @Test func whitespaceOnlySourceIDFallsThrough() {
+        let key = placemark(name: "A", coordinate: Coordinate(longitude: 2, latitude: 1), sourceID: "   ").stableKey
+        #expect(key.hasPrefix("h:"))
+    }
+
+    @Test func emptyNameNoCoordinateFallsBackToParseOrderID() {
+        #expect(placemark(id: "p3", name: "").stableKey == "p:p3")
+    }
 }

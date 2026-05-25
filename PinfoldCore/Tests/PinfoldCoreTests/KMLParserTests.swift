@@ -125,6 +125,26 @@ import Foundation
         }
     }
 
+    @Test func capturesPlacemarkIDAttribute() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark id="marker-42">
+              <name>Tagged</name>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Tagged" }
+        #expect(pm != nil)
+        #expect(pm?.sourceID == "marker-42")
+        #expect(pm?.stableKey == "id:marker-42")
+    }
+
     @Test func multiGeometryUsesPointCoordinateNotLineStringVertex() throws {
         // Point appears BEFORE the LineString — without the inPoint guard the later LineString
         // coordinates overwrite the already-captured Point coordinate.

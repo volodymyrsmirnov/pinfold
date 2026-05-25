@@ -40,11 +40,15 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     ///    folder reordering; only changes if this placemark's own name/coordinate change.
     /// 3. `"p:<id>"` — parse-order id, last resort for a placeless, nameless placemark.
     public var stableKey: String {
-        if let sourceID, !sourceID.isEmpty { return "id:\(sourceID)" }
-        if name != nil || coordinate != nil {
-            let lat = coordinate.map { String(format: "%.6f", $0.latitude) } ?? ""
-            let lon = coordinate.map { String(format: "%.6f", $0.longitude) } ?? ""
-            let basis = "\(name ?? "")|\(lat)|\(lon)"
+        if let sourceID, !sourceID.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "id:\(sourceID.trimmingCharacters(in: .whitespaces))"
+        }
+        let trimmedName = name?.trimmingCharacters(in: .whitespaces)
+        let hasName = !(trimmedName?.isEmpty ?? true)
+        if hasName || coordinate != nil {
+            let lat = coordinate.map { String(format: "%.6f", $0.latitude + 0.0) } ?? ""
+            let lon = coordinate.map { String(format: "%.6f", $0.longitude + 0.0) } ?? ""
+            let basis = "\(trimmedName ?? "")|\(lat)|\(lon)"
             let digest = SHA256.hash(data: Data(basis.utf8))
             let hex = digest.map { String(format: "%02x", $0) }.joined().prefix(16)
             return "h:\(hex)"
