@@ -18,6 +18,7 @@ struct PlacemarkMapView: View {
     @Environment(\.resourceCache) private var resourceCache
     @Environment(\.storageLocations) private var storage
     @Environment(AppSettings.self) private var settings
+    @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
 
     @State private var selectedPlacemarkID: String?
     @State private var placemarkToOpenID: String?
@@ -40,6 +41,8 @@ struct PlacemarkMapView: View {
                 storage: storage,
                 showsUserLocation: locationAuth.isAuthorized,
                 clusterPins: settings.clusterMapPins,
+                favoriteKeys: annotations?.favoriteKeys ?? [],
+                visitedKeys: annotations?.visitedKeys ?? [],
                 selectedID: $selectedPlacemarkID
             )
             .ignoresSafeArea()
@@ -83,6 +86,7 @@ private struct PlacemarkPreviewCard: View {
 
     @Environment(\.resourceCache) private var resourceCache
     @Environment(\.storageLocations) private var storage
+    @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
 
     var body: some View {
         Button(action: onOpen) {
@@ -90,9 +94,18 @@ private struct PlacemarkPreviewCard: View {
                 StyleIcon(placemark: placemark, document: document, entry: entry, size: 40)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(placemark.name ?? "Untitled")
-                        .font(.headline)
-                        .lineLimit(1)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        if annotations?.isFavorite(placemark) == true {
+                            Image(systemName: "star.fill")
+                                .font(.footnote)
+                                .foregroundStyle(.yellow)
+                        }
+                        Text(placemark.name ?? "Untitled")
+                            .font(.headline)
+                            .strikethrough(annotations?.isVisited(placemark) == true)
+                            .foregroundStyle(annotations?.isVisited(placemark) == true ? .secondary : .primary)
+                            .lineLimit(1)
+                    }
                     if let html = placemark.descriptionHTML, !html.isEmpty {
                         let preview = AttributedHTML.plainText(html)
                             .trimmingCharacters(in: .whitespacesAndNewlines)

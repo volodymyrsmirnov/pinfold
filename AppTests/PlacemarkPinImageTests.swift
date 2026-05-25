@@ -12,4 +12,25 @@ struct PlacemarkPinImageTests {
         #expect(image.size.width > 0)
         #expect(image.size.height > 0)
     }
+
+    @Test func decoratedReturnsImageForEveryStateCombo() {
+        let base = PlacemarkPinImage.fallbackImage(tint: .systemBlue)
+        for favorite in [false, true] {
+            for visited in [false, true] {
+                let decorated = PlacemarkPinImage.decorated(base, isFavorite: favorite, isVisited: visited)
+                #expect(decorated.size.width > 0)
+                #expect(decorated.size.height > 0)
+                if favorite {
+                    #expect(decorated.size.width > base.size.width)
+                    #expect(decorated.size.height > base.size.height)
+                }
+            }
+        }
+    }
+
+    @Test func decoratedWithNoFlagsReturnsBaseUnchanged() {
+        let base = PlacemarkPinImage.fallbackImage(tint: .systemBlue)
+        let decorated = PlacemarkPinImage.decorated(base, isFavorite: false, isVisited: false)
+        #expect(decorated === base)
+    }
 }

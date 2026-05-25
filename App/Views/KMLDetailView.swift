@@ -27,6 +27,7 @@ struct KMLDetailView: View {
     @State private var document: KMLDocument?
     @State private var loadError: Error?
     @State private var searchText = ""
+    @State private var annotations: PlacemarkAnnotations?
 
     // MARK: - Body
 
@@ -64,9 +65,13 @@ struct KMLDetailView: View {
                 .disabled(mappablePlacemarks.isEmpty)
             }
         }
-        .task {
+        .task(id: entry.id) {
+            annotations = nil
+            document = nil
+            loadError = nil
             await loadDocument()
         }
+        .environment(annotations)
     }
 
     // MARK: - Mappable placemarks
@@ -81,6 +86,7 @@ struct KMLDetailView: View {
     // MARK: - Load document
 
     private func loadDocument() async {
+        annotations = PlacemarkAnnotations(entry: entry, storage: storage)
         let fileURL = storage.originalFile(for: entry)
         do {
             let parsedKML = try await Task.detached(priority: .userInitiated) {
@@ -209,6 +215,25 @@ struct KMLDetailView: View {
             entry: entry
         )) {
             PlacemarkRow(placemark: placemark, document: document, entry: entry)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if let annotations {
+                Button {
+                    annotations.toggleFavorite(placemark)
+                } label: {
+                    let on = annotations.isFavorite(placemark)
+                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
+                }
+                .tint(.yellow)
+
+                Button {
+                    annotations.toggleVisited(placemark)
+                } label: {
+                    let on = annotations.isVisited(placemark)
+                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
+                }
+                .tint(.blue)
+            }
         }
     }
 }

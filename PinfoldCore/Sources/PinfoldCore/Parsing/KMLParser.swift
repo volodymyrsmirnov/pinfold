@@ -54,6 +54,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var photoLinks: [String] = []
         var hasPoint = false
         var hasNonPointGeometry = false
+        var sourceID: String?
     }
     private var placemark: PlacemarkBuilder?
 
@@ -106,7 +107,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             containerStack.last?.children.append(builder)
             containerStack.append(builder)
         case "Placemark":
-            placemark = PlacemarkBuilder()
+            var builder = PlacemarkBuilder()
+            builder.sourceID = attributeDict["id"]
+            placemark = builder
         case "Style":
             // Inline per-placemark styles (Style inside a Placemark) are intentionally not
             // captured in Phase 1 — only document-level styles are indexed. Phase 2 will
@@ -226,7 +229,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                                              styleUrl: pm.styleUrl,
                                              coordinate: pm.hasPoint ? pm.coordinate : nil,
                                              extendedData: pm.extendedData,
-                                             photoLinks: pm.photoLinks)
+                                             photoLinks: pm.photoLinks,
+                                             sourceID: pm.sourceID)
                     containerStack.last?.placemarks.append(built)
                 }
             }

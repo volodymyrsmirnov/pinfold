@@ -190,4 +190,42 @@ import Foundation
         #expect(fm.fileExists(atPath: synced.appendingPathComponent("both").path))
         #expect(fm.fileExists(atPath: cache.appendingPathComponent("both/resources").path))
     }
+
+    @Test func updateMetadataPreservesUntouchedFields() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storage = StorageLocations(root: base)
+        let folder = "entry-1"
+        try FileManager.default.createDirectory(
+            at: base.appendingPathComponent(folder, isDirectory: true), withIntermediateDirectories: true
+        )
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "T", sourceFilename: "t.kml",
+            importDate: Date(timeIntervalSince1970: 0), pointCount: 1,
+            contentSHA256: "x", trashedAt: nil,
+            favoriteKeys: ["id:keep"], visitedKeys: ["id:seen"]
+        )
+        try storage.writeMetadata(meta, forFolderNamed: folder)
+
+        let stamp = Date(timeIntervalSince1970: 555)
+        try storage.updateMetadata(forFolderNamed: folder) { $0.trashedAt = stamp }
+
+        let reloaded = try #require(try storage.readMetadata(forFolderNamed: folder))
+        #expect(reloaded.trashedAt == stamp)
+        #expect(reloaded.favoriteKeys == ["id:keep"])
+        #expect(reloaded.visitedKeys == ["id:seen"])
+        #expect(reloaded.pointCount == 1)
+        #expect(reloaded.contentSHA256 == "x")
+    }
+
+    @Test func updateMetadata_isNoOp_whenSidecarAbsent() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storage = StorageLocations(root: base)
+        let folder = "ghost"
+        try FileManager.default.createDirectory(
+            at: base.appendingPathComponent(folder, isDirectory: true), withIntermediateDirectories: true
+        )
+        // Must not throw, and must not create a sidecar.
+        try storage.updateMetadata(forFolderNamed: folder) { $0.trashedAt = .now }
+        #expect(try storage.readMetadata(forFolderNamed: folder) == nil)
+    }
 }

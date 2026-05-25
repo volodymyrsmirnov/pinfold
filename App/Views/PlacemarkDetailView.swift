@@ -25,6 +25,7 @@ struct PlacemarkDetailView: View {
     @Environment(MapAppService.self) private var mapService
     @Environment(AppSettings.self) private var settings
     @Environment(\.resourceCache) private var resourceCache
+    @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
 
     // MARK: - State
 
@@ -59,7 +60,7 @@ struct PlacemarkDetailView: View {
             }
         }
         .navigationTitle(placemark.name ?? "Untitled")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
         .task {
             if let html = placemark.descriptionHTML, !html.isEmpty {
@@ -80,9 +81,24 @@ struct PlacemarkDetailView: View {
 
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Style icon header
-            StyleIcon(placemark: placemark, document: document, entry: entry, size: 48)
-                .padding(.horizontal)
+            // Style icon + favorite star header
+            HStack(alignment: .center, spacing: 8) {
+                StyleIcon(placemark: placemark, document: document, entry: entry, size: 48)
+                if annotations?.isFavorite(placemark) == true {
+                    Image(systemName: "star.fill")
+                        .font(.title3)
+                        .foregroundStyle(.yellow)
+                }
+                Text(placemark.name ?? "Untitled")
+                    .font(.title3.bold())
+                    .strikethrough(annotations?.isVisited(placemark) == true)
+                    .foregroundStyle(annotations?.isVisited(placemark) == true ? .secondary : .primary)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(annotations?.accessibilityDescription(for: placemark) ?? (placemark.name ?? "Untitled"))
+            .padding(.horizontal)
 
             // Description
             if let rendered = renderedDescription {
@@ -186,6 +202,23 @@ struct PlacemarkDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                if let annotations {
+                    Button {
+                        annotations.toggleFavorite(placemark)
+                    } label: {
+                        let on = annotations.isFavorite(placemark)
+                        Label(on ? "Remove from Favorites" : "Add to Favorites",
+                              systemImage: on ? "star.slash" : "star")
+                    }
+                    Button {
+                        annotations.toggleVisited(placemark)
+                    } label: {
+                        let on = annotations.isVisited(placemark)
+                        Label(on ? "Mark as Unseen" : "Mark as Seen",
+                              systemImage: on ? "eye.slash" : "eye")
+                    }
+                    Divider()
+                }
                 if let coordStr = coordinateString {
                     Button {
                         UIPasteboard.general.string = coordStr
