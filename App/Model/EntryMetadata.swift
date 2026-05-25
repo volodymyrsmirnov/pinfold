@@ -36,6 +36,9 @@ struct EntryMetadata: Codable, Equatable, Sendable {
         self.visitedKeys = visitedKeys
     }
 
+    // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
+    // can use decodeIfPresent for legacy files and encode as sorted arrays. When adding a
+    // property, update CodingKeys, init(from:), encode(to:), AND the memberwise init.
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
         case contentSHA256, trashedAt, favoriteKeys, visitedKeys

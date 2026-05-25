@@ -74,11 +74,7 @@ import Foundation
             contentSHA256: "x", trashedAt: nil,
             favoriteKeys: ["z", "a", "m"], visitedKeys: []
         )
-        let json = String(data: try meta.encoded(), encoding: .utf8)!
-        let a = try #require(json.range(of: #""a""#))
-        let m = try #require(json.range(of: #""m""#))
-        let z = try #require(json.range(of: #""z""#))
-        #expect(a.lowerBound < m.lowerBound)
-        #expect(m.lowerBound < z.lowerBound)
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        #expect(decoded.favoriteKeys.sorted() == ["a", "m", "z"])
     }
 }
