@@ -24,6 +24,12 @@ struct PlacemarkRow: View {
 
     @Environment(\.resourceCache) private var resourceCache
     @Environment(\.storageLocations) private var storage
+    @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
+
+    // MARK: - Annotation state
+
+    private var isFavorite: Bool { annotations?.isFavorite(placemark) ?? false }
+    private var isVisited: Bool { annotations?.isVisited(placemark) ?? false }
 
     // MARK: - Body
 
@@ -41,9 +47,19 @@ struct PlacemarkRow: View {
 
     private var labelStack: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(placemark.name ?? "Untitled")
-                .font(.body)
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                if isFavorite {
+                    Image(systemName: "star.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.yellow)
+                        .accessibilityLabel("Favorite")
+                }
+                Text(placemark.name ?? "Untitled")
+                    .font(.body)
+                    .strikethrough(isVisited)
+                    .foregroundStyle(isVisited ? .secondary : .primary)
+                    .lineLimit(1)
+            }
             if let html = placemark.descriptionHTML, !html.isEmpty {
                 let preview = AttributedHTML.plainText(html).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !preview.isEmpty {
