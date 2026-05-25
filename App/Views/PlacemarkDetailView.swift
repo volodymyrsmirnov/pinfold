@@ -47,13 +47,6 @@ struct PlacemarkDetailView: View {
         placemark.coordinate != nil
     }
 
-    private var headerAccessibilityLabel: String {
-        var parts = [placemark.name ?? "Untitled"]
-        if annotations?.isFavorite(placemark) == true { parts.append("Favorite") }
-        if annotations?.isVisited(placemark) == true { parts.append("Visited") }
-        return parts.joined(separator: ", ")
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -104,7 +97,7 @@ struct PlacemarkDetailView: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(headerAccessibilityLabel)
+            .accessibilityLabel(annotations?.accessibilityDescription(for: placemark) ?? (placemark.name ?? "Untitled"))
             .padding(.horizontal)
 
             // Description

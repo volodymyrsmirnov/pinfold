@@ -31,13 +31,6 @@ struct PlacemarkRow: View {
     private var isFavorite: Bool { annotations?.isFavorite(placemark) ?? false }
     private var isVisited: Bool { annotations?.isVisited(placemark) ?? false }
 
-    private var accessibilityRowTitle: String {
-        var parts = [placemark.name ?? "Untitled"]
-        if isFavorite { parts.append("Favorite") }
-        if isVisited { parts.append("Visited") }
-        return parts.joined(separator: ", ")
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -67,7 +60,7 @@ struct PlacemarkRow: View {
                     .lineLimit(1)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(accessibilityRowTitle)
+            .accessibilityLabel(annotations?.accessibilityDescription(for: placemark) ?? (placemark.name ?? "Untitled"))
             if let html = placemark.descriptionHTML, !html.isEmpty {
                 let preview = AttributedHTML.plainText(html).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !preview.isEmpty {

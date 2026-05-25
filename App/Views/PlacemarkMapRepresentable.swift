@@ -105,6 +105,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     let storage: StorageLocations
     let showsUserLocation: Bool
     let clusterPins: Bool
+    let favoriteKeys: Set<String>
+    let visitedKeys: Set<String>
     @Binding var selectedID: String?
 
     /// UserDefaults key for the persisted basemap style. The style control and its
@@ -134,9 +136,14 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
         let annotations = placemarks.compactMap { placemark -> PlacemarkAnnotation? in
             guard let coordinate = placemark.coordinate else { return nil }
-            let image = PlacemarkPinImage.image(
+            let base = PlacemarkPinImage.image(
                 for: placemark, document: document, entry: entry,
                 resourceCache: resourceCache, storage: storage
+            )
+            let image = PlacemarkPinImage.decorated(
+                base,
+                isFavorite: favoriteKeys.contains(placemark.stableKey),
+                isVisited: visitedKeys.contains(placemark.stableKey)
             )
             return PlacemarkAnnotation(
                 placemarkID: placemark.id,

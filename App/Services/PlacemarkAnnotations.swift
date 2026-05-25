@@ -40,6 +40,15 @@ import PinfoldCore
     func isFavorite(_ placemark: KMLPlacemark) -> Bool { favoriteKeys.contains(placemark.stableKey) }
     func isVisited(_ placemark: KMLPlacemark) -> Bool { visitedKeys.contains(placemark.stableKey) }
 
+    /// A VoiceOver-friendly description combining the placemark name with its
+    /// favorite/visited state, e.g. "Mount Everest, Favorite, Visited".
+    func accessibilityDescription(for placemark: KMLPlacemark) -> String {
+        var parts = [placemark.name ?? "Untitled"]
+        if isFavorite(placemark) { parts.append("Favorite") }
+        if isVisited(placemark) { parts.append("Visited") }
+        return parts.joined(separator: ", ")
+    }
+
     func toggleFavorite(_ placemark: KMLPlacemark) {
         toggle(&favoriteKeys, key: placemark.stableKey)
         persist()

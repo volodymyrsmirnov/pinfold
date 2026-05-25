@@ -49,6 +49,32 @@ enum PlacemarkPinImage {
         return symbol.withTintColor(tint, renderingMode: .alwaysOriginal)
     }
 
+    /// Returns `base` with a small star badge composited at the top-right when favorite,
+    /// and at reduced opacity when visited. Returns `base` unchanged when neither applies.
+    static func decorated(_ base: UIImage, isFavorite: Bool, isVisited: Bool) -> UIImage {
+        guard isFavorite || isVisited else { return base }
+
+        let badge = dimension * 0.55
+        // Extend the canvas up-and-right so the badge isn't clipped.
+        let inset = isFavorite ? badge / 2 : 0
+        let canvas = CGSize(width: base.size.width + inset, height: base.size.height + inset)
+
+        let renderer = UIGraphicsImageRenderer(size: canvas)
+        return renderer.image { _ in
+            let baseOrigin = CGPoint(x: 0, y: inset)
+            base.draw(in: CGRect(origin: baseOrigin, size: base.size),
+                      blendMode: .normal, alpha: isVisited ? 0.45 : 1.0)
+
+            if isFavorite {
+                let starConfig = UIImage.SymbolConfiguration(pointSize: badge, weight: .bold)
+                let star = UIImage(systemName: "star.fill", withConfiguration: starConfig)?
+                    .withTintColor(.systemYellow, renderingMode: .alwaysOriginal)
+                let starRect = CGRect(x: canvas.width - badge, y: 0, width: badge, height: badge)
+                star?.draw(in: starRect)
+            }
+        }
+    }
+
     /// Scales `image` down so its longest edge is at most `maxDimension` (never upscales).
     private static func resized(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
         let size = image.size
