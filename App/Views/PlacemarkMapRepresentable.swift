@@ -183,7 +183,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         return mapView
     }
 
-    func updateUIView(_ mapView: MKMapView, context _: Context) {
+    func updateUIView(_ mapView: MKMapView, context: Context) {
         mapView.showsUserLocation = showsUserLocation
 
         // Reconcile SwiftUI -> map selection: if SwiftUI cleared it, deselect on the map
@@ -194,18 +194,24 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             }
         }
 
-        // Re-decorate pins from their stored base images using the current favorite/visited
-        // sets. Runs on every SwiftUI update; safe because no file I/O is involved.
-        // `view(for:)` is nil for offscreen annotations — the annotation.image update
-        // still lands, so viewFor(_:) picks up the correct image on next reuse.
-        for annotation in mapView.annotations.compactMap({ $0 as? PlacemarkAnnotation }) {
-            let fresh = PlacemarkPinImage.decorated(
-                annotation.baseImage,
-                isFavorite: favoriteKeys.contains(annotation.stableKey),
-                isVisited: visitedKeys.contains(annotation.stableKey)
-            )
-            annotation.image = fresh
-            mapView.view(for: annotation)?.image = fresh
+        // Re-decorate pins only when the sets actually changed — selection flips
+        // selectedID and triggers updateUIView too, so without this guard every tap
+        // would re-composite UIGraphicsImageRenderer images for all N annotations.
+        // `view(for:)` is nil for offscreen annotations — annotation.image still lands,
+        // so viewFor(_:) picks up the correct image on next reuse.
+        if context.coordinator.lastFavoriteKeys != favoriteKeys
+            || context.coordinator.lastVisitedKeys != visitedKeys {
+            context.coordinator.lastFavoriteKeys = favoriteKeys
+            context.coordinator.lastVisitedKeys = visitedKeys
+            for annotation in mapView.annotations.compactMap({ $0 as? PlacemarkAnnotation }) {
+                let fresh = PlacemarkPinImage.decorated(
+                    annotation.baseImage,
+                    isFavorite: favoriteKeys.contains(annotation.stableKey),
+                    isVisited: visitedKeys.contains(annotation.stableKey)
+                )
+                annotation.image = fresh
+                mapView.view(for: annotation)?.image = fresh
+            }
         }
     }
 
@@ -287,6 +293,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         weak var mapView: MKMapView?
         weak var styleButton: UIButton?
         var currentStyle: EmbeddedMapStyle?
+        var lastFavoriteKeys: Set<String> = []
+        var lastVisitedKeys: Set<String> = []
 
         init(_ parent: PlacemarkMapRepresentable) {
             self.parent = parent
