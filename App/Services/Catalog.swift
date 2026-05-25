@@ -92,8 +92,6 @@ import Observation
     }
 
     private func writeTrashedAt(_ date: Date?, to entry: CatalogEntry) {
-        var meta = entry.metadata
-        meta.trashedAt = date
-        try? storage.writeMetadata(meta, forFolderNamed: entry.storageFolderName)
+        try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.trashedAt = date }
     }
 }

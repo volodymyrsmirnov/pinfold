@@ -150,6 +150,16 @@ struct StorageLocations {
         return try EntryMetadata.decoded(from: Data(contentsOf: url))
     }
 
+    /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field
+    /// the caller does not touch. No-op if the sidecar is absent. Use this instead of
+    /// reconstructing `EntryMetadata` from an in-memory `CatalogEntry` (which does not
+    /// carry the favorite/visited sets and would clobber them).
+    func updateMetadata(forFolderNamed name: String, _ mutate: (inout EntryMetadata) -> Void) throws {
+        guard var meta = try readMetadata(forFolderNamed: name) else { return }
+        mutate(&meta)
+        try writeMetadata(meta, forFolderNamed: name)
+    }
+
     // MARK: - Enumeration
 
     /// Names of all per-entry folders directly under the synced root. Returns `[]`
