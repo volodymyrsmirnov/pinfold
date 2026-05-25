@@ -43,4 +43,42 @@ import Foundation
             _ = try EntryMetadata.decoded(from: Data("not json".utf8))
         }
     }
+
+    @Test func roundTripsFavoriteAndVisitedKeys() throws {
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Trip", sourceFilename: "trip.kml",
+            importDate: Date(timeIntervalSince1970: 1000), pointCount: 3,
+            contentSHA256: "deadbeef", trashedAt: nil,
+            favoriteKeys: ["id:a", "h:1234"], visitedKeys: ["id:b"]
+        )
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        #expect(decoded.favoriteKeys == ["id:a", "h:1234"])
+        #expect(decoded.visitedKeys == ["id:b"])
+        #expect(decoded == meta)
+    }
+
+    @Test func legacyJSONWithoutNewKeysDecodesToEmptySets() throws {
+        let legacy = """
+        {"contentSHA256":"abc","displayName":"Old","id":"\(UUID().uuidString)",\
+        "importDate":0,"pointCount":1,"sourceFilename":"old.kml"}
+        """
+        let decoded = try EntryMetadata.decoded(from: Data(legacy.utf8))
+        #expect(decoded.favoriteKeys.isEmpty)
+        #expect(decoded.visitedKeys.isEmpty)
+    }
+
+    @Test func encodesKeysAsSortedArraysForStableOutput() throws {
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "T", sourceFilename: "t.kml",
+            importDate: Date(timeIntervalSince1970: 0), pointCount: 0,
+            contentSHA256: "x", trashedAt: nil,
+            favoriteKeys: ["z", "a", "m"], visitedKeys: []
+        )
+        let json = String(data: try meta.encoded(), encoding: .utf8)!
+        let a = try #require(json.range(of: #""a""#))
+        let m = try #require(json.range(of: #""m""#))
+        let z = try #require(json.range(of: #""z""#))
+        #expect(a.lowerBound < m.lowerBound)
+        #expect(m.lowerBound < z.lowerBound)
+    }
 }
