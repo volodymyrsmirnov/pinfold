@@ -21,7 +21,6 @@ import Foundation
 ///     resources/            ← local-only icon/photo cache
 /// ```
 struct StorageLocations {
-
     // MARK: - Properties
 
     /// Synced root: holds per-entry folders with the original file + sidecar.
@@ -94,8 +93,8 @@ struct StorageLocations {
         folder(for: entry).appendingPathComponent("metadata.json")
     }
 
-    /// The sidecar path for a raw folder name (used by the reconciler before a
-    /// `KMLFileEntry` exists).
+    /// The sidecar path for a raw folder name (used by the scanner before a
+    /// `CatalogEntry` exists).
     func metadataFile(forFolderNamed name: String) -> URL {
         root.appendingPathComponent(name, isDirectory: true).appendingPathComponent("metadata.json")
     }
@@ -133,13 +132,13 @@ struct StorageLocations {
 
     /// Writes the sidecar `metadata.json` for `entry` (folder must already exist).
     func writeMetadata(_ metadata: EntryMetadata, for entry: CatalogEntry) throws {
-        try metadata.encoded().write(to: metadataFile(for: entry))
+        try metadata.encoded().write(to: metadataFile(for: entry), options: .atomic)
     }
 
     /// Writes the sidecar into a raw folder name (used by the reconciler to backfill a
     /// sidecar for a pre-existing entry that predates iCloud sync). Folder must exist.
     func writeMetadata(_ metadata: EntryMetadata, forFolderNamed name: String) throws {
-        try metadata.encoded().write(to: metadataFile(forFolderNamed: name))
+        try metadata.encoded().write(to: metadataFile(forFolderNamed: name), options: .atomic)
     }
 
     /// Reads the sidecar for a raw folder name, or `nil` if the file is absent.

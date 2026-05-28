@@ -74,6 +74,10 @@ final class ShareViewController: UIViewController {
         let inbox = container.appendingPathComponent("Inbox", isDirectory: true)
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         let dest = inbox.appendingPathComponent("\(UUID().uuidString)-\(url.lastPathComponent)")
+        // Files vended by other apps (Files, Mail, …) may be security-scoped; without
+        // claiming access first, the copy can silently fail.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         try? FileManager.default.copyItem(at: url, to: dest)
     }
 

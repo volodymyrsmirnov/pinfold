@@ -6,7 +6,6 @@ import Foundation
 /// Inject a custom `inboxURL` in tests — do not rely on the real App Group container.
 @MainActor
 struct PendingImportInbox {
-
     // MARK: - Properties
 
     /// The inbox directory to drain (typically `AppGroup.inboxURL`).
@@ -35,7 +34,8 @@ struct PendingImportInbox {
         // If the inbox directory doesn't exist there is nothing to drain.
         var isDirectory: ObjCBool = false
         guard fm.fileExists(atPath: inboxURL.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
+              isDirectory.boolValue
+        else {
             return 0
         }
 
@@ -58,6 +58,9 @@ struct PendingImportInbox {
         }
 
         var imported = 0
+        // Hashes committed within THIS drain. The catalogue is only reloaded at the end, so
+        // without this two identical files dropped in one batch would both import.
+        var committedHashes: Set<String> = []
 
         for file in files {
             do {
@@ -66,12 +69,15 @@ struct PendingImportInbox {
                     data: data,
                     sourceFilename: file.lastPathComponent
                 )
-                if catalog.entry(withSHA256: result.contentSHA256) == nil {
+                let isNew = catalog.entry(withSHA256: result.contentSHA256) == nil
+                    && !committedHashes.contains(result.contentSHA256)
+                if isNew {
                     _ = try ImportService.commit(
                         result,
                         storage: storage,
                         cache: cache
                     )
+                    committedHashes.insert(result.contentSHA256)
                     imported += 1
                 }
             } catch {

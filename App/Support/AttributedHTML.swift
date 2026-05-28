@@ -1,110 +1,82 @@
 import Foundation
-import UIKit
 
-/// Utilities for converting HTML strings to `AttributedString`.
+/// Converts a KML `<description>` HTML string to plain text for display.
 ///
-/// HTML-to-`AttributedString` conversion via `NSAttributedString` is expensive and must
-/// run on the main thread. Call `render(_:)` lazily — once, when a detail view appears —
-/// rather than up-front or in a list. Never call it in bulk (e.g. inside a `List` body).
+/// KML descriptions are **untrusted** — they come from arbitrary imported files — so the
+/// app deliberately does **not** feed them to `NSAttributedString`'s `.html` importer. That
+/// importer is WebKit-backed and issues synchronous network requests for any remote
+/// subresources referenced in the markup (`<img>`, external CSS) while it parses: a
+/// privacy/beaconing leak (it reveals that a file was opened, plus the device IP) and a
+/// main-thread stall. These helpers instead strip tags locally — no HTML parsing, no
+/// network — and decode the common HTML entities.
 enum AttributedHTML {
+    // MARK: - One-line plain text
 
-    // MARK: - Main-actor render
-
-    /// Converts an HTML string to an `AttributedString`.
-    ///
-    /// Uses `NSAttributedString(data:options:documentAttributes:)` with `.html` document
-    /// type and UTF-8 encoding, then bridges the result to `AttributedString`. If the
-    /// conversion fails for any reason (malformed HTML, unsupported encoding, etc.), falls
-    /// back to `plainText(_:)` so the caller always receives readable text.
-    ///
-    /// The HTML importer applies its own default styling (a serif body font at ~12pt and a
-    /// hard-coded black text color). To match the rest of the app, every run is remapped
-    /// to the system **body** font — preserving bold/italic traits — and the importer's
-    /// foreground color is stripped so the text adapts to light/dark mode. Links and other
-    /// attributes are left intact.
-    ///
-    /// - Parameter html: An HTML string, e.g. a KML `<description>` value.
-    /// - Returns: A styled `AttributedString`, or a plain-text fallback on failure.
-    ///
-    /// - Important: This method is `@MainActor`-bound. Call it from the main actor only.
-    ///   Typically it should be called once inside a `.task` or `.onAppear` block and
-    ///   stored in `@State`.
-    @MainActor
-    static func render(_ html: String) -> AttributedString {
-        guard let data = html.data(using: .utf8),
-              let nsAttr = try? NSAttributedString(
-                  data: data,
-                  options: [
-                      .documentType: NSAttributedString.DocumentType.html,
-                      .characterEncoding: NSUTF8StringEncoding
-                  ],
-                  documentAttributes: nil
-              ) else {
-            return AttributedString(plainText(html))
-        }
-
-        let normalized = normalizedForDisplay(nsAttr)
-        guard let attributed = try? AttributedString(normalized, including: \.uiKit) else {
-            return AttributedString(plainText(html))
-        }
-        return attributed
-    }
-
-    /// Spacing inserted after each paragraph (`<p>`), relative to the body font size.
-    @MainActor
-    private static var paragraphSpacing: CGFloat {
-        UIFont.preferredFont(forTextStyle: .body).pointSize * 0.65
-    }
-
-    /// Normalizes the imported HTML for display: remaps fonts to the system body font
-    /// (preserving bold/italic), drops the importer's fixed foreground color so the text
-    /// adapts to light/dark, and adds spacing between paragraphs (existing paragraph
-    /// attributes such as alignment are preserved).
-    @MainActor
-    private static func normalizedForDisplay(_ source: NSAttributedString) -> NSAttributedString {
-        let mutable = NSMutableAttributedString(attributedString: source)
-        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
-        let fullRange = NSRange(location: 0, length: mutable.length)
-
-        mutable.enumerateAttribute(.font, in: fullRange) { value, range, _ in
-            // Preserve only the bold/italic traits from the imported font.
-            let traits = (value as? UIFont)?.fontDescriptor.symbolicTraits ?? []
-            var descriptor = bodyFont.fontDescriptor
-            if let withTraits = descriptor.withSymbolicTraits(
-                traits.intersection([.traitBold, .traitItalic])
-            ) {
-                descriptor = withTraits
-            }
-            let font = UIFont(descriptor: descriptor, size: bodyFont.pointSize)
-            mutable.addAttribute(.font, value: font, range: range)
-        }
-
-        // Add space between paragraphs, preserving any existing paragraph style.
-        let spacing = paragraphSpacing
-        mutable.enumerateAttribute(.paragraphStyle, in: fullRange) { value, range, _ in
-            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle
-                ?? NSMutableParagraphStyle()
-            style.paragraphSpacing = spacing
-            mutable.addAttribute(.paragraphStyle, value: style, range: range)
-        }
-
-        // Drop the importer's hard-coded color so SwiftUI's default (adaptive) color wins.
-        mutable.removeAttribute(.foregroundColor, range: fullRange)
-        return mutable
-    }
-
-    // MARK: - Tag stripping fallback
-
-    /// Returns a plain-text approximation of `html` by stripping all tags.
-    ///
-    /// This is the fallback used when `NSAttributedString` conversion fails. It performs
-    /// a simple regex-based tag strip — it is not a full HTML parser and will not handle
-    /// edge cases like `<` inside attribute values, but it is adequate as a best-effort
-    /// fallback for KML description fields.
-    ///
-    /// - Parameter html: An HTML string.
-    /// - Returns: The string with all `<tag>` occurrences removed.
+    /// Tags stripped, entities decoded, every run of whitespace collapsed to a single
+    /// space. Use for one-line previews (list rows, map preview card) shown with
+    /// `lineLimit(1)`.
     static func plainText(_ html: String) -> String {
-        html.replacing(#/<[^>]*>/#, with: "")
+        let stripped = stripTags(html, lineBreak: " ", paragraphBreak: " ")
+        return decodeEntities(stripped)
+            .replacing(#/\s+/#, with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Multi-line readable text
+
+    /// `<br>` and block-level tags become line breaks, table cells become spaces, entities
+    /// are decoded, and the source file's indentation plus runs of blank lines are removed
+    /// so the result reads cleanly. Use for the placemark detail description.
+    static func readableText(_ html: String) -> String {
+        let decoded = decodeEntities(stripTags(html, lineBreak: "\n", paragraphBreak: "\n\n"))
+        // KML CDATA descriptions frequently carry the source file's leading indentation;
+        // trim each line and collapse consecutive blank lines.
+        var lines: [String] = []
+        for rawLine in decoded.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty, lines.last?.isEmpty == true { continue }
+            lines.append(line)
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Tag stripping
+
+    /// Replaces `<br>` and per-item closes (`</li>`, `</tr>`) with `lineBreak`, block-level
+    /// closes (`</p>`, `</div>`, headings, lists, …) with `paragraphBreak`, and table cells
+    /// with a space, then removes every remaining tag. Using a doubled `paragraphBreak` for
+    /// readable text puts a blank line between paragraphs so descriptions don't read cramped.
+    private static func stripTags(_ html: String, lineBreak: String, paragraphBreak: String) -> String {
+        var s = html
+        s = s.replacing(#/(?i)<\s*br\s*/?>/#, with: lineBreak)
+        s = s.replacing(#/(?i)<\s*/\s*(?:li|tr)\s*>/#, with: lineBreak)
+        s = s.replacing(#/(?i)<\s*/\s*(?:p|div|blockquote|ul|ol|table|h[1-6])\s*>/#, with: paragraphBreak)
+        s = s.replacing(#/(?i)<\s*/\s*(?:td|th)\s*>/#, with: " ")
+        s = s.replacing(#/<[^>]*>/#, with: "")
+        return s
+    }
+
+    // MARK: - Entity decoding
+
+    /// Decodes the common named and numeric HTML entities. `&amp;` is decoded **last** so
+    /// double-encoded input such as `&amp;lt;` becomes the literal `&lt;`, not `<`.
+    private static func decodeEntities(_ html: String) -> String {
+        var s = html
+        // Numeric — hex (`&#xA0;`) first, then decimal (`&#160;`).
+        s = s.replacing(#/&#x([0-9A-Fa-f]+);/#) { match in
+            UInt32(match.1, radix: 16).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                ?? String(match.0)
+        }
+        s = s.replacing(#/&#([0-9]+);/#) { match in
+            UInt32(match.1, radix: 10).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                ?? String(match.0)
+        }
+        let named: [(String, String)] = [
+            ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&apos;", "'"),
+        ]
+        for (entity, replacement) in named {
+            s = s.replacingOccurrences(of: entity, with: replacement)
+        }
+        return s.replacingOccurrences(of: "&amp;", with: "&")
     }
 }

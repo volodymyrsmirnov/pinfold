@@ -1,11 +1,10 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `PendingImportInbox` — inbox draining, dedup, empty inbox, and resilience
 /// against malformed files.
 @Suite(.serialized) @MainActor struct PendingImportInboxTests {
-
     // MARK: - Helpers
 
     /// Creates a fresh `Catalog`, a temp storage root, and a temp inbox directory.
@@ -76,7 +75,7 @@ import Foundation
         #expect(remaining.isEmpty, "Inbox must be empty after the second drain")
     }
 
-    @Test func drain_nonExistentInbox_returnsZeroWithoutThrowing() async throws {
+    @Test func drain_nonExistentInbox_returnsZeroWithoutThrowing() async {
         let tempBase = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let nonExistentInbox = tempBase.appendingPathComponent("DoesNotExist", isDirectory: true)
@@ -113,5 +112,21 @@ import Foundation
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: inboxURL.path)
         #expect(remaining.isEmpty, "Inbox must be empty: both files (valid + malformed) removed")
+    }
+
+    @Test func drain_twoIdenticalFilesInOneBatch_importsOnlyOne() async throws {
+        let (inbox, catalog, inboxURL) = try makeEnvironment()
+        // Same bytes under two names, both present for a single drain. The catalogue is not
+        // reloaded until the end of the drain, so dedup must happen within the batch.
+        try copyFixture(named: "Rome.kml", as: "Rome-a.kml", into: inboxURL)
+        try copyFixture(named: "Rome.kml", as: "Rome-b.kml", into: inboxURL)
+
+        let count = await inbox.drain()
+
+        #expect(count == 1, "Two identical files in one batch must import only once")
+        #expect(catalog.active.count == 1, "Only one entry must exist after same-batch dedup")
+
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: inboxURL.path)
+        #expect(remaining.isEmpty, "Both inbox files must be removed")
     }
 }

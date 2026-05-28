@@ -82,14 +82,14 @@ extension MapApp {
 
     // MARK: - Individual entries
 
-    /// Apple Maps — always installed; uses `maps.apple.com` HTTP URL.
+    /// Apple Maps — always installed; uses the `https://maps.apple.com` universal link.
     static let apple = MapApp(
         id: "apple",
         displayName: "Apple Maps",
         urlScheme: nil,
         alwaysAvailable: true
     ) { lat, lng, name in
-        var components = URLComponents(string: "http://maps.apple.com/")!
+        var components = URLComponents(string: "https://maps.apple.com/")!
         components.queryItems = [
             URLQueryItem(name: "ll", value: "\(lat),\(lng)"),
             URLQueryItem(name: "q", value: name),

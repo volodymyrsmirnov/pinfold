@@ -8,6 +8,9 @@ import Foundation
 /// - Downloads remote http(s) icon/photo hrefs via an injected downloader.
 /// - Maintains a `manifest.json` mapping original href/path to cached filename so the
 ///   UI can resolve an href to a local `URL` without knowledge of the naming scheme.
+/// - Records the full set of expected remote hrefs (`remote-hrefs.json`) so a later
+///   `retryPending(in:)` pass can fill in downloads that failed while offline — without
+///   re-parsing the original file.
 /// - Skips individual download failures (offline-first) and retries them later.
 ///
 /// The downloader closure is injectable so tests never hit the network.
@@ -85,7 +88,7 @@ final class ResourceCache: Sendable {
         for (key, data) in resources {
             let filename = cachedFilename(for: key)
             let dest = resourcesDir.appendingPathComponent(filename)
-            try data.write(to: dest)
+            try data.write(to: dest, options: .atomic)
             manifest[key] = filename
         }
         try saveManifest(manifest, to: resourcesDir)
@@ -95,30 +98,37 @@ final class ResourceCache: Sendable {
 
     /// Downloads each http(s) href via the injected downloader and writes the result to
     /// `resourcesDir`. Individual failures are silently skipped (offline-first). The
-    /// manifest is updated after each successful write.
+    /// manifest is updated after each successful write, and the full expected href set is
+    /// recorded so `retryPending(in:)` can re-attempt failures later.
     ///
     /// - Parameters:
     ///   - hrefs: Remote resource URLs to download.
     ///   - resourcesDir: Destination `resources/` directory.
     func downloadRemote(_ hrefs: [String], to resourcesDir: URL) async {
-        for href in hrefs {
-            guard let url = URL(string: href),
-                  url.scheme == "http" || url.scheme == "https" else { continue }
+        let remote = hrefs.filter { $0.hasPrefix("http://") || $0.hasPrefix("https://") }
+        // Record the full expected set up front so a later retry pass can fill in any that
+        // fail now, without re-parsing the original file.
+        recordExpectedRemoteHrefs(remote, to: resourcesDir)
+        for href in remote {
+            guard let url = URL(string: href) else { continue }
             // App Transport Security blocks plain http loads, so fetch over https. Many KML
             // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
             // hosts also serve https. The manifest is still keyed by the original `href`
-            // so UI lookups via `localURL(forHref:)` resolve unchanged.
+            // so UI lookups via `localURL(forHref:)` resolve unchanged. A host that serves
+            // *only* http (no https) is unsupported by design — the download fails and the
+            // UI falls back to a generic pin.
             let downloadURL = Self.httpsUpgraded(url)
             do {
                 let data = try await downloader(downloadURL)
                 let filename = cachedFilename(for: href)
                 let dest = resourcesDir.appendingPathComponent(filename)
-                try data.write(to: dest)
+                try data.write(to: dest, options: .atomic)
                 var manifest = loadManifest(from: resourcesDir)
                 manifest[href] = filename
                 try saveManifest(manifest, to: resourcesDir)
             } catch {
-                // Offline-first: skip this href; it will be retried via retryPending.
+                // Offline-first: skip this href. The recorded-hrefs file lets `retryPending`
+                // re-attempt it on a later materialization pass / app foreground.
             }
         }
     }
@@ -136,9 +146,7 @@ final class ResourceCache: Sendable {
 
     // MARK: - Retry
 
-    /// Re-attempts any hrefs that are not yet recorded in the manifest.
-    ///
-    /// Call this when connectivity is restored to fill in previously-failed downloads.
+    /// Re-attempts any hrefs in `hrefs` that are not yet recorded in the manifest.
     ///
     /// - Parameters:
     ///   - hrefs: The full set of remote hrefs for the entry (same list used at import).
@@ -147,6 +155,17 @@ final class ResourceCache: Sendable {
         let manifest = loadManifest(from: resourcesDir)
         let pending = hrefs.filter { manifest[$0] == nil }
         await downloadRemote(pending, to: resourcesDir)
+    }
+
+    /// Re-attempts downloads for the remote hrefs recorded for this entry (by a prior
+    /// `downloadRemote`) that are not yet in the manifest. Reads the persisted href list, so
+    /// no re-parse of the original file is needed; a cheap no-op when everything is cached
+    /// (or when the entry has no remote resources). Call when connectivity may have been
+    /// restored — e.g. from the background materialization pass on app foreground.
+    func retryPending(in resourcesDir: URL) async {
+        let recorded = loadRecordedHrefs(from: resourcesDir)
+        guard !recorded.isEmpty else { return }
+        await retryPending(recorded, to: resourcesDir)
     }
 
     // MARK: - Lookup
@@ -184,9 +203,39 @@ final class ResourceCache: Sendable {
         return decoded
     }
 
-    /// Encodes `manifest` to JSON and writes it to `resourcesDir/manifest.json`.
+    /// Encodes `manifest` to JSON and writes it atomically to `resourcesDir/manifest.json`.
     private func saveManifest(_ manifest: [String: String], to resourcesDir: URL) throws {
         let data = try JSONEncoder().encode(manifest)
-        try data.write(to: manifestURL(in: resourcesDir))
+        try data.write(to: manifestURL(in: resourcesDir), options: .atomic)
+    }
+
+    // MARK: - Recorded remote hrefs (for retry)
+
+    private func recordedHrefsURL(in resourcesDir: URL) -> URL {
+        resourcesDir.appendingPathComponent("remote-hrefs.json")
+    }
+
+    /// The full set of remote http(s) hrefs expected for this entry, recorded at download
+    /// time so failed downloads can be retried later without re-parsing the original.
+    private func loadRecordedHrefs(from resourcesDir: URL) -> [String] {
+        guard let data = try? Data(contentsOf: recordedHrefsURL(in: resourcesDir)),
+              let decoded = try? JSONDecoder().decode([String].self, from: data)
+        else {
+            return []
+        }
+        return decoded
+    }
+
+    /// Merges `hrefs` into the recorded set and writes it back (sorted, atomic). No-op when
+    /// `hrefs` adds nothing new, so repeated `downloadRemote` calls don't rewrite the file.
+    private func recordExpectedRemoteHrefs(_ hrefs: [String], to resourcesDir: URL) {
+        guard !hrefs.isEmpty else { return }
+        var set = Set(loadRecordedHrefs(from: resourcesDir))
+        let original = set
+        set.formUnion(hrefs)
+        guard set != original else { return }
+        if let data = try? JSONEncoder().encode(set.sorted()) {
+            try? data.write(to: recordedHrefsURL(in: resourcesDir), options: .atomic)
+        }
     }
 }

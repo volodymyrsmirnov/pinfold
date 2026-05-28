@@ -4,6 +4,9 @@ import ZIPFoundation
 public enum KMZArchiveError: Error, Equatable {
     case notAZipArchive
     case noKMLEntry
+    /// The archive declares (or, mid-extraction, produces) more entries or uncompressed
+    /// bytes than the allowed limit — a guard against decompression-bomb inputs.
+    case archiveTooLarge
 }
 
 public struct KMZContents: Sendable {
@@ -24,14 +27,45 @@ public enum KMZArchive {
         return data[s] == 0x50 && data[s + 1] == 0x4B && data[s + 2] == 0x03 && data[s + 3] == 0x04
     }
 
-    public static func extract(_ data: Data) throws -> KMZContents {
+    /// Generous defaults that no realistic KML/KMZ (even photo-heavy) approaches, but that
+    /// stop a crafted decompression bomb from exhausting memory. Callers may tighten them.
+    public static let defaultMaxEntryCount = 100_000
+    public static let defaultMaxUncompressedBytes = 2 * 1024 * 1024 * 1024 // 2 GiB
+
+    public static func extract(
+        _ data: Data,
+        maxEntryCount: Int = defaultMaxEntryCount,
+        maxUncompressedBytes: Int = defaultMaxUncompressedBytes
+    ) throws -> KMZContents {
         guard isKMZ(data) else { throw KMZArchiveError.notAZipArchive }
         let archive = try Archive(data: data, accessMode: .read)
 
-        var entries: [String: Data] = [:]
+        // Pre-flight on the declared sizes: cheaply reject a pathological archive before
+        // allocating anything for it.
+        var fileEntries: [Entry] = []
+        var declaredTotal = 0
         for entry in archive where entry.type == .file {
+            fileEntries.append(entry)
+            if fileEntries.count > maxEntryCount { throw KMZArchiveError.archiveTooLarge }
+            declaredTotal &+= Int(clamping: entry.uncompressedSize)
+            if declaredTotal < 0 || declaredTotal > maxUncompressedBytes {
+                throw KMZArchiveError.archiveTooLarge
+            }
+        }
+
+        var entries: [String: Data] = [:]
+        var extractedTotal = 0
+        for entry in fileEntries {
             var bytes = Data()
-            _ = try archive.extract(entry) { chunk in bytes.append(chunk) }
+            // Enforce the byte budget during extraction too, so a lying header can't balloon
+            // memory before the post-loop check fires.
+            _ = try archive.extract(entry) { chunk in
+                extractedTotal &+= chunk.count
+                guard extractedTotal >= 0, extractedTotal <= maxUncompressedBytes else {
+                    throw KMZArchiveError.archiveTooLarge
+                }
+                bytes.append(chunk)
+            }
             entries[entry.path] = bytes
         }
 
