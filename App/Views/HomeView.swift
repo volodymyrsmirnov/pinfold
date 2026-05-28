@@ -277,6 +277,13 @@ struct HomeView: View {
                                 Label("Trash", systemImage: "trash")
                             }
                         }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                Task { await catalog.moveToTrash(entry) }
+                            } label: {
+                                Label("Trash", systemImage: "trash")
+                            }
+                        }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -304,6 +311,18 @@ struct HomeView: View {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
                                 .tint(.blue)
+                            }
+                            .contextMenu {
+                                Button {
+                                    Task { await catalog.restore(entry) }
+                                } label: {
+                                    Label("Restore", systemImage: "arrow.uturn.backward")
+                                }
+                                Button(role: .destructive) {
+                                    Task { await catalog.deleteForever(entry) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash.fill")
+                                }
                             }
                     }
                 }

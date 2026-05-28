@@ -161,7 +161,7 @@ private struct RootView: View {
               let result = try? ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
         else { return }
         if catalog.entry(withSHA256: result.contentSHA256) == nil {
-            try? ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
+            _ = try? ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
             await catalog.reload()
         }
         // The opened document is a copy in our sandbox (open-in-place is disabled), so it is

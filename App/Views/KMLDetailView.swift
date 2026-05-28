@@ -244,5 +244,22 @@ struct KMLDetailView: View {
                 .tint(.blue)
             }
         }
+        .contextMenu {
+            if let annotations {
+                Button {
+                    annotations.toggleFavorite(placemark)
+                } label: {
+                    let on = annotations.isFavorite(placemark)
+                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
+                }
+
+                Button {
+                    annotations.toggleVisited(placemark)
+                } label: {
+                    let on = annotations.isVisited(placemark)
+                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
+                }
+            }
+        }
     }
 }
