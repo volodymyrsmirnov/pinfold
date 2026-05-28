@@ -8,6 +8,8 @@
 
 Import the places you care about once — then browse and navigate them anywhere, no signal required.
 
+[**Download on the App Store**](https://apps.apple.com/in/app/pinfold/id6772969442)
+
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20iPadOS%20%7C%20macOS-blue)
 ![iOS](https://img.shields.io/badge/iOS-26.0%2B-orange)
 ![Swift](https://img.shields.io/badge/Swift-6.0-fa7343)
