@@ -10,7 +10,6 @@ excluded:
   - .build
   - PinfoldCore/.build
   - Pinfold.xcodeproj
-  - samples
 
 disabled_rules:
   - todo                 # in-progress markers are fine

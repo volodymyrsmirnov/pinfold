@@ -52,8 +52,13 @@ private struct RootView: View {
         // Pick up files synced or shared while the app was already running.
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                Task { await drainInbox(); await catalog.reload() }
+                Task { await drainInbox(); await drainDocumentsInbox(); await catalog.reload() }
             }
+        }
+        // Handle a file opened via the KML/KMZ file-type association ("Open in Pinfold"
+        // from Files/Mail/Safari) or the share extension's `pinfold://import` launch URL.
+        .onOpenURL { url in
+            Task { await handleOpenURL(url) }
         }
         // Apply the iCloud toggle live: switch the active root (migrating existing files)
         // and restart the watcher. No relaunch required.
@@ -66,6 +71,7 @@ private struct RootView: View {
     private func bootstrap() async {
         await applyStorage(migrate: false)
         await drainInbox()
+        await drainDocumentsInbox()
         await catalog.reload()
     }
 
@@ -118,6 +124,56 @@ private struct RootView: View {
         guard let inboxURL = AppGroup.inboxURL else { return }
         let inbox = PendingImportInbox(
             inboxURL: inboxURL,
+            catalog: catalog,
+            storage: catalog.storage,
+            cache: resourceCache
+        )
+        await inbox.drain()
+    }
+
+    // MARK: - Document open ("Open in Pinfold")
+
+    /// The app-sandbox `Documents/Inbox` directory that iOS copies opened documents into
+    /// (the app declares the KML/KMZ types with open-in-place disabled). Distinct from the
+    /// App Group inbox the share extension uses.
+    private var documentsInboxURL: URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Inbox", isDirectory: true)
+    }
+
+    /// Handles a URL handed to the app via the file-type association or a custom scheme.
+    /// A file URL is imported directly — it is authoritative and already in our sandbox, so
+    /// relying only on a directory scan could silently drop it — then both inboxes are
+    /// drained for any stragglers.
+    private func handleOpenURL(_ url: URL) async {
+        if url.isFileURL {
+            await importFile(at: url)
+        }
+        await drainDocumentsInbox()
+        await drainInbox()
+    }
+
+    /// Imports a single opened file, deduping by content hash, then deletes the sandbox copy.
+    private func importFile(at url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url),
+              let result = try? ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
+        else { return }
+        if catalog.entry(withSHA256: result.contentSHA256) == nil {
+            try? ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
+            await catalog.reload()
+        }
+        // The opened document is a copy in our sandbox (open-in-place is disabled), so it is
+        // safe to delete after importing.
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Drains the app's `Documents/Inbox` (files opened via the KML/KMZ file-type association).
+    private func drainDocumentsInbox() async {
+        guard let documentsInboxURL else { return }
+        let inbox = PendingImportInbox(
+            inboxURL: documentsInboxURL,
             catalog: catalog,
             storage: catalog.storage,
             cache: resourceCache

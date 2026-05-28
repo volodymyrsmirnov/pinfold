@@ -13,7 +13,7 @@ private enum Segment: Hashable {
 /// Manages the state machine for the file-import flow in `HomeView`.
 ///
 /// Import is a two-phase pipeline: `prepare` runs off-main (hashing + parsing),
-/// then `commit` runs on the main actor (SwiftData insert + disk write). When a
+/// then `commit` runs on the main actor (writes files to disk). When a
 /// duplicate SHA-256 is detected, the coordinator stalls and presents an alert so
 /// the user can choose Import Anyway or Skip. After the user responds, the
 /// coordinator moves on to the next URL in the queue.
@@ -164,9 +164,13 @@ struct HomeView: View {
 
     // MARK: - Computed partitions
 
-    private var active: [CatalogEntry] { catalog.active }
+    private var active: [CatalogEntry] {
+        catalog.active
+    }
 
-    private var trashed: [CatalogEntry] { catalog.trashed }
+    private var trashed: [CatalogEntry] {
+        catalog.trashed
+    }
 
     // MARK: - Body
 

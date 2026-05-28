@@ -4,12 +4,11 @@ import SwiftUI
 
 /// App settings screen for map-app and sync preferences.
 ///
-/// Reads and writes `Settings` (UserDefaults-backed) directly; every mutation persists
+/// Reads and writes `AppSettings` (UserDefaults-backed) directly; every mutation persists
 /// immediately, so reopening Settings always shows the current state. The iCloud toggle
 /// only flips `settings.syncEnabled` — `RootView` observes that and switches the active
 /// storage root live (no relaunch required).
 struct SettingsView: View {
-
     // MARK: - Environment
 
     @Environment(MapAppService.self) private var mapService
@@ -31,7 +30,6 @@ struct SettingsView: View {
 
     // MARK: - iCloud section
 
-    @ViewBuilder
     private func iCloudSection(settings: Bindable<AppSettings>) -> some View {
         Section {
             Toggle("Sync with iCloud", isOn: settings.syncEnabled)

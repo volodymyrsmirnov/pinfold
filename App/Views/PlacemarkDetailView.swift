@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// Displays (in order):
 /// 1. Photo gallery (if any photo links exist).
-/// 2. Rich-text description rendered lazily via `AttributedHTML.render`.
+/// 2. Plain-text description (HTML tags stripped, entities decoded, line breaks kept).
 /// 3. Coordinates.
 /// 4. Extended data as chip rows.
 /// 5. "Open in Maps" primary action button.
@@ -29,14 +29,21 @@ struct PlacemarkDetailView: View {
 
     // MARK: - State
 
-    /// Rendered description, computed once in `.task`.
-    @State private var renderedDescription: AttributedString?
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
     /// Whether to force-show the picker (long-press on Open in Maps).
     @State private var forcePicker = false
 
     // MARK: - Computed
+
+    /// The description as readable, multi-line plain text (tags stripped, entities decoded,
+    /// line breaks preserved). KML descriptions are untrusted, so they are never sent
+    /// through `NSAttributedString`'s HTML importer.
+    private var descriptionText: String? {
+        guard let html = placemark.descriptionHTML, !html.isEmpty else { return nil }
+        let text = AttributedHTML.readableText(html)
+        return text.isEmpty ? nil : text
+    }
 
     private var coordinateString: String? {
         guard let coord = placemark.coordinate else { return nil }
@@ -62,11 +69,6 @@ struct PlacemarkDetailView: View {
         .navigationTitle(placemark.name ?? "Untitled")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
-        .task {
-            if let html = placemark.descriptionHTML, !html.isEmpty {
-                renderedDescription = AttributedHTML.render(html)
-            }
-        }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -101,12 +103,11 @@ struct PlacemarkDetailView: View {
             .padding(.horizontal)
 
             // Description
-            if let rendered = renderedDescription {
-                Text(rendered)
+            if let descriptionText {
+                Text(descriptionText)
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
-            } else if placemark.descriptionHTML != nil {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
             }
 
             // Coordinates
@@ -229,7 +230,7 @@ struct PlacemarkDetailView: View {
                     if let coord = placemark.coordinate {
                         let q = (placemark.name ?? "")
                             .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        let mapsURL = "http://maps.apple.com/?ll=\(coord.latitude),\(coord.longitude)&q=\(q)"
+                        let mapsURL = "https://maps.apple.com/?ll=\(coord.latitude),\(coord.longitude)&q=\(q)"
                         if let url = URL(string: mapsURL) {
                             ShareLink(item: url, subject: Text(placemark.name ?? "Placemark")) {
                                 Label("Share", systemImage: "square.and.arrow.up")

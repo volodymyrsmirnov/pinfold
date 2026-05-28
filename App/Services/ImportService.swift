@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 import PinfoldCore
 
 // MARK: - ImportResult
@@ -8,8 +8,8 @@ import PinfoldCore
 ///
 /// `prepare(data:sourceFilename:)` computes all expensive work off the main actor
 /// (hashing, parsing). `commit` then takes this struct on the main actor to create
-/// the `KMLFileEntry`, write files, and kick off caching.
-struct ImportResult: Sendable {
+/// the `CatalogEntry`, write files, and kick off caching.
+struct ImportResult {
     /// Human-readable name shown in the catalogue (document name or filename stem).
     let displayName: String
     /// Original filename as received (e.g. `"Rome.kml"`).
@@ -40,9 +40,8 @@ enum ImportError: Error {
 
 /// Static methods that implement the two-phase import flow:
 /// 1. `prepare` — off-main, pure computation; returns `ImportResult`.
-/// 2. `commit`  — main-actor, performs storage and SwiftData insert; returns `KMLFileEntry`.
+/// 2. `commit`  — main-actor, performs storage (writes files to disk); returns `CatalogEntry`.
 enum ImportService {
-
     // MARK: - SHA-256
 
     /// Returns the lowercase hex SHA-256 digest of `data`.
@@ -86,8 +85,8 @@ enum ImportService {
         // Deduplicate and keep only http/https URLs (KMZ paths are handled separately).
         var hrefSet: Set<String> = []
         for style in document.styles.values {
-            if let href = style.iconHref,
-               href.hasPrefix("http://") || href.hasPrefix("https://") {
+            guard let href = style.iconHref else { continue }
+            if href.hasPrefix("http://") || href.hasPrefix("https://") {
                 hrefSet.insert(href)
             }
         }
@@ -146,7 +145,7 @@ enum ImportService {
         try storage.createFolders(for: entry)
 
         // Write the original file bytes.
-        try result.originalData.write(to: storage.originalFile(for: entry))
+        try result.originalData.write(to: storage.originalFile(for: entry), options: .atomic)
 
         // Write the synced metadata sidecar next to the original.
         try storage.writeMetadata(entry.metadata, for: entry)

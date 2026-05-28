@@ -7,7 +7,7 @@ import PinfoldCore
 ///
 /// `Sendable` so it can run off the main actor: `Catalog.reload()` hands the scan to a
 /// detached task and assigns the result back on the main actor.
-struct CatalogScanner: Sendable {
+struct CatalogScanner {
     let storage: StorageLocations
     var cache: ResourceCache = .init()
 
@@ -79,7 +79,14 @@ struct CatalogScanner: Sendable {
         var didWork = false
         for name in folderNames {
             let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
-            if FileManager.default.fileExists(atPath: resourcesDir.path) { continue }
+            if FileManager.default.fileExists(atPath: resourcesDir.path) {
+                // Already materialized once. Retry any remote downloads that failed earlier
+                // (e.g. the device was offline at import). Cheap no-op when the manifest
+                // already covers them, and no re-parse is needed — the expected href list
+                // was recorded to disk at download time.
+                await cache.retryPending(in: resourcesDir)
+                continue
+            }
 
             guard let fileURL = storage.originalFileURL(inFolderNamed: name),
                   let data = try? UbiquityContainer.readDownloadingIfNeeded(fileURL),

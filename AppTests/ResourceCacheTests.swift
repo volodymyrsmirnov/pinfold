@@ -3,8 +3,8 @@ import Foundation
 import PinfoldCore
 import Testing
 
-/// Tests for `ResourceCache`. No SwiftData involved, so no `.serialized` requirement
-/// and no `TestModelContainer` needed.
+/// Tests for `ResourceCache`. Pure disk I/O against a temporary directory — no shared
+/// mutable state, so no `.serialized` requirement.
 struct ResourceCacheTests {
     // MARK: - Helpers
 
@@ -258,5 +258,39 @@ struct ResourceCacheTests {
         #expect(callCount == 1, "retryPending should only attempt hrefs absent from the manifest")
         let pending = retryCache.localURL(forHref: pendingHref, in: dir)
         #expect(pending != nil, "Pending href should be cached after retry")
+    }
+
+    @Test func retryInDir_retriesRecordedHrefsAfterFailure() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/icon.png"
+
+        // First attempt fails (offline) but records the expected href list to disk.
+        let failing = ResourceCache { _ in
+            struct FakeNetworkError: Error {}
+            throw FakeNetworkError()
+        }
+        await failing.downloadRemote([href], to: dir)
+        #expect(failing.localURL(forHref: href, in: dir) == nil, "Initial download must fail")
+
+        // Connectivity restored: a retry that is NOT handed the href list reads the recorded
+        // one (no re-parse) and succeeds.
+        let succeeding = ResourceCache { _ in Data("ok".utf8) }
+        await succeeding.retryPending(in: dir)
+        #expect(succeeding.localURL(forHref: href, in: dir) != nil,
+                "retryPending(in:) should fetch the recorded pending href without being given it")
+    }
+
+    @Test func retryInDir_noOpWhenNothingRecorded() async throws {
+        let dir = try makeTempDir()
+        actor CallCounter { var count = 0; func increment() {
+            count += 1
+        } }
+        let counter = CallCounter()
+        let cache = ResourceCache { _ in
+            await counter.increment()
+            return Data()
+        }
+        await cache.retryPending(in: dir)
+        #expect(await counter.count == 0, "Retry with no recorded hrefs must not download")
     }
 }

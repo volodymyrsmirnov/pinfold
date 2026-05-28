@@ -36,9 +36,9 @@ private let name = "Colosseo, Roma"
         #expect(str.contains("q=Colosseo,%20Roma"))
     }
 
-    @Test func appleURL_schemeIsHttp() throws {
+    @Test func appleURL_schemeIsHttps() throws {
         let url = try #require(MapApp.apple.makeURL(lat, lng, name))
-        #expect(url.scheme == "http")
+        #expect(url.scheme == "https")
         #expect(url.host == "maps.apple.com")
     }
 
