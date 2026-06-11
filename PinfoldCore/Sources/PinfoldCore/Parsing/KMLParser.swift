@@ -113,10 +113,16 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     private var styleBuilder: StyleBuilder?
 
-    // StyleMap assembly.
+    // StyleMap assembly. Each <Pair> buffers its <key> ("normal"/"highlight") and style
+    // reference separately because KML allows them in either order; the pair is resolved
+    // when it closes. The style reference comes from either a <styleUrl> child or an
+    // inline <Style> child (indexed under a synthesized id).
     private var styleMapID: String?
-    private var styleMapCurrentKey: String? // "normal" / "highlight"
     private var styleMapNormalURL: String?
+    private var inStyleMap = false
+    private var inPair = false
+    private var pairKey: String?
+    private var pairStyleURL: String?
 
     /// ExtendedData assembly.
     private var inExtendedData = false
@@ -153,6 +159,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     func parser(_: XMLParser, didStartElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?,
                 attributes attributeDict: [String: String] = [:])
+    // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
+    // swiftlint:disable:next opening_brace
     {
         if descriptionDepth > 0 {
             // Re-serialize the child element's open tag into the description verbatim;
@@ -187,9 +195,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "StyleMap":
             // Same Phase 1 scope restriction as Style — skip inline StyleMaps inside Placemarks.
             guard placemark == nil else { break }
+            inStyleMap = true
             styleMapID = attributeDict["id"]
             styleMapNormalURL = nil
-            styleMapCurrentKey = nil
+        case "Pair":
+            guard inStyleMap else { break }
+            inPair = true
+            pairKey = nil
+            pairStyleURL = nil
         case "ExtendedData":
             inExtendedData = true
         case "Data":
@@ -219,6 +232,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     func parser(_: XMLParser, didEndElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?)
+    // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
+    // swiftlint:disable:next opening_brace
     {
         if descriptionDepth > 0 {
             descriptionDepth -= 1
@@ -271,21 +286,32 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             if let b = styleBuilder {
                 styles[b.id] = KMLStyle(id: b.id, iconHref: b.iconHref,
                                         iconColor: b.iconColor, iconScale: b.iconScale)
+                // An inline <Style> inside a StyleMap <Pair> acts as that pair's style
+                // reference, equivalent to a <styleUrl> pointing at its (possibly
+                // synthesized) id.
+                if inPair { pairStyleURL = "#\(b.id)" }
             }
             styleBuilder = nil
         case "key":
-            styleMapCurrentKey = trimmed
+            if inPair { pairKey = trimmed }
         case "styleUrl":
             if placemark != nil {
                 placemark?.styleUrl = trimmed
-            } else if styleMapID != nil, styleMapCurrentKey == "normal" {
-                styleMapNormalURL = trimmed
+            } else if inPair {
+                pairStyleURL = trimmed
             }
+        case "Pair":
+            // Resolve only on close: KML allows <key> before or after the style reference.
+            if pairKey == "normal", let url = pairStyleURL {
+                styleMapNormalURL = url
+            }
+            inPair = false; pairKey = nil; pairStyleURL = nil
         case "StyleMap":
             if let id = styleMapID, let normal = styleMapNormalURL {
                 styleMaps[id] = normal
             }
-            styleMapID = nil; styleMapCurrentKey = nil; styleMapNormalURL = nil
+            inStyleMap = false
+            styleMapID = nil; styleMapNormalURL = nil
         case "ExtendedData":
             inExtendedData = false
         case "value":

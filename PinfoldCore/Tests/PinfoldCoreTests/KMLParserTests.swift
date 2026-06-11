@@ -145,6 +145,34 @@ struct KMLParserTests {
         #expect(pm?.stableKey == "id:marker-42")
     }
 
+    @Test func parse_styleMapWithInlinePairStyle() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <StyleMap id="m">
+              <Pair>
+                <key>normal</key>
+                <Style>
+                  <IconStyle>
+                    <Icon><href>https://x/icon.png</href></Icon>
+                  </IconStyle>
+                </Style>
+              </Pair>
+            </StyleMap>
+            <Placemark>
+              <name>Mapped</name>
+              <styleUrl>#m</styleUrl>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        #expect(doc.resolvedStyle(forStyleUrl: "#m")?.iconHref == "https://x/icon.png")
+    }
+
     @Test func parse_schemaDataSimpleData() throws {
         let doc = try parse("schemadata.kml")
         let pm = doc.root.allPlacemarks.first { $0.name == "Trailhead" }
