@@ -1,12 +1,11 @@
-import Testing
 import Foundation
 @testable import Pinfold
 import PinfoldCore
+import Testing
 
 /// Tests for `ImportService` — prepare, commit-to-disk, and sha256Hex. Duplicate detection
 /// lives on `Catalog` and is covered by `CatalogTests`.
 @Suite(.serialized) @MainActor struct ImportServiceTests {
-
     // MARK: - Helpers
 
     private func makeStorage() -> StorageLocations {
@@ -199,6 +198,18 @@ import PinfoldCore
         #expect(entry.contentSHA256 == result.contentSHA256)
         #expect(entry.storageFolderName == result.storageFolderName)
         #expect(!entry.isTrashed)
+    }
+
+    @Test func commit_entryIDEqualsFolderUUID() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+
+        // UUID().uuidString is uppercase; compare case-insensitively.
+        #expect(entry.id.uuidString.caseInsensitiveCompare(result.storageFolderName) == .orderedSame,
+                "entry identity must equal its folder UUID")
     }
 
     @Test func commit_writesSidecarMatchingEntry() throws {

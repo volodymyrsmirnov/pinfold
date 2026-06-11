@@ -31,6 +31,11 @@ import Testing
             importDate: importDate, pointCount: 1, contentSHA256: sha, trashedAt: trashedAt
         )
         try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+        // The scanner now requires an original alongside a readable sidecar (a sidecar-only
+        // folder is treated as mid-download / mid-commit and skipped), so write one. The
+        // bytes are irrelevant for the `.ok` path — the entry comes from the sidecar — only
+        // the presence of a *.kml file matters.
+        try Data("<kml/>".utf8).write(to: dir.appendingPathComponent("\(folder).kml"))
     }
 
     @Test func scan_emptyWhenRootAbsent() {
@@ -169,6 +174,52 @@ import Testing
         )
         #expect(contents.map(\.lastPathComponent) == ["metadata.json"])
         #expect(try Data(contentsOf: sidecarURL) == garbage)
+    }
+
+    // MARK: - Crash-safe commit ordering / identity
+
+    /// A folder with a valid sidecar but NO original file (the original is mid-iCloud-download,
+    /// or `commit` crashed after writing the sidecar but before the original): the scanner
+    /// returns no entry and writes/deletes nothing — the watcher rescans once the file lands.
+    @Test func scan_sidecarWithoutOriginal_skippedWithoutWrites() throws {
+        let (scanner, storage) = makeScanner()
+        let folder = "sidecar-only"
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Pending", sourceFilename: "Pending.kml",
+            importDate: .now, pointCount: 3, contentSHA256: "x", trashedAt: nil
+        )
+        try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+        let before = try FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        ).map(\.lastPathComponent).sorted()
+
+        let entries = scanner.scan()
+
+        #expect(entries.isEmpty, "a sidecar without an original must not surface an entry")
+        let after = try FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        ).map(\.lastPathComponent).sorted()
+        #expect(after == before, "folder contents must be untouched")
+    }
+
+    /// A backfilled entry reuses the folder-name UUID as its identity, so an entry's `id`
+    /// equals its folder UUID across devices and across rebuilds.
+    @Test func rebuild_bareOriginal_reusesFolderUUIDAsID() throws {
+        let (scanner, storage) = makeScanner()
+        let folderUUID = UUID()
+        let folder = folderUUID.uuidString
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+
+        let entries = scanner.scan()
+
+        #expect(entries.count == 1)
+        #expect(entries.first?.id == folderUUID)
+        let meta = try #require(try storage.readMetadata(forFolderNamed: folder))
+        #expect(meta.id == folderUUID, "backfilled sidecar id must equal the folder UUID")
     }
 
     // MARK: - Per-device resource materialization

@@ -1,11 +1,10 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `Catalog` — the in-memory catalogue sourced from the folders on disk, with
 /// mutations (trash / restore / delete) writing through to the folder and reloading.
 @Suite(.serialized) @MainActor struct CatalogTests {
-
     private func makeCatalog() -> (Catalog, StorageLocations) {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -32,6 +31,10 @@ import Foundation
             importDate: importDate, pointCount: 1, contentSHA256: sha, trashedAt: trashedAt
         )
         try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+        // The scanner now requires an original alongside a readable sidecar (a sidecar-only
+        // folder is treated as mid-download / mid-commit and skipped), so write one. The
+        // bytes are irrelevant for the `.ok` path — the entry comes from the sidecar.
+        try Data("<kml/>".utf8).write(to: dir.appendingPathComponent("\(folder).kml"))
         return meta
     }
 
@@ -83,7 +86,8 @@ import Foundation
 
         #expect(catalog.entries.isEmpty)
         #expect(!FileManager.default.fileExists(
-            atPath: storage.root.appendingPathComponent("gone").path))
+            atPath: storage.root.appendingPathComponent("gone").path
+        ))
     }
 
     @Test func entryWithSHA256_findsByContentHash() async throws {

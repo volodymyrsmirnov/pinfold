@@ -7,7 +7,13 @@ import Foundation
 /// (display name, trash status) plus a cached copy of the cheap-but-not-free
 /// derivable fields (`pointCount`, `contentSHA256`) so the reconciler can rebuild
 /// the local SwiftData index without re-parsing every file on every launch.
-struct EntryMetadata: Codable, Equatable, Sendable {
+struct EntryMetadata: Codable, Equatable {
+    /// Stable entry identity. For every entry created after the crash-safe-commit change this
+    /// equals the folder-name UUID (`UUID(uuidString: storageFolderName)`): `commit` derives
+    /// it from the folder name, and `CatalogScanner.rebuildFromBareOriginal` reuses the same
+    /// UUID when backfilling. Keeping the two in lockstep prevents identity drift when an
+    /// entry is rebuilt from a bare original on another device. Legacy sidecars may carry an
+    /// unrelated UUID; nothing keys storage operations on `id` (those use `storageFolderName`).
     var id: UUID
     var displayName: String
     var sourceFilename: String
@@ -53,8 +59,8 @@ struct EntryMetadata: Codable, Equatable, Sendable {
         pointCount = try c.decode(Int.self, forKey: .pointCount)
         contentSHA256 = try c.decode(String.self, forKey: .contentSHA256)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
-        favoriteKeys = Set(try c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
-        visitedKeys = Set(try c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
+        favoriteKeys = try Set(c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
+        visitedKeys = try Set(c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
     }
 
     func encode(to encoder: any Encoder) throws {

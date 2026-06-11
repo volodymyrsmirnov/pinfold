@@ -33,13 +33,18 @@ struct CatalogScanner {
     private func entry(forFolderNamed name: String) -> CatalogEntry? {
         switch storage.readSidecar(forFolderNamed: name) {
         case let .ok(meta):
-            CatalogEntry(metadata: meta, storageFolderName: name)
+            // Readable sidecar but a not-yet-downloaded original (iCloud placeholder, or a
+            // crash mid-commit between the sidecar and the original): skip silently and leave
+            // the folder. The watcher rescans once the original lands, surfacing the entry
+            // with its intended identity — no self-heal under a fresh UUID.
+            guard storage.originalFileURL(inFolderNamed: name) != nil else { return nil }
+            return CatalogEntry(metadata: meta, storageFolderName: name)
         case .missing:
-            rebuildFromBareOriginal(folderNamed: name)
+            return rebuildFromBareOriginal(folderNamed: name)
         case .unreadable:
             // Derive in memory only — the on-disk sidecar is untouchable (newer schema or
             // conflict artifact). No entry if there is nothing to derive from.
-            deriveFromOriginal(folderNamed: name)?.entry
+            return deriveFromOriginal(folderNamed: name)?.entry
         }
     }
 
@@ -74,7 +79,10 @@ struct CatalogScanner {
         else { return nil }
 
         let meta = EntryMetadata(
-            id: UUID(),
+            // Reuse the folder-name UUID as the entry identity so a rebuilt entry keeps a
+            // stable identity across devices and rescans (see EntryMetadata.id). Falls back
+            // to a fresh UUID only for legacy folders whose name is not a UUID string.
+            id: UUID(uuidString: name) ?? UUID(),
             displayName: result.displayName,
             sourceFilename: result.sourceFilename,
             // Use the file's creation date so the catalogue order is stable across devices.
