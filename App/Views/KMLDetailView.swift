@@ -31,15 +31,12 @@ struct KMLDetailView: View {
     /// Collapsed folder ids (tree paths like "0/2"). Toggled by tapping a folder row;
     /// ignored while searching (the outline force-expands then).
     @State private var collapsedFolderIDs: Set<String> = []
-    /// The memoized flattened outline, recomputed off-main (debounced for search-text
-    /// changes) via the `.task(id:)` below. `nil` until the first build completes.
+    /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
+    /// modifiers below. `nil` until the first build completes.
     @State private var outline: PlacemarkOutline?
-    /// The query the current `outline` was built for. Used to tell a search-text change
-    /// (debounce) from a collapse toggle (rebuild immediately) inside `rebuildOutline`.
-    @State private var lastBuiltQuery = ""
 
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
-    /// toggles are not debounced (they compare equal query and skip the sleep).
+    /// toggles and document loads are not debounced (they go through a separate trigger).
     private static let searchDebounce: Duration = .milliseconds(250)
 
     // MARK: - Body
@@ -88,59 +85,59 @@ struct KMLDetailView: View {
             document = nil
             loadError = nil
             outline = nil
-            lastBuiltQuery = ""
             collapsedFolderIDs = []
             await loadDocument()
         }
-        // Recompute the flattened outline off-main when the document, query, or collapse
-        // set changes. `.task(id:)` auto-cancels the in-flight build when the trigger
-        // changes again, so rapid typing only keeps the latest. A ~250ms debounce is
-        // applied only when the *query* changed (collapse toggles rebuild immediately).
-        .task(id: OutlineTrigger(
+        // The outline rebuild is driven by TWO independent triggers so the debounce policy
+        // derives from *which trigger fired*, never from mutable post-build state (a single
+        // task comparing against a "last built query" could mis-debounce a collapse toggle
+        // that restarted it mid-sleep):
+        // - Query trigger: keyed on the search text alone; sleeps ~250ms first, coalescing
+        //   keystrokes (`.task(id:)` auto-cancels superseded runs).
+        // - Immediate trigger: keyed on entry, document-loaded flag, and collapse set;
+        //   rebuilds with no debounce (collapse toggles and the initial document load must
+        //   feel instant).
+        // Both funnel into `buildOutlineNow()`, which snapshots the live state when it runs.
+        .task(id: searchText) {
+            try? await Task.sleep(for: Self.searchDebounce)
+            if Task.isCancelled { return }
+            await buildOutlineNow()
+        }
+        .task(id: ImmediateOutlineTrigger(
             documentID: entry.id,
             documentLoaded: document != nil,
-            query: searchText,
             collapsed: collapsedFolderIDs
         )) {
-            await rebuildOutline()
+            await buildOutlineNow()
         }
         .environment(annotations)
     }
 
     // MARK: - Outline rebuild
 
-    /// Identity that drives the outline rebuild `.task`. Equatable so SwiftUI restarts the
-    /// task only on a real change; carries enough to detect query-vs-collapse changes.
-    private struct OutlineTrigger: Equatable {
+    /// Identity for the un-debounced outline rebuild `.task`: the document (id + loaded
+    /// flag, since the document arrives asynchronously after first appearance) and the
+    /// collapse set. The search text deliberately lives in its own debounced trigger.
+    private struct ImmediateOutlineTrigger: Equatable {
         let documentID: CatalogEntry.ID
-        /// Flips false→true when the parsed document finishes loading, so the first outline
-        /// build fires then (the document is loaded asynchronously after first appearance).
         let documentLoaded: Bool
-        let query: String
         let collapsed: Set<String>
     }
 
-    /// Debounced, cancel-safe rebuild of `outline`. When the only thing that changed since
-    /// the last build was the search text, waits `searchDebounce` first (coalescing
-    /// keystrokes); collapse toggles skip the wait. The build itself runs in a detached
-    /// task because `KMLContainer`/`KMLPlacemark` are `Sendable` value types.
-    private func rebuildOutline() async {
+    /// Rebuilds `outline` from the live `searchText`/`collapsedFolderIDs` immediately
+    /// (debouncing is the caller's concern). Cancel-safe: the result is discarded if the
+    /// owning `.task` was superseded. The walk runs in a detached task because
+    /// `KMLContainer`/`KMLPlacemark` are `Sendable` value types.
+    private func buildOutlineNow() async {
         guard let document else { return }
         let query = searchText
         let collapsed = collapsedFolderIDs
-        // Debounce only when the query changed; a collapse toggle leaves the query equal
-        // to the last-built one, so it rebuilds immediately.
-        if query != lastBuiltQuery {
-            try? await Task.sleep(for: Self.searchDebounce)
-            if Task.isCancelled { return }
-        }
         let root = document.root
         let built = await Task.detached(priority: .userInitiated) {
             PlacemarkOutline.build(from: root, matching: query, collapsed: collapsed)
         }.value
         if Task.isCancelled { return }
         outline = built
-        lastBuiltQuery = query
     }
 
     // MARK: - Load document
@@ -232,6 +229,8 @@ struct KMLDetailView: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    // Purely decorative; the Button's label/value/hint carry the semantics.
+                    .accessibilityHidden(true)
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -243,6 +242,8 @@ struct KMLDetailView: View {
         .disabled(searching)
         .accessibilityLabel(name)
         .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+        // String literal resolves as a LocalizedStringKey, so it localizes like Text.
+        .accessibilityHint("Expands or collapses this folder.")
     }
 
     // MARK: - Search field row
