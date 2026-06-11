@@ -382,6 +382,8 @@ struct HomeView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    // VoiceOver reads filename + reason as one element per failure.
+                    .accessibilityElement(children: .combine)
                 }
             }
             .padding()

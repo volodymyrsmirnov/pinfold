@@ -25,6 +25,13 @@ private struct RootView: View {
         category: "migration"
     )
 
+    /// Diagnostics for "Open in Pinfold" import failures. The user-facing failure banner
+    /// carries only friendly reasons; the underlying errors go here.
+    private static let importLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "import"
+    )
+
     @State private var settings: AppSettings
     @State private var catalog: Catalog
     @State private var mapAppService: MapAppService
@@ -215,7 +222,15 @@ private struct RootView: View {
             data = try Data(contentsOf: url)
             result = try ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
         } catch {
-            // Read or parse failure — permanent. Record and delete the copy.
+            // Read or parse failure — permanent. Record and delete the copy; the underlying
+            // cause goes to the console log.
+            Self.importLogger.error(
+                """
+                Failed to read or parse opened file \
+                '\(url.lastPathComponent, privacy: .public)': \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
             importFailureLog.record(
                 filename: url.lastPathComponent,
                 reason: String(
@@ -232,11 +247,22 @@ private struct RootView: View {
                 try ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
                 await catalog.reload()
             } catch {
-                // Commit (I/O) failure — potentially transient. Record but KEEP the copy so the
-                // Documents-inbox drain can retry it.
+                // Commit (I/O) failure — potentially transient. Record a friendly reason (the
+                // raw error is developer-speak) but KEEP the copy so the Documents-inbox drain
+                // can retry it; the underlying error goes to the console log.
+                Self.importLogger.error(
+                    """
+                    Transient failure importing opened file \
+                    '\(url.lastPathComponent, privacy: .public)': \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
                 importFailureLog.record(
                     filename: url.lastPathComponent,
-                    reason: error.localizedDescription
+                    reason: String(
+                        localized: "Couldn't save the file. It will be retried automatically.",
+                        comment: "Import failure reason: a transient I/O error; the import will be retried."
+                    )
                 )
                 return
             }

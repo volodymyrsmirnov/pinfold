@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Drains the App Group inbox directory, importing each KML/KMZ file that has not been
 /// seen before, then removes it.
@@ -6,6 +7,14 @@ import Foundation
 /// Inject a custom `inboxURL` in tests — do not rely on the real App Group container.
 @MainActor
 struct PendingImportInbox {
+    /// Diagnostics for per-file import failures. The user-facing `failureLog` carries only
+    /// friendly reasons; the underlying errors go here so they stay diagnosable from the
+    /// console (follows the `migrationLogger` precedent in `PinfoldApp`).
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "import"
+    )
+
     // MARK: - Properties
 
     /// The inbox directory to drain (typically `AppGroup.inboxURL`).
@@ -131,7 +140,12 @@ struct PendingImportInbox {
             } catch let ImportError.parseFailure(underlying) {
                 // Permanent: the bytes are not valid KML/KMZ. Record and remove so it is not
                 // retried forever.
-                _ = underlying
+                Self.logger.error(
+                    """
+                    Parse failure importing '\(file.lastPathComponent, privacy: .public)': \
+                    \(underlying.localizedDescription, privacy: .public)
+                    """
+                )
                 failureLog?.record(
                     filename: file.lastPathComponent,
                     reason: String(
@@ -141,11 +155,21 @@ struct PendingImportInbox {
                 )
                 try? fm.removeItem(at: file)
             } catch {
-                // Potentially transient (e.g. an I/O error writing to disk). Record but KEEP
-                // the file so a later drain can retry it.
+                // Potentially transient (e.g. an I/O error writing to disk). Record a friendly
+                // reason (the raw error is developer-speak) but KEEP the file so a later drain
+                // can retry it; the underlying error goes to the console log.
+                Self.logger.error(
+                    """
+                    Transient failure importing '\(file.lastPathComponent, privacy: .public)': \
+                    \(error.localizedDescription, privacy: .public)
+                    """
+                )
                 failureLog?.record(
                     filename: file.lastPathComponent,
-                    reason: error.localizedDescription
+                    reason: String(
+                        localized: "Couldn't save the file. It will be retried automatically.",
+                        comment: "Import failure reason: a transient I/O error; the import will be retried."
+                    )
                 )
             }
         }
