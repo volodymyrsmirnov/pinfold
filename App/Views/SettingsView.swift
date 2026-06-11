@@ -13,6 +13,7 @@ struct SettingsView: View {
 
     @Environment(MapAppService.self) private var mapService
     @Environment(AppSettings.self) private var settings
+    @Environment(MigrationAlertState.self) private var migrationAlert
 
     // MARK: - Body
 
@@ -26,6 +27,20 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
+        // Surface a partial iCloud migration: entries whose folders couldn't be moved stay
+        // in the previous location rather than silently disappearing from the catalogue.
+        .alert(
+            Text("Some Items Didn't Move", comment: "Title of the partial-migration alert"),
+            isPresented: Binding(
+                get: { migrationAlert.message != nil },
+                set: { if !$0 { migrationAlert.message = nil } }
+            ),
+            presenting: migrationAlert.message
+        ) { _ in
+            Button("OK", role: .cancel) { migrationAlert.message = nil }
+        } message: { message in
+            Text(message)
+        }
     }
 
     // MARK: - iCloud section

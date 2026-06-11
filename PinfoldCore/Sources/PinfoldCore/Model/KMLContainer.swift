@@ -16,4 +16,17 @@ public struct KMLContainer: Equatable, Sendable, Identifiable {
     public var allPlacemarks: [KMLPlacemark] {
         placemarks + children.flatMap(\.allPlacemarks)
     }
+
+    /// Total placemarks in this container and its descendants, computed by recursive
+    /// summation without materializing the `allPlacemarks` arrays.
+    public var placemarkCount: Int {
+        placemarks.count + children.reduce(0) { $0 + $1.placemarkCount }
+    }
+
+    /// Placemarks with an explicit `<Point>` (`hasPoint`) in this container and its
+    /// descendants, computed without materializing arrays.
+    public var pointCount: Int {
+        placemarks.reduce(0) { $0 + ($1.hasPoint ? 1 : 0) }
+            + children.reduce(0) { $0 + $1.pointCount }
+    }
 }

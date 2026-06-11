@@ -15,11 +15,28 @@ import UIKit
 /// All work is synchronous file/CoreGraphics I/O — call it on the main actor when
 /// building annotations (placemark counts are typically small).
 enum PlacemarkPinImage {
-
     /// Target max edge length of a pin image, in points. Kept fairly small so pins
     /// collide (and therefore cluster) less aggressively — MapKit has no cluster-radius
     /// API, so annotation-view size is the main lever.
     static let dimension: CGFloat = 24
+
+    /// The identity of the *base* (un-decorated) pin image for a placemark: everything
+    /// `image(for:...)` actually consumes that varies between placemarks — the resolved
+    /// style's icon `href` and `iconColor`. (`dimension` is a fixed constant, so it is not
+    /// part of the key.) Placemarks that resolve to the same style — the common case, since
+    /// a KML file has few distinct styles — produce the same key, so the base image can be
+    /// built once and reused. Favorite/visited decoration is applied per-annotation *after*
+    /// the cache lookup and is deliberately NOT part of this key.
+    struct CacheKey: Hashable {
+        let iconHref: String?
+        let iconColor: String?
+    }
+
+    /// Derives the base-image cache key for `placemark` under `document`'s styles.
+    static func cacheKey(for placemark: KMLPlacemark, document: KMLDocument) -> CacheKey {
+        let style = document.resolvedStyle(forStyleUrl: placemark.styleUrl)
+        return CacheKey(iconHref: style?.iconHref, iconColor: style?.iconColor)
+    }
 
     static func image(
         for placemark: KMLPlacemark,
@@ -32,8 +49,12 @@ enum PlacemarkPinImage {
 
         if let href = style?.iconHref, !href.isEmpty {
             let resourcesDir = storage.resourcesDirectory(for: entry)
+            // SwiftFormat puts the brace of a wrapped multi-line `if` on its own line.
+            // swiftlint:disable opening_brace
             if let localURL = resourceCache.localURL(forHref: href, in: resourcesDir),
-               let image = UIImage(contentsOfFile: localURL.path) {
+               let image = UIImage(contentsOfFile: localURL.path)
+            {
+                // swiftlint:enable opening_brace
                 return resized(image, maxDimension: dimension)
             }
         }

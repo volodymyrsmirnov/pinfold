@@ -1,8 +1,8 @@
-import Testing
 import Foundation
 @testable import PinfoldCore
+import Testing
 
-@Suite struct KMLParserTests {
+struct KMLParserTests {
     private func parse(_ fixture: String) throws -> KMLDocument {
         try KMLParser.parse(data: Fixture.data(fixture))
     }
@@ -49,7 +49,7 @@ import Foundation
 
     @Test func parsesStyleMapNormalPair() throws {
         #expect(try parse("Munich Sole.kml").styleMaps["icon-1502-0288D1-nodesc"]
-                == "#icon-1502-0288D1-nodesc-normal")
+            == "#icon-1502-0288D1-nodesc-normal")
     }
 
     @Test func placemarkStyleUrlResolvesThroughStyleMap() throws {
@@ -57,7 +57,7 @@ import Foundation
         let pm = doc.root.allPlacemarks.first { $0.styleUrl == "#icon-1502-0288D1-nodesc" }
         #expect(pm != nil)
         #expect(doc.resolvedStyle(forStyleUrl: pm?.styleUrl)?.iconHref
-                == "https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png")
+            == "https://www.gstatic.com/mapspro/images/stock/503-wht-blank_maps.png")
     }
 
     @Test func parsesExtendedDataExcludingMediaLinks() throws {
@@ -88,10 +88,19 @@ import Foundation
         #expect(pm?.coordinate == nil)
     }
 
-    @Test func dropsNonPointGeometryPlacemarks() throws {
+    @Test func keepsNonPointGeometryPlacemarks() throws {
+        // Placemarks whose only geometry is a LineString/Polygon are now kept (Task 7) with
+        // their geometry captured and a representative coordinate.
         let doc = try parse("KML_Samples.kml")
-        #expect(doc.root.allPlacemarks.contains { $0.name == "Tessellated" } == false)  // LineString
-        #expect(doc.root.allPlacemarks.contains { $0.name == "Building 40" } == false)   // Polygon
+        let line = doc.root.allPlacemarks.first { $0.name == "Tessellated" } // LineString
+        #expect(line != nil)
+        #expect(line?.hasPoint == false)
+        #expect(line?.coordinate != nil)
+        #expect(line?.geometries.contains { if case .lineString = $0 { true } else { false } } == true)
+        let poly = doc.root.allPlacemarks.first { $0.name == "Building 40" } // Polygon
+        #expect(poly != nil)
+        #expect(poly?.hasPoint == false)
+        #expect(poly?.geometries.contains { if case .polygon = $0 { true } else { false } } == true)
     }
 
     @Test func inlinePlacemarkStyleDoesNotLeakIntoDocumentStyles() throws {
@@ -114,14 +123,36 @@ import Foundation
         """
         let doc = try KMLParser.parse(data: Data(xml.utf8))
         let pm = doc.root.allPlacemarks.first { $0.name == "Styled" }
-        #expect(pm != nil)                      // placemark is kept
+        #expect(pm != nil) // placemark is kept
         #expect(pm?.coordinate?.longitude == 1.0)
-        #expect(doc.styles.isEmpty)             // inline style must NOT leak into document table
+        #expect(doc.styles.isEmpty) // inline style must NOT leak into document table
     }
 
     @Test func parseMalformedXMLThrows() {
         #expect(throws: KMLParseError.self) {
             try KMLParser.parse(data: Data("not xml".utf8))
+        }
+    }
+
+    @Test func parse_truncatedDocumentThrowsWithLineInfo() {
+        // Valid KML cut off mid-element. The thrown malformedXML must carry positional info.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Truncated</name>
+            <Placemark>
+              <name>Spot</name>
+              <Point><coordinates>1.0,2.0,0
+        """
+        do {
+            _ = try KMLParser.parse(data: Data(xml.utf8))
+            Issue.record("expected a parse error")
+        } catch let KMLParseError.malformedXML(line, _, detail) {
+            #expect(line > 0)
+            #expect(!detail.isEmpty)
+        } catch {
+            Issue.record("expected malformedXML, got \(error)")
         }
     }
 
@@ -143,6 +174,210 @@ import Foundation
         #expect(pm != nil)
         #expect(pm?.sourceID == "marker-42")
         #expect(pm?.stableKey == "id:marker-42")
+    }
+
+    @Test func parse_styleMapWithInlinePairStyle() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <StyleMap id="m">
+              <Pair>
+                <key>normal</key>
+                <Style>
+                  <IconStyle>
+                    <Icon><href>https://x/icon.png</href></Icon>
+                  </IconStyle>
+                </Style>
+              </Pair>
+            </StyleMap>
+            <Placemark>
+              <name>Mapped</name>
+              <styleUrl>#m</styleUrl>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        #expect(doc.resolvedStyle(forStyleUrl: "#m")?.iconHref == "https://x/icon.png")
+    }
+
+    @Test func parse_schemaDataSimpleData() throws {
+        let doc = try parse("schemadata.kml")
+        let pm = doc.root.allPlacemarks.first { $0.name == "Trailhead" }
+        #expect(pm != nil)
+        #expect(pm?.extendedData.contains(KMLDataItem(name: "elevation", value: "120")) == true)
+        #expect(pm?.extendedData.contains(KMLDataItem(name: "surface", value: "gravel")) == true)
+    }
+
+    @Test func parse_valueOutsideDataIgnored() throws {
+        // A stray <value> directly under <ExtendedData> (not inside <Data>) must not
+        // create a data item.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Stray</name>
+              <ExtendedData>
+                <value>x</value>
+              </ExtendedData>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Stray" }
+        #expect(pm != nil)
+        #expect(pm?.extendedData.isEmpty == true)
+    }
+
+    @Test func parse_rawDescriptionWithInlineHTML() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description>See <b>this</b> place &amp; more</description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML == "See <b>this</b> place & more")
+    }
+
+    @Test func parse_rawDescriptionNestedTags() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><div><a href="https://x.example">link</a> tail</div></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        let html = pm?.descriptionHTML
+        #expect(html?.contains(#"<a href="https://x.example">link</a>"#) == true)
+        #expect(html?.contains("tail") == true)
+    }
+
+    @Test func parse_cdataDescriptionStillWorks() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><![CDATA[<p>Hello <b>Bold</b> &amp; raw</p>]]></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        // CDATA content passes through byte-for-byte (entities inside CDATA stay literal).
+        #expect(pm?.descriptionHTML == "<p>Hello <b>Bold</b> &amp; raw</p>")
+    }
+
+    @Test func parse_rawDescriptionSelfClosingChild() throws {
+        // XMLParser reports <br/> and <img/> as start+end pairs. The capture re-serializes
+        // HTML void elements without a closing tag, since the buffer is display-HTML and
+        // "</br>" / "</img>" are invalid there.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description>line one<br/>line two <img src="https://x.example/p.png"/> end</description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML
+            == #"line one<br>line two <img src="https://x.example/p.png"> end"#)
+    }
+
+    @Test func parse_doctypeAfterRootElementIgnored() throws {
+        // The DOCTYPE scan is bounded to the prolog: a literal "<!DOCTYPE" appearing inside
+        // element content (here, CDATA) after the root element opened is plain text, not a
+        // DTD, and must not cause rejection.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><![CDATA[<!DOCTYPE html><p>embedded page</p>]]></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML == "<!DOCTYPE html><p>embedded page</p>")
+    }
+
+    @Test func parse_rejectsDOCTYPE() {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE kml [<!ENTITY a "x">]>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>&a;</name>
+          </Document>
+        </kml>
+        """
+        #expect(throws: KMLParseError.self) {
+            try KMLParser.parse(data: Data(xml.utf8))
+        }
+    }
+
+    @Test func parse_rejectsBillionLaughs() {
+        // Nested-entity expansion payload (5 levels suffices to prove the point).
+        // Rejection must happen before XML parsing, so this completes fast regardless
+        // of the theoretical expansion size.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE kml [
+          <!ENTITY a "ha">
+          <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+          <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+          <!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">
+          <!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;">
+        ]>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>&e;</name>
+          </Document>
+        </kml>
+        """
+        #expect(throws: KMLParseError.self) {
+            try KMLParser.parse(data: Data(xml.utf8))
+        }
     }
 
     @Test func multiGeometryUsesPointCoordinateNotLineStringVertex() throws {
@@ -169,8 +404,8 @@ import Foundation
         """
         let doc = try KMLParser.parse(data: Data(xml.utf8))
         let pm = doc.root.allPlacemarks.first { $0.name == "Mixed" }
-        #expect(pm != nil)                              // placemark is kept (has a Point)
-        #expect(pm?.coordinate?.longitude == 55.5)      // Point's coordinate, not LineString vertex
+        #expect(pm != nil) // placemark is kept (has a Point)
+        #expect(pm?.coordinate?.longitude == 55.5) // Point's coordinate, not LineString vertex
         #expect(pm?.coordinate?.latitude == 33.3)
     }
 }

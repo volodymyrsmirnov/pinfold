@@ -1,5 +1,20 @@
 import Foundation
 
+/// The outcome of reading an entry's `metadata.json` sidecar, distinguishing an *absent*
+/// sidecar from one that *exists but cannot be decoded*.
+///
+/// This distinction is load-bearing for the scanner: a `.missing` sidecar may be safely
+/// backfilled, but an `.unreadable` one (a conflict artifact or a newer schema) must never
+/// be overwritten — doing so would destroy trash/favorite/visited state.
+enum SidecarReadResult: Equatable {
+    /// No `metadata.json` exists in the folder.
+    case missing
+    /// A `metadata.json` exists but could not be read or decoded.
+    case unreadable
+    /// A `metadata.json` was read and decoded successfully.
+    case ok(EntryMetadata)
+}
+
 /// Computes on-disk paths for imported KML/KMZ files.
 ///
 /// Storage is split across two roots so iCloud sync only carries what it must:
@@ -128,17 +143,54 @@ struct StorageLocations {
             .first
     }
 
+    // MARK: - Coordinated file I/O
+
+    /// Reads `url` under an `NSFileCoordinator` read lock, so a concurrent iCloud daemon
+    /// write can't tear the file out from under us. Applied unconditionally: for local
+    /// (non-ubiquitous) files coordination is cheap and a transparent pass-through, and the
+    /// synced root may be the iCloud container, where racing the daemon is the actual bug.
+    private func coordinatedRead(at url: URL) throws -> Data {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        // NSFileCoordinator surfaces accessor failures through the `byAccessor` closure, not
+        // its own `error` out-param, so capture into an outer var and rethrow afterwards.
+        var accessorError: Error?
+        var result: Data?
+        var coordinationError: NSError?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
+            do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let accessorError { throw accessorError }
+        // `result` is non-nil whenever neither error fired.
+        return result ?? Data()
+    }
+
+    /// Writes `data` to `url` under an `NSFileCoordinator` write lock (`.forReplacing`),
+    /// atomically. Applied unconditionally for the same reason as `coordinatedRead`.
+    private func coordinatedWrite(_ data: Data, to url: URL) throws {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var accessorError: Error?
+        var coordinationError: NSError?
+        coordinator.coordinate(
+            writingItemAt: url, options: .forReplacing, error: &coordinationError
+        ) { writeURL in
+            do { try data.write(to: writeURL, options: .atomic) } catch { accessorError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let accessorError { throw accessorError }
+    }
+
     // MARK: - Sidecar I/O
 
     /// Writes the sidecar `metadata.json` for `entry` (folder must already exist).
     func writeMetadata(_ metadata: EntryMetadata, for entry: CatalogEntry) throws {
-        try metadata.encoded().write(to: metadataFile(for: entry), options: .atomic)
+        try coordinatedWrite(metadata.encoded(), to: metadataFile(for: entry))
     }
 
     /// Writes the sidecar into a raw folder name (used by the reconciler to backfill a
     /// sidecar for a pre-existing entry that predates iCloud sync). Folder must exist.
     func writeMetadata(_ metadata: EntryMetadata, forFolderNamed name: String) throws {
-        try metadata.encoded().write(to: metadataFile(forFolderNamed: name), options: .atomic)
+        try coordinatedWrite(metadata.encoded(), to: metadataFile(forFolderNamed: name))
     }
 
     /// Reads the sidecar for a raw folder name, or `nil` if the file is absent.
@@ -146,7 +198,75 @@ struct StorageLocations {
     func readMetadata(forFolderNamed name: String) throws -> EntryMetadata? {
         let url = metadataFile(forFolderNamed: name)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        return try EntryMetadata.decoded(from: Data(contentsOf: url))
+        let meta = try EntryMetadata.decoded(from: coordinatedRead(at: url))
+        return resolvingConflicts(of: meta, at: url)
+    }
+
+    /// Reads the sidecar for a raw folder name, distinguishing *absent* from *undecodable*.
+    ///
+    /// The scanner relies on this distinction: a sidecar that exists but won't decode (an
+    /// iCloud conflict placeholder, a half-synced file, or a future schema version) must be
+    /// left alone, whereas an absent sidecar can be safely backfilled. The throwing
+    /// `readMetadata(forFolderNamed:)` collapses both into a thrown error / `nil` and is kept
+    /// for callers that only need the happy path (e.g. `updateMetadata`).
+    func readSidecar(forFolderNamed name: String) -> SidecarReadResult {
+        let url = metadataFile(forFolderNamed: name)
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        guard let data = try? coordinatedRead(at: url),
+              let meta = try? EntryMetadata.decoded(from: data)
+        else { return .unreadable }
+        return .ok(resolvingConflicts(of: meta, at: url))
+    }
+
+    /// Best-effort resolution of iCloud edit conflicts for a sidecar we've **already decoded
+    /// successfully** (`current`). When two devices edited the same `metadata.json`, iCloud
+    /// keeps the losing versions as conflict siblings; left alone they're never reconciled and
+    /// one device's favorites/visited/trash silently disappears.
+    ///
+    /// We union-merge every decodable conflict version into `current` (see
+    /// `EntryMetadata.merging(conflicts:)`), write the merged result back, and mark the
+    /// **decoded** conflicts resolved. The entire block is best-effort (`try?`-style): a
+    /// failure here must never block reading, and on local roots / in tests there are never
+    /// any conflict versions, so it is fully inert (returns `current` unchanged). Gating on a
+    /// successful decode of `current` preserves the never-overwrite-an-unreadable-sidecar
+    /// invariant.
+    ///
+    /// **Undecodable versions are preserved, never destroyed.** A conflict version that won't
+    /// decode is most likely a *newer* schema written by another device's future build;
+    /// `removeOtherVersionsOfItem` is irreversible, so deleting it would permanently destroy
+    /// that device's favorites/visited/trash state. We therefore call
+    /// `removeOtherVersionsOfItem` only when **every** conflict version decoded into the
+    /// merge; otherwise only the decoded versions are marked `.isResolved`, and the
+    /// undecodable ones stay unresolved for a future build that understands them. Leaving
+    /// conflicts pending is safe: the union merge is idempotent, so re-merging on a later
+    /// read — including two devices alternating writes — converges on the same merged set.
+    private func resolvingConflicts(of current: EntryMetadata, at url: URL) -> EntryMetadata {
+        let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) ?? []
+        guard !conflicts.isEmpty else { return current }
+
+        let decodedPairs = conflicts.compactMap { version -> (NSFileVersion, EntryMetadata)? in
+            guard let data = try? Data(contentsOf: version.url),
+                  let meta = try? EntryMetadata.decoded(from: data)
+            else { return nil }
+            return (version, meta)
+        }
+        let merged = current.merging(conflicts: decodedPairs.map(\.1))
+
+        do {
+            try coordinatedWrite(merged.encoded(), to: url)
+            for (version, _) in decodedPairs {
+                version.isResolved = true
+            }
+            if decodedPairs.count == conflicts.count {
+                // Every version was folded into the merge — safe to discard the copies.
+                try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+            }
+            return merged
+        } catch {
+            // Couldn't persist the merge; return the in-memory union so the caller at least
+            // sees the combined state for this read, leaving conflicts to retry next time.
+            return merged
+        }
     }
 
     /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field
@@ -179,6 +299,23 @@ struct StorageLocations {
 
     // MARK: - Root migration
 
+    /// The outcome of a root migration: which per-entry folders moved and which couldn't.
+    ///
+    /// Migration is best-effort *per folder* — a single failing folder must not strand the
+    /// rest in the old root — so the result is a report rather than a thrown error. The caller
+    /// repoints storage to `newRoot` regardless (the moved majority lives there) and surfaces
+    /// `failed` to the user, whose files remain readable in the previous location.
+    struct MigrationReport {
+        var moved: [String] = []
+        var failed: [MigrationFailure] = []
+    }
+
+    /// A single per-folder migration failure: the folder that could not be moved and why.
+    struct MigrationFailure {
+        let folderName: String
+        let error: Error
+    }
+
     /// Moves every per-entry folder from `oldRoot` into `newRoot`, so nothing disappears
     /// from the catalogue when the iCloud sync toggle changes the active root.
     ///
@@ -188,18 +325,27 @@ struct StorageLocations {
     /// - **iCloud → local** (`fromUbiquitous`): `setUbiquitous(false,…)` to evict it.
     /// - **otherwise** (local → local): `moveItem`.
     ///
+    /// Each move (`setUbiquitous`/`moveItem`) removes the source folder on success, so after a
+    /// fully successful migration no per-entry folders remain in `oldRoot`.
+    ///
     /// Creates `newRoot` if absent. Skips any folder whose name already exists at the
     /// destination (the destination is authoritative — e.g. iCloud already holds that
-    /// entry) without throwing. No-op when the roots are equal or `oldRoot` is absent.
+    /// entry) without recording a failure. **Per-folder failures are collected and the loop
+    /// continues**, so one bad folder never strands the others; the returned `MigrationReport`
+    /// lists what moved and what failed. Returns an empty report when the roots are equal or
+    /// `oldRoot` is absent. Only throws for failures *before* the per-folder loop (creating
+    /// `newRoot`, enumerating `oldRoot`).
+    @discardableResult
     static func migrateEntryFolders(
         from oldRoot: URL,
         to newRoot: URL,
         fromUbiquitous: Bool = false,
         toUbiquitous: Bool = false
-    ) throws {
-        guard oldRoot.standardizedFileURL != newRoot.standardizedFileURL else { return }
+    ) throws -> MigrationReport {
+        var report = MigrationReport()
+        guard oldRoot.standardizedFileURL != newRoot.standardizedFileURL else { return report }
         let fm = FileManager.default
-        guard fm.fileExists(atPath: oldRoot.path) else { return }
+        guard fm.fileExists(atPath: oldRoot.path) else { return report }
         try fm.createDirectory(at: newRoot, withIntermediateDirectories: true)
 
         let contents = try fm.contentsOfDirectory(
@@ -210,17 +356,27 @@ struct StorageLocations {
         for source in contents {
             let isDir = (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
             guard isDir else { continue }
-            let dest = newRoot.appendingPathComponent(source.lastPathComponent, isDirectory: true)
+            let name = source.lastPathComponent
+            let dest = newRoot.appendingPathComponent(name, isDirectory: true)
             if fm.fileExists(atPath: dest.path) { continue }
 
-            if toUbiquitous, !fromUbiquitous {
-                try fm.setUbiquitous(true, itemAt: source, destinationURL: dest)
-            } else if fromUbiquitous, !toUbiquitous {
-                try fm.setUbiquitous(false, itemAt: source, destinationURL: dest)
-            } else {
-                try fm.moveItem(at: source, to: dest)
+            do {
+                if toUbiquitous, !fromUbiquitous {
+                    try fm.setUbiquitous(true, itemAt: source, destinationURL: dest)
+                } else if fromUbiquitous, !toUbiquitous {
+                    try fm.setUbiquitous(false, itemAt: source, destinationURL: dest)
+                } else {
+                    try fm.moveItem(at: source, to: dest)
+                }
+                report.moved.append(name)
+            } catch {
+                // Collect and keep going — a single un-movable folder (e.g. a non-empty
+                // destination already present, or a transient iCloud error) must not strand
+                // the remaining entries in the old root.
+                report.failed.append(MigrationFailure(folderName: name, error: error))
             }
         }
+        return report
     }
 
     // MARK: - Directory management

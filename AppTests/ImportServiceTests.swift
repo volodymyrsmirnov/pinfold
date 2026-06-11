@@ -1,12 +1,11 @@
-import Testing
 import Foundation
 @testable import Pinfold
 import PinfoldCore
+import Testing
 
 /// Tests for `ImportService` — prepare, commit-to-disk, and sha256Hex. Duplicate detection
 /// lives on `Catalog` and is covered by `CatalogTests`.
 @Suite(.serialized) @MainActor struct ImportServiceTests {
-
     // MARK: - Helpers
 
     private func makeStorage() -> StorageLocations {
@@ -133,6 +132,24 @@ import PinfoldCore
         #expect(result.sourceFilename == "Rome.kmz")
     }
 
+    // MARK: - prepare — filename sanitization
+
+    @Test func prepare_sanitizesSourceFilename() throws {
+        let minimalKML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <Placemark>
+              <Point><coordinates>12.5,41.9,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let result = try ImportService.prepare(data: Data(minimalKML.utf8), sourceFilename: "a/b.kml")
+        #expect(result.sourceFilename == "b.kml",
+                "prepare must sanitize attacker-controlled filenames to a final path component")
+    }
+
     // MARK: - prepare — fallback displayName
 
     @Test func prepare_fallbackDisplayName_usesFilenameStem() throws {
@@ -199,6 +216,32 @@ import PinfoldCore
         #expect(entry.contentSHA256 == result.contentSHA256)
         #expect(entry.storageFolderName == result.storageFolderName)
         #expect(!entry.isTrashed)
+    }
+
+    @Test func commit_entryIDEqualsFolderUUID() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+
+        // UUID().uuidString is uppercase; compare case-insensitively.
+        #expect(entry.id.uuidString.caseInsensitiveCompare(result.storageFolderName) == .orderedSame,
+                "entry identity must equal its folder UUID")
+    }
+
+    @Test func commit_writesPlacemarkIndex() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        #expect(!result.indexEntries.isEmpty, "prepare must build the index entries")
+
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        let onDisk = PlacemarkIndex.read(from: resourcesDir)
+        #expect(onDisk != nil, "placemarks-index.json must exist after commit")
+        #expect(onDisk?.count == result.indexEntries.count)
     }
 
     @Test func commit_writesSidecarMatchingEntry() throws {

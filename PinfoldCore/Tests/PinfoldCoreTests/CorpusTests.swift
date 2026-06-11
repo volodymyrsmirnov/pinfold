@@ -1,17 +1,17 @@
-import Testing
 import Foundation
 @testable import PinfoldCore
+import Testing
 
-@Suite struct CorpusTests {
+struct CorpusTests {
     static let fixtures = [
         "KML_Samples.kml", "Munich Sole.kml", "Munich Sole.kmz",
         "Rome.kml", "Rome.kmz", "Iceland.kml", "Iceland.kmz",
-        "iceland-trip-2026.kml",
+        "iceland-trip-2026.kml", "schemadata.kml", "geometry.kml",
     ]
 
     @Test(arguments: fixtures)
     func everyFixtureReadsWithoutThrowing(name: String) throws {
-        let parsed = try KMLReader.read(data: try Fixture.data(name))
+        let parsed = try KMLReader.read(data: Fixture.data(name))
         #expect(parsed.document.name?.isEmpty == false)
         #expect(parsed.document.placemarkCount > 0)
         for pm in parsed.document.root.allPlacemarks {

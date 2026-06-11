@@ -8,7 +8,10 @@ public struct KMLDocument: Equatable, Sendable {
     public let styleMaps: [String: String]
 
     public init(name: String?, descriptionHTML: String?, root: KMLContainer,
-                styles: [String: KMLStyle], styleMaps: [String: String]) {
+                styles: [String: KMLStyle], styleMaps: [String: String])
+    // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
+    // swiftlint:disable:next opening_brace
+    {
         self.name = name
         self.descriptionHTML = descriptionHTML
         self.root = root
@@ -16,8 +19,16 @@ public struct KMLDocument: Equatable, Sendable {
         self.styleMaps = styleMaps
     }
 
-    public var placemarkCount: Int { root.allPlacemarks.count }
-    public var pointCount: Int { root.allPlacemarks.filter { $0.coordinate != nil }.count }
+    public var placemarkCount: Int {
+        root.placemarkCount
+    }
+
+    /// Number of placemarks with an explicit `<Point>` geometry. A point-less placemark that
+    /// carries only line/polygon/track geometry has a representative `coordinate` but is NOT
+    /// counted here.
+    public var pointCount: Int {
+        root.pointCount
+    }
 
     /// Resolves a styleUrl (e.g. "#foo") to a KMLStyle, following one StyleMap hop to its
     /// 'normal' style if needed. Returns nil if unknown.

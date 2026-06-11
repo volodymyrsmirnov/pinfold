@@ -28,11 +28,23 @@
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
+			<!-- Activate only when every attachment in the share is a KML/KMZ file (max 10).
+			     This keeps Pinfold out of the share sheet for PDFs, photos, and other
+			     non-KML payloads. The inner SUBQUERY counts attachments whose UTI conforms
+			     to our KML/KMZ types; requiring that count to equal the total attachment
+			     count means a mixed selection (e.g. one KML + one photo) does not activate. -->
 			<key>NSExtensionActivationRule</key>
-			<dict>
-				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
-				<integer>10</integer>
-			</dict>
+			<string>SUBQUERY (
+    extensionItems,
+    $extensionItem,
+    SUBQUERY (
+        $extensionItem.attachments,
+        $attachment,
+        ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.google.earth.kml"
+        OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.google.earth.kmz"
+    ).@count == $extensionItem.attachments.@count
+    AND $extensionItem.attachments.@count &lt;= 10
+).@count == 1</string>
 		</dict>
 	</dict>
 </dict>

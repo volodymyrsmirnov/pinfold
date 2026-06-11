@@ -7,7 +7,13 @@ import Foundation
 /// (display name, trash status) plus a cached copy of the cheap-but-not-free
 /// derivable fields (`pointCount`, `contentSHA256`) so the reconciler can rebuild
 /// the local SwiftData index without re-parsing every file on every launch.
-struct EntryMetadata: Codable, Equatable, Sendable {
+struct EntryMetadata: Codable, Equatable {
+    /// Stable entry identity. For every entry created after the crash-safe-commit change this
+    /// equals the folder-name UUID (`UUID(uuidString: storageFolderName)`): `commit` derives
+    /// it from the folder name, and `CatalogScanner.rebuildFromBareOriginal` reuses the same
+    /// UUID when backfilling. Keeping the two in lockstep prevents identity drift when an
+    /// entry is rebuilt from a bare original on another device. Legacy sidecars may carry an
+    /// unrelated UUID; nothing keys storage operations on `id` (those use `storageFolderName`).
     var id: UUID
     var displayName: String
     var sourceFilename: String
@@ -19,11 +25,16 @@ struct EntryMetadata: Codable, Equatable, Sendable {
     var favoriteKeys: Set<String> = []
     /// Stable keys of placemarks marked visited/seen.
     var visitedKeys: Set<String> = []
+    /// User-assigned labels on this entry (per-ENTRY, not per-placemark). Normalized by
+    /// `Catalog.setTags` (trimmed, de-duplicated case-insensitively, sorted); stored as a
+    /// plain array so the order is exactly the diff-stable sorted order written to disk.
+    var tags: [String] = []
 
     init(
         id: UUID, displayName: String, sourceFilename: String, importDate: Date,
         pointCount: Int, contentSHA256: String, trashedAt: Date?,
-        favoriteKeys: Set<String> = [], visitedKeys: Set<String> = []
+        favoriteKeys: Set<String> = [], visitedKeys: Set<String> = [],
+        tags: [String] = []
     ) {
         self.id = id
         self.displayName = displayName
@@ -34,6 +45,7 @@ struct EntryMetadata: Codable, Equatable, Sendable {
         self.trashedAt = trashedAt
         self.favoriteKeys = favoriteKeys
         self.visitedKeys = visitedKeys
+        self.tags = tags
     }
 
     // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
@@ -41,7 +53,7 @@ struct EntryMetadata: Codable, Equatable, Sendable {
     // property, update CodingKeys, init(from:), encode(to:), AND the memberwise init.
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
-        case contentSHA256, trashedAt, favoriteKeys, visitedKeys
+        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags
     }
 
     init(from decoder: any Decoder) throws {
@@ -53,8 +65,9 @@ struct EntryMetadata: Codable, Equatable, Sendable {
         pointCount = try c.decode(Int.self, forKey: .pointCount)
         contentSHA256 = try c.decode(String.self, forKey: .contentSHA256)
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
-        favoriteKeys = Set(try c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
-        visitedKeys = Set(try c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
+        favoriteKeys = try Set(c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
+        visitedKeys = try Set(c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -70,6 +83,9 @@ struct EntryMetadata: Codable, Equatable, Sendable {
         // array order is otherwise nondeterministic, causing spurious sync churn).
         try c.encode(favoriteKeys.sorted(), forKey: .favoriteKeys)
         try c.encode(visitedKeys.sorted(), forKey: .visitedKeys)
+        // Tags are already kept sorted by `Catalog.setTags`, but sort again here so a
+        // hand-built/legacy-merged value still serializes diff-stably.
+        try c.encode(tags.sorted(), forKey: .tags)
     }
 
     /// Encodes to pretty-printed, key-sorted JSON for stable, diff-friendly files.
@@ -88,5 +104,35 @@ struct EntryMetadata: Codable, Equatable, Sendable {
     /// Decodes from the JSON produced by `encoded()`.
     static func decoded(from data: Data) throws -> EntryMetadata {
         try JSONDecoder().decode(EntryMetadata.self, from: data)
+    }
+
+    /// Resolves an iCloud edit conflict by merging this (the current, on-disk winner) with
+    /// the loser `conflicts` versions, producing a single sidecar that loses no user intent.
+    ///
+    /// Merge rules:
+    /// - `favoriteKeys` / `visitedKeys`: **union** across all versions. Marks made on
+    ///   different devices are additive — neither device's stars/visited flags are dropped.
+    /// - `tags`: **union** across all versions (case-sensitive set union, then re-sorted),
+    ///   consistent with `favoriteKeys` — a tag added on one device is never lost by a
+    ///   conflicting copy that never saw it.
+    /// - Scalar identity/content fields (`id`, `displayName`, `sourceFilename`, `importDate`,
+    ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
+    ///   underlying file, so the winning version is authoritative; there is nothing to merge.
+    /// - `trashedAt`: the **maximum** of all non-nil `trashedAt` values across current and
+    ///   conflicts, or `nil` if every version is non-trashed. A trash performed on one device
+    ///   therefore wins over an unaware copy (deletion is the user's most recent intent), and
+    ///   when two devices both trashed, the later timestamp survives.
+    func merging(conflicts: [EntryMetadata]) -> EntryMetadata {
+        var merged = self
+        var tagSet = Set(tags)
+        for other in conflicts {
+            merged.favoriteKeys.formUnion(other.favoriteKeys)
+            merged.visitedKeys.formUnion(other.visitedKeys)
+            tagSet.formUnion(other.tags)
+        }
+        merged.tags = tagSet.sorted()
+        let trashStamps = ([self] + conflicts).compactMap(\.trashedAt)
+        merged.trashedAt = trashStamps.max()
+        return merged
     }
 }

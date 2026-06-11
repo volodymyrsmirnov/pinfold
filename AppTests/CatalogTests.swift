@@ -1,11 +1,10 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `Catalog` — the in-memory catalogue sourced from the folders on disk, with
 /// mutations (trash / restore / delete) writing through to the folder and reloading.
 @Suite(.serialized) @MainActor struct CatalogTests {
-
     private func makeCatalog() -> (Catalog, StorageLocations) {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -32,6 +31,10 @@ import Foundation
             importDate: importDate, pointCount: 1, contentSHA256: sha, trashedAt: trashedAt
         )
         try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+        // The scanner now requires an original alongside a readable sidecar (a sidecar-only
+        // folder is treated as mid-download / mid-commit and skipped), so write one. The
+        // bytes are irrelevant for the `.ok` path — the entry comes from the sidecar.
+        try Data("<kml/>".utf8).write(to: dir.appendingPathComponent("\(folder).kml"))
         return meta
     }
 
@@ -83,7 +86,8 @@ import Foundation
 
         #expect(catalog.entries.isEmpty)
         #expect(!FileManager.default.fileExists(
-            atPath: storage.root.appendingPathComponent("gone").path))
+            atPath: storage.root.appendingPathComponent("gone").path
+        ))
     }
 
     @Test func entryWithSHA256_findsByContentHash() async throws {
@@ -93,6 +97,86 @@ import Foundation
 
         #expect(catalog.entry(withSHA256: "needle")?.storageFolderName == "f")
         #expect(catalog.entry(withSHA256: "missing") == nil)
+    }
+
+    @Test func reload_concurrentCallsSettleToFinalState() async throws {
+        let (catalog, storage) = makeCatalog()
+        // Seed several folders so a scan has real work to do.
+        for index in 0 ..< 5 {
+            try seedFolder(storage, folder: "f\(index)")
+        }
+
+        // Fire many reloads concurrently. The generation guard must ensure no crash and that a
+        // stale scan never clobbers a newer one. A final awaited reload settles the state.
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0 ..< 8 {
+                group.addTask { await catalog.reload() }
+            }
+        }
+        await catalog.reload()
+
+        let onDisk = try FileManager.default.contentsOfDirectory(atPath: storage.root.path)
+            .filter { !$0.hasPrefix(".") }
+        #expect(
+            catalog.entries.count == onDisk.count,
+            "After concurrent reloads settle, entries must match the on-disk folder count"
+        )
+        #expect(catalog.entries.count == 5)
+    }
+
+    @Test func rename_updatesSidecarAndList() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.rename(entry, to: "  Renamed Trip  ")
+
+        // The renamed entry appears with the trimmed new name after the reload.
+        #expect(catalog.active.first?.displayName == "Renamed Trip")
+        // The sidecar on disk carries the new name (persisted, survives a fresh scan).
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == "Renamed Trip")
+    }
+
+    @Test func rename_rejectsEmptyOrWhitespace() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        let original = entry.displayName
+
+        await catalog.rename(entry, to: "   ")
+
+        // No-op: the name is unchanged both in memory and on disk.
+        #expect(catalog.active.first?.displayName == original)
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
+    }
+
+    @Test func catalog_setTags_persists() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.setTags(["food", "art"], for: entry)
+
+        // Surfaced on the in-memory entry (sorted) after reload.
+        #expect(catalog.active.first?.tags == ["art", "food"])
+        // Persisted to the on-disk sidecar (survives a fresh scan), and sorted there too.
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["art", "food"])
+    }
+
+    @Test func setTags_normalizes() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        // Whitespace, empties, and case-insensitive duplicates (keep first casing).
+        await catalog.setTags(["  Food ", "", "food", "ART", "art", "   "], for: entry)
+
+        #expect(catalog.active.first?.tags == ["ART", "Food"])
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["ART", "Food"])
     }
 
     @Test func setStorage_repointsRootAndReloads() async throws {

@@ -19,6 +19,11 @@ struct PlacemarkRow: View {
     let placemark: KMLPlacemark
     let document: KMLDocument
     let entry: CatalogEntry
+    /// Pre-formatted straight-line distance from the user to this placemark, or `nil` when the
+    /// user's location is unknown / the placemark has no coordinate. Computed ONCE per list build
+    /// by the caller (`KMLDetailView`) so the whole list shares a single location fix rather than
+    /// re-deriving it per row.
+    var distance: String?
 
     // MARK: - Environment
 
@@ -28,8 +33,13 @@ struct PlacemarkRow: View {
 
     // MARK: - Annotation state
 
-    private var isFavorite: Bool { annotations?.isFavorite(placemark) ?? false }
-    private var isVisited: Bool { annotations?.isVisited(placemark) ?? false }
+    private var isFavorite: Bool {
+        annotations?.isFavorite(placemark) ?? false
+    }
+
+    private var isVisited: Bool {
+        annotations?.isVisited(placemark) ?? false
+    }
 
     // MARK: - Body
 
@@ -69,6 +79,13 @@ struct PlacemarkRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+            }
+            if let distance {
+                Label(distance, systemImage: "location")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
             }
         }
     }

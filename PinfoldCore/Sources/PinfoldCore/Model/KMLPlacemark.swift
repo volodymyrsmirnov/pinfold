@@ -1,6 +1,13 @@
 import CryptoKit
 import Foundation
 
+/// One captured geometry of a placemark beyond its representative point.
+public enum KMLGeometry: Equatable, Sendable {
+    case lineString([Coordinate])
+    case polygon(outer: [Coordinate], inners: [[Coordinate]])
+    case track([Coordinate])
+}
+
 public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// A parse-order identifier ("p1", "p2", …) assigned by the parser.
     /// **Not stable across re-parses** — if the source file changes, the same placemark
@@ -10,8 +17,18 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     public let name: String?
     public let descriptionHTML: String?
     public let styleUrl: String?
-    /// nil for a placeless placemark (no Point geometry).
+    /// The representative point of the placemark.
+    ///
+    /// For a placemark with an explicit `<Point>` this is that point. For a point-less
+    /// placemark that carries only line/polygon/track geometry, this is the **first
+    /// coordinate of its first captured geometry**, so the placemark can still be located
+    /// on a map. `nil` only for a placeless placemark with neither a point nor any geometry.
     public let coordinate: Coordinate?
+    /// True when the source placemark had an explicit `<Point>` geometry. Distinguishes a
+    /// real point from a representative point synthesized from line/polygon/track geometry.
+    public let hasPoint: Bool
+    /// Captured geometries beyond the representative point (lines, polygons, tracks).
+    public var geometries: [KMLGeometry] = []
     public let extendedData: [KMLDataItem]
     /// Photo URLs gathered from ExtendedData `gx_media_links` (kept separate from extendedData).
     public let photoLinks: [String]
@@ -20,13 +37,20 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     public let sourceID: String?
 
     public init(id: String, name: String?, descriptionHTML: String?, styleUrl: String?,
-                coordinate: Coordinate?, extendedData: [KMLDataItem], photoLinks: [String],
-                sourceID: String? = nil) {
+                coordinate: Coordinate?, hasPoint: Bool = true,
+                geometries: [KMLGeometry] = [],
+                extendedData: [KMLDataItem], photoLinks: [String],
+                sourceID: String? = nil)
+    // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
+    // swiftlint:disable:next opening_brace
+    {
         self.id = id
         self.name = name
         self.descriptionHTML = descriptionHTML
         self.styleUrl = styleUrl
         self.coordinate = coordinate
+        self.hasPoint = hasPoint
+        self.geometries = geometries
         self.extendedData = extendedData
         self.photoLinks = photoLinks
         self.sourceID = sourceID

@@ -1,13 +1,13 @@
-import Testing
 @testable import PinfoldCore
+import Testing
 
-@Suite struct ModelTests {
+struct ModelTests {
     private func sampleDoc() -> KMLDocument {
         let p1 = KMLPlacemark(id: "p1", name: "A", descriptionHTML: nil,
                               styleUrl: "#m1", coordinate: Coordinate(longitude: 1, latitude: 2),
                               extendedData: [], photoLinks: [])
         let p2 = KMLPlacemark(id: "p2", name: "B", descriptionHTML: nil,
-                              styleUrl: "#s1", coordinate: nil,
+                              styleUrl: "#s1", coordinate: nil, hasPoint: false,
                               extendedData: [KMLDataItem(name: "day", value: "1")], photoLinks: [])
         let inner = KMLContainer(id: "c1", name: "Inner", children: [], placemarks: [p2])
         let root = KMLContainer(id: "c0", name: "Root", children: [inner], placemarks: [p1])
@@ -20,8 +20,8 @@ import Testing
                            styles: styles, styleMaps: styleMaps)
     }
 
-    @Test func pointCountCountsOnlyPlacemarksWithCoordinates() {
-        #expect(sampleDoc().pointCount == 1)   // only p1 has a coordinate
+    @Test func pointCountCountsOnlyPlacemarksWithExplicitPoint() {
+        #expect(sampleDoc().pointCount == 1) // only p1 has an explicit Point (hasPoint)
     }
 
     @Test func placemarkCountCountsAllPlacemarks() {

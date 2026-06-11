@@ -1,10 +1,9 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `EntryMetadata` — JSON round-tripping of the synced sidecar.
-@Suite struct EntryMetadataTests {
-
+struct EntryMetadataTests {
     @Test func roundTrips_throughJSON() throws {
         let original = EntryMetadata(
             id: UUID(),
@@ -65,6 +64,128 @@ import Foundation
         let decoded = try EntryMetadata.decoded(from: Data(legacy.utf8))
         #expect(decoded.favoriteKeys.isEmpty)
         #expect(decoded.visitedKeys.isEmpty)
+    }
+
+    @Test func mergeConflict_unionsFavoriteAndVisitedKeys() {
+        let importDate = Date(timeIntervalSince1970: 1000)
+        let id = UUID()
+        let current = EntryMetadata(
+            id: id, displayName: "Current", sourceFilename: "cur.kml",
+            importDate: importDate, pointCount: 5, contentSHA256: "cur-sha",
+            trashedAt: nil, favoriteKeys: ["a"], visitedKeys: []
+        )
+        // Conflicts carry differing scalars (which must be ignored) and disjoint key sets.
+        let conflictFav = EntryMetadata(
+            id: UUID(), displayName: "Other1", sourceFilename: "o1.kml",
+            importDate: Date(timeIntervalSince1970: 9999), pointCount: 1, contentSHA256: "o1",
+            trashedAt: nil, favoriteKeys: ["b"], visitedKeys: []
+        )
+        let conflictVisited = EntryMetadata(
+            id: UUID(), displayName: "Other2", sourceFilename: "o2.kml",
+            importDate: Date(timeIntervalSince1970: 8888), pointCount: 2, contentSHA256: "o2",
+            trashedAt: nil, favoriteKeys: [], visitedKeys: ["c"]
+        )
+
+        let merged = current.merging(conflicts: [conflictFav, conflictVisited])
+
+        #expect(merged.favoriteKeys == ["a", "b"])
+        #expect(merged.visitedKeys == ["c"])
+        // Scalars keep CURRENT's values.
+        #expect(merged.id == id)
+        #expect(merged.displayName == "Current")
+        #expect(merged.sourceFilename == "cur.kml")
+        #expect(merged.importDate == importDate)
+        #expect(merged.pointCount == 5)
+        #expect(merged.contentSHA256 == "cur-sha")
+    }
+
+    @Test func mergeConflict_trashedAt_allNilStaysNil() {
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: nil
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: nil
+        )
+        #expect(current.merging(conflicts: [conflict]).trashedAt == nil)
+    }
+
+    @Test func mergeConflict_trashedAt_conflictTrashWinsOverUnawareCurrent() {
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: nil
+        )
+        let trashDate = Date(timeIntervalSince1970: 5000)
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: trashDate
+        )
+        #expect(current.merging(conflicts: [conflict]).trashedAt == trashDate)
+    }
+
+    @Test func mergeConflict_trashedAt_takesLaterOfBoth() {
+        let earlier = Date(timeIntervalSince1970: 1000)
+        let later = Date(timeIntervalSince1970: 2000)
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: earlier
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: later
+        )
+        #expect(current.merging(conflicts: [conflict]).trashedAt == later)
+    }
+
+    @Test func mergeConflict_trashedAt_keepsCurrentWhenItIsLater() {
+        let earlier = Date(timeIntervalSince1970: 1000)
+        let later = Date(timeIntervalSince1970: 2000)
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: later
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: earlier
+        )
+        #expect(current.merging(conflicts: [conflict]).trashedAt == later)
+    }
+
+    @Test func metadata_tagsRoundTripAndLegacyDecode() throws {
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Trip", sourceFilename: "trip.kml",
+            importDate: Date(timeIntervalSince1970: 1000), pointCount: 3,
+            contentSHA256: "deadbeef", trashedAt: nil,
+            favoriteKeys: [], visitedKeys: [], tags: ["food", "art"]
+        )
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        // Encoded sorted, so decode comes back sorted regardless of input order.
+        #expect(decoded.tags == ["art", "food"])
+
+        // Legacy sidecar with no `tags` key decodes to an empty array.
+        let legacy = """
+        {"contentSHA256":"abc","displayName":"Old","id":"\(UUID().uuidString)",\
+        "importDate":0,"pointCount":1,"sourceFilename":"old.kml"}
+        """
+        let legacyDecoded = try EntryMetadata.decoded(from: Data(legacy.utf8))
+        #expect(legacyDecoded.tags.isEmpty)
+    }
+
+    @Test func mergeConflict_unionsTags() {
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: nil,
+            tags: ["art"]
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: nil,
+            tags: ["food", "art"]
+        )
+        let merged = current.merging(conflicts: [conflict])
+        // Union of {art} and {food, art}, re-sorted.
+        #expect(merged.tags == ["art", "food"])
     }
 
     @Test func encodesKeysAsSortedArraysForStableOutput() throws {

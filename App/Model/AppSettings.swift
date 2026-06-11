@@ -19,6 +19,7 @@ import Observation
         static let defaultMapAppID = "settings.defaultMapAppID"
         static let clusterMapPins = "settings.clusterMapPins"
         static let syncEnabled = "settings.syncEnabled"
+        static let entrySort = "settings.entrySort"
     }
 
     /// Identifiers of the map apps the user has explicitly enabled. Empty means "all
@@ -42,6 +43,12 @@ import Observation
         didSet { defaults.set(syncEnabled, forKey: Key.syncEnabled) }
     }
 
+    /// How the catalogue's active list is ordered (presentation-level; see `EntrySort`).
+    /// Stored as the case's raw-value string; defaults to `.dateDesc` (newest first).
+    var entrySort: EntrySort {
+        didSet { defaults.set(entrySort.rawValue, forKey: Key.entrySort) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // Initial assignments do not trigger `didSet`, so this only reads.
@@ -49,5 +56,7 @@ import Observation
         defaultMapAppID = defaults.string(forKey: Key.defaultMapAppID)
         clusterMapPins = defaults.bool(forKey: Key.clusterMapPins)
         syncEnabled = defaults.bool(forKey: Key.syncEnabled)
+        entrySort = defaults.string(forKey: Key.entrySort)
+            .flatMap(EntrySort.init(rawValue:)) ?? .dateDesc
     }
 }

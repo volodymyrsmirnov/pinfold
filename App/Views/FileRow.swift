@@ -29,6 +29,14 @@ struct FileRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if !entry.tags.isEmpty {
+                    Label(entry.tags.joined(separator: ", "), systemImage: "tag")
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 2)
@@ -38,6 +46,14 @@ struct FileRow: View {
 
     private var secondaryLine: String {
         let dateStr = entry.importDate.formatted(date: .abbreviated, time: .omitted)
-        return "\(entry.pointCount) points · \(dateStr)"
+        // Explicit singular/plural branch rather than `^[…](inflect: true)`: the automatic
+        // grammar-agreement markup is only guaranteed to render once verified on every
+        // destination (final review flagged it showing literally on the Mac "Designed for
+        // iPad" build), and the project ships no string catalog. Same pattern as the
+        // import-failure banner.
+        let points = entry.pointCount == 1
+            ? String(localized: "1 point")
+            : String(localized: "\(entry.pointCount) points")
+        return "\(points) · \(dateStr)"
     }
 }

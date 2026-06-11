@@ -2,182 +2,35 @@ import SwiftUI
 
 @main
 struct PinfoldApp: App {
+    /// Bridges the "Import…" menu command to `HomeView`'s file importer (see `AppCommands`).
+    @State private var appCommands = AppCommands()
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(appCommands)
         }
-    }
-}
-
-// MARK: - RootView
-
-/// Bootstraps the app's services once and provides the root `NavigationStack`.
-///
-/// There is no SwiftData container: the catalogue lives in the folders on disk and is held
-/// in memory by `Catalog`, which is sourced from whichever root is active (local Application
-/// Support, or the iCloud container's `Documents` when sync is on). `AppSettings` (sync
-/// toggle + map prefs) is UserDefaults-backed.
-private struct RootView: View {
-    @State private var settings: AppSettings
-    @State private var catalog: Catalog
-    @State private var mapAppService: MapAppService
-    @State private var resourceCache: ResourceCache
-    @State private var watcher: CatalogWatcher?
-    /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
-    /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
-    @State private var rootIsUbiquitous = false
-
-    @Environment(\.scenePhase) private var scenePhase
-
-    init() {
-        // Start on local storage (synchronously knowable). `bootstrap()` resolves the real
-        // root — iCloud if sync is on and available — and switches to it.
-        let cache = ResourceCache()
-        _settings = State(initialValue: AppSettings())
-        _resourceCache = State(initialValue: cache)
-        _mapAppService = State(initialValue: MapAppService())
-        _catalog = State(initialValue: Catalog(storage: .applicationSupport, cache: cache))
-    }
-
-    var body: some View {
-        NavigationStack {
-            HomeView()
-        }
-        .environment(catalog)
-        .environment(settings)
-        .environment(mapAppService)
-        .environment(\.resourceCache, resourceCache)
-        .environment(\.storageLocations, catalog.storage)
-        .task { await bootstrap() }
-        // Pick up files synced or shared while the app was already running.
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                Task { await drainInbox(); await drainDocumentsInbox(); await catalog.reload() }
+        .commands {
+            // ⌘I mirrors HomeView's "+" toolbar button. Placed after the standard "New"
+            // group so it sits with the file-creation commands in the menu bar (Mac /
+            // hardware-keyboard iPad). The flag-bump is observed by HomeView, which owns
+            // the fileImporter — Commands can't present sheets directly.
+            CommandGroup(after: .newItem) {
+                Button("Import\u{2026}") {
+                    appCommands.requestImport()
+                }
+                .keyboardShortcut("i", modifiers: .command)
+            }
+            // ⌘F focuses HomeView's catalogue search field. Like ⌘I it bumps a counter on
+            // AppCommands (Commands can't move focus directly); HomeView observes it and
+            // drives its `.searchFocused` binding. Placed in `.textEditing` so it sits with
+            // the standard Find commands in the menu bar.
+            CommandGroup(after: .textEditing) {
+                Button("Search") {
+                    appCommands.requestSearchFocus()
+                }
+                .keyboardShortcut("f", modifiers: .command)
             }
         }
-        // Handle a file opened via the KML/KMZ file-type association ("Open in Pinfold"
-        // from Files/Mail/Safari) or the share extension's `pinfold://import` launch URL.
-        .onOpenURL { url in
-            Task { await handleOpenURL(url) }
-        }
-        // Apply the iCloud toggle live: switch the active root (migrating existing files)
-        // and restart the watcher. No relaunch required.
-        .onChange(of: settings.syncEnabled) { _, _ in
-            Task { await applyStorage(migrate: true) }
-        }
-    }
-
-    /// One-time startup: resolve the active root, drain the inbox, reload, start watching.
-    private func bootstrap() async {
-        await applyStorage(migrate: false)
-        await drainInbox()
-        await drainDocumentsInbox()
-        await catalog.reload()
-    }
-
-    /// Resolves the active root from the current sync preference, points the catalogue at
-    /// it, and (re)starts the watcher.
-    ///
-    /// - Parameter migrate: `true` for the toggle path (move existing files into the new
-    ///   root, choosing the iCloud-aware file API); `false` for launch (the files are
-    ///   already where the resolved root expects them).
-    private func applyStorage(migrate: Bool) async {
-        let (storage, ubiquitous) = await resolveStorage()
-        if migrate {
-            let from = catalog.storage.root
-            let wasUbiquitous = rootIsUbiquitous
-            try? await Task.detached {
-                try StorageLocations.migrateEntryFolders(
-                    from: from,
-                    to: storage.root,
-                    fromUbiquitous: wasUbiquitous,
-                    toUbiquitous: ubiquitous
-                )
-            }.value
-        }
-        await catalog.setStorage(storage)
-        rootIsUbiquitous = ubiquitous
-        startWatcher(root: storage.root, ubiquitous: ubiquitous)
-    }
-
-    /// Returns the storage layout for the current preference, plus whether it is the iCloud
-    /// (ubiquitous) container. Falls back to local storage when sync is off or iCloud is
-    /// unavailable.
-    private func resolveStorage() async -> (StorageLocations, Bool) {
-        guard settings.syncEnabled else { return (.applicationSupport, false) }
-        let documentsURL = await Task.detached { UbiquityContainer.documentsURL() }.value
-        guard let documentsURL else { return (.applicationSupport, false) }
-        return (.synced(root: documentsURL), true)
-    }
-
-    /// Starts a fresh watcher on `root`, replacing any previous one.
-    private func startWatcher(root: URL, ubiquitous: Bool) {
-        let watcher = CatalogWatcher { [catalog] in
-            Task { await catalog.reload() }
-        }
-        watcher.start(root: root, ubiquitous: ubiquitous)
-        self.watcher = watcher
-    }
-
-    /// Drains the share-extension inbox into the active root, if the App Group is available.
-    private func drainInbox() async {
-        guard let inboxURL = AppGroup.inboxURL else { return }
-        let inbox = PendingImportInbox(
-            inboxURL: inboxURL,
-            catalog: catalog,
-            storage: catalog.storage,
-            cache: resourceCache
-        )
-        await inbox.drain()
-    }
-
-    // MARK: - Document open ("Open in Pinfold")
-
-    /// The app-sandbox `Documents/Inbox` directory that iOS copies opened documents into
-    /// (the app declares the KML/KMZ types with open-in-place disabled). Distinct from the
-    /// App Group inbox the share extension uses.
-    private var documentsInboxURL: URL? {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Inbox", isDirectory: true)
-    }
-
-    /// Handles a URL handed to the app via the file-type association or a custom scheme.
-    /// A file URL is imported directly — it is authoritative and already in our sandbox, so
-    /// relying only on a directory scan could silently drop it — then both inboxes are
-    /// drained for any stragglers.
-    private func handleOpenURL(_ url: URL) async {
-        if url.isFileURL {
-            await importFile(at: url)
-        }
-        await drainDocumentsInbox()
-        await drainInbox()
-    }
-
-    /// Imports a single opened file, deduping by content hash, then deletes the sandbox copy.
-    private func importFile(at url: URL) async {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url),
-              let result = try? ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
-        else { return }
-        if catalog.entry(withSHA256: result.contentSHA256) == nil {
-            _ = try? ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
-            await catalog.reload()
-        }
-        // The opened document is a copy in our sandbox (open-in-place is disabled), so it is
-        // safe to delete after importing.
-        try? FileManager.default.removeItem(at: url)
-    }
-
-    /// Drains the app's `Documents/Inbox` (files opened via the KML/KMZ file-type association).
-    private func drainDocumentsInbox() async {
-        guard let documentsInboxURL else { return }
-        let inbox = PendingImportInbox(
-            inboxURL: documentsInboxURL,
-            catalog: catalog,
-            storage: catalog.storage,
-            cache: resourceCache
-        )
-        await inbox.drain()
     }
 }

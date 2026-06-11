@@ -18,7 +18,5 @@
 	<array>
 		<string>iCloud.tech.inkhorn.pinfold</string>
 	</array>
-	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
-	<string>$(TeamIdentifierPrefix)tech.inkhorn.pinfold</string>
 </dict>
 </plist>
