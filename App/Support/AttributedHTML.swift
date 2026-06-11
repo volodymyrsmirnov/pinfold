@@ -46,19 +46,35 @@ enum AttributedHTML {
     /// schemes that could exfiltrate, run script, or read local files.
     private static let allowedLinkSchemes: Set<String> = ["http", "https", "mailto", "tel"]
 
+    /// DoS bound for untrusted input: `attributed(_:)` only ever inspects this many characters
+    /// of a description. 256 K characters is far beyond any legitimate KML description; the cap
+    /// exists so a crafted multi-megabyte description can't tie up the anchor-extraction pass.
+    /// `plainText`/`readableText` are NOT capped — their passes are all linear-time regexes, so
+    /// the anchor pass here is the only superlinear-risk surface.
+    private static let maxDescriptionLength = 256 * 1024
+
     /// Same tag-stripping / entity-decoding / line-tidying as `readableText`, but `<a href>`
     /// anchors with an allowlisted scheme, plus bare URLs / emails / phone numbers, become
     /// tappable `.link` runs. Pure string + `NSDataDetector` work — no HTML parsing, no
     /// network — so it is safe off the main thread. On link-free input the character content is
     /// byte-identical to `readableText` (it runs the same passes).
     static func attributed(_ html: String) -> AttributedString {
+        // Cap the input first (see `maxDescriptionLength`): descriptions are untrusted and
+        // unbounded. Truncating mid-anchor is harmless — the unmatched tag is just stripped.
+        let html = String(html.prefix(maxDescriptionLength))
+
         // 1. Pull valid anchors out, replacing each with a private-use sentinel that survives
         //    the strip/decode/tidy passes, and remember each anchor's (visible text, URL).
         var anchors: [(text: String, url: URL)] = []
         // `<a … href="…">…</a>`: captures the href (group 1) and inner content (group 2).
-        // Handles single- or double-quoted hrefs and attributes in any order. Anchors don't
-        // legally nest, so the lazy inner match is safe.
-        let anchorPattern = #/(?is)<a\b[^>]*?\bhref\s*=\s*["']([^"']*)["'][^>]*>(.*?)<\s*/\s*a\s*>/#
+        // Handles single- or double-quoted hrefs and attributes in any order; anchors don't
+        // legally nest. The inner content match is **length-bounded** (`{0,1024}`, lazy): an
+        // unbounded lazy `.*?` re-scans to end-of-string for every unclosed `<a` tag, which is
+        // O(n²) on crafted input (measured ~9–11 s for 3000 unclosed anchors). With the bound,
+        // each anchor candidate inspects at most 1024 characters, keeping the pass ~linear
+        // (same input: ~0.3 s); anchors whose inner content exceeds the bound — far beyond any
+        // real link text — simply degrade to plain text.
+        let anchorPattern = #/(?is)<a\b[^>]*?\bhref\s*=\s*["']([^"']*)["'][^>]*>(.{0,1024}?)<\s*/\s*a\s*>/#
         let sentineled = html.replacing(anchorPattern) { match in
             let href = String(match.1)
             // Inner markup is stripped to text; entities decoded; whitespace collapsed.
@@ -78,6 +94,14 @@ enum AttributedHTML {
         let readable = readableText(String(sentineled))
 
         // 3. Reassemble, swapping each sentinel back for a linked run of its visible text.
+        //
+        // Forged sentinels: a description that literally embeds U+E000<idx>U+E001 with an
+        // in-range idx binds attacker-chosen text to a REAL anchor's URL. That URL has already
+        // cleared the scheme allowlist, so the impact is limited to link-text spoofing of an
+        // allowlisted destination — no new scheme or action becomes reachable. Out-of-range or
+        // malformed sentinels fail `nextSentinel` and degrade to inert text. Tracking anchor
+        // ranges through the tidy passes instead (immune to forgery) was considered and
+        // rejected as not worth the complexity for that residual impact.
         var result = AttributedString()
         var detectorRanges: [Range<AttributedString.Index>] = []
         var rest = Substring(readable)

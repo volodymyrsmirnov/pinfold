@@ -177,6 +177,19 @@ struct AttributedHTMLTests {
         #expect(try linkURLs(result) == [#require(URL(string: "https://example.com"))])
     }
 
+    @Test func attributed_pathologicalUnclosedAnchorsCompletesQuickly() {
+        // ReDoS regression (untrusted input): pre-fix, the anchor pattern's lazy `(.*?)`
+        // scanned to end-of-string for EVERY unclosed `<a` tag — O(n²), measured ~9 s for
+        // this input. The bounded inner quantifier + input-length cap keep it ~linear; the
+        // 2 s budget is generous so the test stays robust on slow CI simulators.
+        let html = String(repeating: "<a href=\"https://x/\">", count: 3000)
+        let clock = ContinuousClock()
+        let elapsed = clock.measure {
+            _ = AttributedHTML.attributed(html)
+        }
+        #expect(elapsed < .seconds(2))
+    }
+
     @Test func attributed_plainTextParityWhenNoLinks() {
         // For a fixture with no links, the attributed string's character content must equal
         // readableText's output — guards the shared-passes refactor.
