@@ -29,6 +29,14 @@ struct FileRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if !entry.tags.isEmpty {
+                    Label(entry.tags.joined(separator: ", "), systemImage: "tag")
+                        .font(.caption2)
+                        .foregroundStyle(.tint)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(.vertical, 2)

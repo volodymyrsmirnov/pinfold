@@ -6,6 +6,22 @@ import SwiftUI
 /// `HomeView.swift` focused on the catalogue list + import flow. Rendered by `fileList` when
 /// a query is active on the Files segment.
 extension HomeView {
+    /// Active entries whose display name matches the query — the "Files" results section.
+    /// Same `localizedCaseInsensitiveContains` primitive as the placemark search.
+    var matchingFiles: [CatalogEntry] {
+        sortedActive.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+    }
+
+    /// Place hits grouped by the entry that contains them, in catalogue order, so the results
+    /// list can show one section per file. Resolves each hit's folder name to its entry.
+    var groupedPlaceHits: [(entry: CatalogEntry, hits: [PlacemarkIndex.Hit])] {
+        let byFolder = Dictionary(grouping: placeHits, by: \.folderName)
+        return active.compactMap { entry in
+            guard let hits = byFolder[entry.storageFolderName], !hits.isEmpty else { return nil }
+            return (entry, hits)
+        }
+    }
+
     /// Replaces the plain entry list while a query is active. Two sections:
     /// - "Files": active entries whose display name matches (selecting one opens it normally).
     /// - "Places": placemark hits from the per-entry indexes, grouped by file. Tapping a hit

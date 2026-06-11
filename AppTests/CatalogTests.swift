@@ -152,6 +152,33 @@ import Testing
         #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
     }
 
+    @Test func catalog_setTags_persists() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.setTags(["food", "art"], for: entry)
+
+        // Surfaced on the in-memory entry (sorted) after reload.
+        #expect(catalog.active.first?.tags == ["art", "food"])
+        // Persisted to the on-disk sidecar (survives a fresh scan), and sorted there too.
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["art", "food"])
+    }
+
+    @Test func setTags_normalizes() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        // Whitespace, empties, and case-insensitive duplicates (keep first casing).
+        await catalog.setTags(["  Food ", "", "food", "ART", "art", "   "], for: entry)
+
+        #expect(catalog.active.first?.tags == ["ART", "Food"])
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["ART", "Food"])
+    }
+
     @Test func setStorage_repointsRootAndReloads() async throws {
         let (catalog, oldStorage) = makeCatalog()
         try seedFolder(oldStorage, folder: "old")

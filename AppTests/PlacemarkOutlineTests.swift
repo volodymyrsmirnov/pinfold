@@ -1,3 +1,4 @@
+import CoreLocation
 @testable import Pinfold
 import PinfoldCore
 import Testing
@@ -150,6 +151,76 @@ struct PlacemarkOutlineTests {
     /// must enable the map button: such placemarks carry a `coordinate`, so they appear in
     /// `mappablePlacemarks` exactly like point placemarks. Without this the "map only
     /// routes" case would leave the map button disabled.
+    // MARK: - Nearest-first sort
+
+    /// A placemark at an explicit coordinate (for distance ordering).
+    private func placemark(id: String, name: String, lat: Double, lon: Double) -> KMLPlacemark {
+        KMLPlacemark(
+            id: id, name: name, descriptionHTML: nil, styleUrl: nil,
+            coordinate: Coordinate(longitude: lon, latitude: lat),
+            extendedData: [], photoLinks: [], sourceID: id
+        )
+    }
+
+    @Test func nearest_flattensTreeAndSortsByDistanceDroppingFolders() {
+        // Three placemarks across two folders, plus one at the root, at increasing distance
+        // from (0,0). Nearest-first must ignore folders and emit a flat, distance-ordered list.
+        let near = placemark(id: "near", name: "Near", lat: 0, lon: 0.1) // closest
+        let mid = placemark(id: "mid", name: "Mid", lat: 0, lon: 0.5)
+        let far = placemark(id: "far", name: "Far", lat: 0, lon: 2.0) // farthest
+        let folderA = KMLContainer(id: "fA", name: "A", children: [], placemarks: [far])
+        let folderB = KMLContainer(id: "fB", name: "B", children: [], placemarks: [mid])
+        let root = KMLContainer(
+            id: "root", name: nil, children: [folderA, folderB], placemarks: [near]
+        )
+        let here = CLLocation(latitude: 0, longitude: 0)
+
+        let outline = PlacemarkOutline.build(
+            from: root, matching: "", collapsed: [], sort: .nearest(here)
+        )
+
+        // Flat list, no folder rows, nearest→farthest.
+        let allPlacemarks = outline.rows.allSatisfy(\.isPlacemark)
+        #expect(allPlacemarks)
+        #expect(outline.rows.map(\.id) == ["id:near", "id:mid", "id:far"])
+        #expect(outline.rows.map(\.depth) == [0, 0, 0])
+    }
+
+    @Test func nearest_coordinateLessPlacemarksSortLast() {
+        let near = placemark(id: "near", name: "Near", lat: 0, lon: 0.1)
+        let noCoord = KMLPlacemark(
+            id: "nc", name: "No Coord", descriptionHTML: nil, styleUrl: nil,
+            coordinate: nil, extendedData: [], photoLinks: [], sourceID: "nc"
+        )
+        let root = KMLContainer(
+            id: "root", name: nil, children: [], placemarks: [noCoord, near]
+        )
+        let here = CLLocation(latitude: 0, longitude: 0)
+
+        let outline = PlacemarkOutline.build(
+            from: root, matching: "", collapsed: [], sort: .nearest(here)
+        )
+
+        // Coordinate-bearing placemark first; the coordinate-less one sorts last.
+        #expect(outline.rows.map(\.id) == ["id:near", "id:nc"])
+    }
+
+    @Test func nearest_respectsSearchQuery() {
+        let alpha = placemark(id: "a", name: "Alpha", lat: 0, lon: 0.1)
+        let beta = placemark(id: "b", name: "Beta", lat: 0, lon: 0.2)
+        let root = KMLContainer(
+            id: "root", name: nil, children: [], placemarks: [alpha, beta]
+        )
+        let here = CLLocation(latitude: 0, longitude: 0)
+
+        let outline = PlacemarkOutline.build(
+            from: root, matching: "beta", collapsed: [], sort: .nearest(here)
+        )
+
+        // Only the matching placemark survives, still as a flat row.
+        #expect(outline.rows.map(\.id) == ["id:b"])
+    }
+
     @Test func mappable_includesPointLessGeometryPlacemarks() {
         let route = KMLPlacemark(
             id: "route", name: "Trail", descriptionHTML: nil, styleUrl: nil,

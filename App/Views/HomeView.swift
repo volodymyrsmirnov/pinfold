@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Segment
 
-private enum Segment: Hashable {
+enum Segment: Hashable {
     case files
     case trash
 }
@@ -44,7 +44,8 @@ struct HomeView: View {
 
     // MARK: - Local state
 
-    @State private var segment: Segment = .files
+    /// Not `private`: read from the `HomeViewTags` extension (a separate file) for the chips bar.
+    @State var segment: Segment = .files
     /// Presents the `fileImporter` picker sheet. Distinct from
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
     @State private var isFileImporterPresented = false
@@ -64,13 +65,26 @@ struct HomeView: View {
     /// current name when the alert opens.
     @State var renameText = ""
 
+    /// The entry currently having its tags edited (drives the tags alert), or `nil`. Set from
+    /// the active-row context menu's "Edit Tags…" action (in HomeViewRows).
+    @State var tagsTarget: CatalogEntry?
+    /// The editable, comma-separated tags text bound to the tags alert's `TextField`, prefilled
+    /// by joining the entry's current tags with ", ". Parsed back by comma on Save.
+    @State var tagsText = ""
+
+    /// The currently-selected filter chip tag (Files segment), or `nil` for "All". Hidden while
+    /// searching (chips are not shown during search to keep filter state simple).
+    /// Not `private`: read/written from the `HomeViewTags` extension (a separate file).
+    @State var selectedTag: String?
+
     /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
     @State private var searchQuery = ""
     /// Keyboard focus for the search field, driven by the ⌘F command (see `AppCommands`).
     @FocusState private var isSearchFocused: Bool
     /// "Places" hits for the current query, read off-main from each active entry's local
     /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
-    @State private var placeHits: [PlacemarkIndex.Hit] = []
+    /// Not `private`: `groupedPlaceHits` lives in the `HomeSearchResults` extension (a separate file).
+    @State var placeHits: [PlacemarkIndex.Hit] = []
 
     /// Debounce before reading every entry's index off disk, matching `KMLDetailView`'s
     /// in-file search debounce so rapid typing doesn't fan out a read storm.
@@ -106,24 +120,9 @@ struct HomeView: View {
         searchQuery.trimmingCharacters(in: .whitespaces)
     }
 
-    private var isSearching: Bool {
+    /// Not `private`: read from the `HomeViewTags` extension (a separate file).
+    var isSearching: Bool {
         segment == .files && !trimmedQuery.isEmpty
-    }
-
-    /// Active entries whose display name matches the query — the "Files" results section.
-    /// Same `localizedCaseInsensitiveContains` primitive as the placemark search.
-    var matchingFiles: [CatalogEntry] {
-        sortedActive.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
-    }
-
-    /// Place hits grouped by the entry that contains them, in catalogue order, so the results
-    /// list can show one section per file. Resolves each hit's folder name to its entry.
-    var groupedPlaceHits: [(entry: CatalogEntry, hits: [PlacemarkIndex.Hit])] {
-        let byFolder = Dictionary(grouping: placeHits, by: \.folderName)
-        return active.compactMap { entry in
-            guard let hits = byFolder[entry.storageFolderName], !hits.isEmpty else { return nil }
-            return (entry, hits)
-        }
     }
 
     // MARK: - Body
@@ -131,6 +130,7 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             pickerBar
+            tagChipsBar
             importFailureBanner
             fileList
         }
@@ -318,6 +318,27 @@ struct HomeView: View {
             }
             Button("Cancel", role: .cancel) { renameTarget = nil }
         }
+        // Edit Tags alert — a single TextField of comma-separated tags, prefilled by joining the
+        // entry's current tags. Save splits on commas and hands the raw parts to
+        // `catalog.setTags`, which trims/dedupes/sorts them (see `Catalog.normalizeTags`).
+        .alert(
+            "Edit Tags",
+            isPresented: Binding(
+                get: { tagsTarget != nil },
+                set: { if !$0 { tagsTarget = nil } }
+            ),
+            presenting: tagsTarget
+        ) { entry in
+            TextField("Tags, comma-separated", text: $tagsText)
+            Button("Save") {
+                let parsed = tagsText.split(separator: ",").map(String.init)
+                Task { await catalog.setTags(parsed, for: entry) }
+                tagsTarget = nil
+            }
+            Button("Cancel", role: .cancel) { tagsTarget = nil }
+        } message: { _ in
+            Text("Separate tags with commas.")
+        }
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.
@@ -364,7 +385,7 @@ struct HomeView: View {
                 // detail on compact width (collapsed split view) — replacing the old explicit
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
-                    ForEach(sortedActive) { entry in
+                    ForEach(displayedActive) { entry in
                         FileRow(entry: entry)
                             .tag(entry.id)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {

@@ -152,6 +152,42 @@ struct EntryMetadataTests {
         #expect(current.merging(conflicts: [conflict]).trashedAt == later)
     }
 
+    @Test func metadata_tagsRoundTripAndLegacyDecode() throws {
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Trip", sourceFilename: "trip.kml",
+            importDate: Date(timeIntervalSince1970: 1000), pointCount: 3,
+            contentSHA256: "deadbeef", trashedAt: nil,
+            favoriteKeys: [], visitedKeys: [], tags: ["food", "art"]
+        )
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        // Encoded sorted, so decode comes back sorted regardless of input order.
+        #expect(decoded.tags == ["art", "food"])
+
+        // Legacy sidecar with no `tags` key decodes to an empty array.
+        let legacy = """
+        {"contentSHA256":"abc","displayName":"Old","id":"\(UUID().uuidString)",\
+        "importDate":0,"pointCount":1,"sourceFilename":"old.kml"}
+        """
+        let legacyDecoded = try EntryMetadata.decoded(from: Data(legacy.utf8))
+        #expect(legacyDecoded.tags.isEmpty)
+    }
+
+    @Test func mergeConflict_unionsTags() {
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: nil,
+            tags: ["art"]
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: nil,
+            tags: ["food", "art"]
+        )
+        let merged = current.merging(conflicts: [conflict])
+        // Union of {art} and {food, art}, re-sorted.
+        #expect(merged.tags == ["art", "food"])
+    }
+
     @Test func encodesKeysAsSortedArraysForStableOutput() throws {
         let meta = EntryMetadata(
             id: UUID(), displayName: "T", sourceFilename: "t.kml",

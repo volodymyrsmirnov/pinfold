@@ -1,3 +1,4 @@
+import CoreLocation
 import PinfoldCore
 
 // MARK: - PlacemarkOutline
@@ -29,6 +30,20 @@ import PinfoldCore
 /// `collapsed` set is ignored (force-expanded), so a match nested in a collapsed folder
 /// is never hidden.
 struct PlacemarkOutline {
+    // MARK: - Sort
+
+    /// How the outline orders its placemark rows.
+    enum Sort: Equatable {
+        /// Document order with the full folder hierarchy preserved (the default).
+        case document
+        /// A FLAT, distance-sorted list of placemark rows only — folder rows are dropped and
+        /// the tree structure is ignored, since "nearest first" is inherently a global ordering
+        /// that cuts across folders. Placemarks without a coordinate (no distance) sort last,
+        /// keeping their relative document order. Requires the user's location; when it is
+        /// absent the build falls back to `.document` (see `build`).
+        case nearest(CLLocation)
+    }
+
     // MARK: - Row
 
     struct Row: Identifiable {
@@ -64,8 +79,12 @@ struct PlacemarkOutline {
     static func build(
         from root: KMLContainer,
         matching query: String,
-        collapsed: Set<String>
+        collapsed: Set<String>,
+        sort: Sort = .document
     ) -> PlacemarkOutline {
+        if case let .nearest(location) = sort {
+            return buildNearest(from: root, matching: query, location: location)
+        }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let isSearching = !trimmed.isEmpty
         // While searching, ignore the collapse state so matches in collapsed folders show.
@@ -128,6 +147,58 @@ struct PlacemarkOutline {
         }
 
         walk(root, path: "", depth: 0, hidden: false)
+        return PlacemarkOutline(rows: rows, mappablePlacemarks: mappable)
+    }
+
+    /// Builds the flat, nearest-first outline: every matching placemark across the whole tree
+    /// (folder structure ignored), sorted by distance from `location`. Each row sits at depth
+    /// 0; no folder rows are emitted. Placemarks with a coordinate are ordered nearest→farthest;
+    /// coordinate-less placemarks (no distance) follow, in document order. `mappablePlacemarks`
+    /// keeps document order (the map plots them the same way regardless of this view sort).
+    private static func buildNearest(
+        from root: KMLContainer,
+        matching query: String,
+        location: CLLocation
+    ) -> PlacemarkOutline {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        let isSearching = !trimmed.isEmpty
+
+        func matches(_ placemark: KMLPlacemark) -> Bool {
+            guard isSearching else { return true }
+            guard let name = placemark.name else { return false }
+            return name.localizedCaseInsensitiveContains(trimmed)
+        }
+
+        // Flatten the whole tree into document-order placemarks (folders ignored).
+        var flat: [KMLPlacemark] = []
+        func collect(_ container: KMLContainer) {
+            for placemark in container.placemarks where matches(placemark) {
+                flat.append(placemark)
+            }
+            for child in container.children {
+                collect(child)
+            }
+        }
+        collect(root)
+
+        /// Distance (nil for coordinate-less placemarks). A stable sort on the pre-indexed
+        /// document order keeps equal/absent distances in their original relative order.
+        func distance(_ placemark: KMLPlacemark) -> Double? {
+            guard let coordinate = placemark.coordinate else { return nil }
+            return location.distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+        }
+
+        let sorted = flat.enumerated().sorted { lhs, rhs in
+            switch (distance(lhs.element), distance(rhs.element)) {
+            case let (l?, r?): l != r ? l < r : lhs.offset < rhs.offset
+            case (_?, nil): true // placed-on-map before coordinate-less
+            case (nil, _?): false
+            case (nil, nil): lhs.offset < rhs.offset
+            }
+        }.map(\.element)
+
+        let rows = sorted.map { Row(kind: .placemark($0), depth: 0, id: $0.stableKey) }
+        let mappable = flat.filter { $0.coordinate != nil }
         return PlacemarkOutline(rows: rows, mappablePlacemarks: mappable)
     }
 }

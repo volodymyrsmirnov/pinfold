@@ -1,3 +1,4 @@
+import CoreLocation
 import PinfoldCore
 import SwiftUI
 
@@ -45,6 +46,12 @@ struct KMLDetailView: View {
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State private var outline: PlacemarkOutline?
+    /// One-shot location provider for distance display and the nearest-first sort. Requests a
+    /// fix when the view appears; `lastLocation` is nil until it arrives / when denied.
+    @State private var locationAuth = LocationAuthorization()
+    /// Whether the outline sorts placemarks nearest-first (flat, folders dropped) instead of in
+    /// document order. Only takes effect once a location fix is known; see `effectiveSort`.
+    @State private var nearestFirst = false
 
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
     /// toggles and document loads are not debounced (they go through a separate trigger).
@@ -70,6 +77,20 @@ struct KMLDetailView: View {
         .navigationTitle(entry.displayName)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            // Sort menu: Document order vs. Nearest first. "Nearest" is disabled until a
+            // location fix is known (so the user isn't offered a sort that can't be applied).
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Sort", selection: $nearestFirst) {
+                        Label("Document Order", systemImage: "list.bullet").tag(false)
+                        Label("Nearest First", systemImage: "location").tag(true)
+                    }
+                    .disabled(locationAuth.lastLocation == nil)
+                } label: {
+                    Image(systemName: nearestFirst ? "location.fill" : "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     if let document {
@@ -92,6 +113,9 @@ struct KMLDetailView: View {
             loadError = nil
             outline = nil
             collapsedFolderIDs = []
+            nearestFirst = false
+            // Ask for a one-shot location fix so distances and the nearest sort can light up.
+            locationAuth.request()
             // Seed the in-file search from a Places-hit deep link (if any), then tell the
             // owner it was consumed so it isn't re-applied on a later normal re-selection.
             if let initialSearch, !initialSearch.isEmpty {
@@ -134,7 +158,12 @@ struct KMLDetailView: View {
         .task(id: ImmediateOutlineTrigger(
             documentID: entry.id,
             documentLoaded: document != nil,
-            collapsed: collapsedFolderIDs
+            collapsed: collapsedFolderIDs,
+            nearestFirst: nearestFirst,
+            // A new fix (or the first one) must rebuild a nearest-first outline so the order
+            // reflects the user's current position. Identity by coordinate keeps it cheap.
+            locationLat: locationAuth.lastLocation?.coordinate.latitude,
+            locationLon: locationAuth.lastLocation?.coordinate.longitude
         )) {
             await buildOutlineNow()
         }
@@ -156,6 +185,19 @@ struct KMLDetailView: View {
         let documentID: CatalogEntry.ID
         let documentLoaded: Bool
         let collapsed: Set<String>
+        let nearestFirst: Bool
+        let locationLat: Double?
+        let locationLon: Double?
+    }
+
+    /// The sort to build the outline with: `.nearest` only when the user chose it AND a location
+    /// fix is available; otherwise `.document`. Computed on the main actor (reads `locationAuth`)
+    /// and passed into the detached build, which takes a plain `Sendable` value.
+    private var effectiveSort: PlacemarkOutline.Sort {
+        if nearestFirst, let location = locationAuth.lastLocation {
+            return .nearest(location)
+        }
+        return .document
     }
 
     /// Rebuilds `outline` from the live `searchText`/`collapsedFolderIDs` immediately
@@ -167,8 +209,9 @@ struct KMLDetailView: View {
         let query = searchText
         let collapsed = collapsedFolderIDs
         let root = document.root
+        let sort = effectiveSort
         let built = await Task.detached(priority: .userInitiated) {
-            PlacemarkOutline.build(from: root, matching: query, collapsed: collapsed)
+            PlacemarkOutline.build(from: root, matching: query, collapsed: collapsed, sort: sort)
         }.value
         if Task.isCancelled { return }
         outline = built
@@ -201,6 +244,9 @@ struct KMLDetailView: View {
     @ViewBuilder
     private func contentList(_ document: KMLDocument) -> some View {
         let query = searchText.trimmingCharacters(in: .whitespaces)
+        // Snapshot the user's location ONCE per list build so every row shares one fix instead
+        // of re-reading `locationAuth` per row. `nil` → rows show no distance.
+        let location = locationAuth.lastLocation
         List {
             searchSection
             if let outline {
@@ -213,7 +259,7 @@ struct KMLDetailView: View {
                 } else {
                     Section {
                         ForEach(outline.rows) { row in
-                            outlineRow(row, document: document)
+                            outlineRow(row, document: document, location: location)
                         }
                     }
                 }
@@ -229,13 +275,15 @@ struct KMLDetailView: View {
     /// `DisclosureGroup`); while searching the outline ignores that set, so the chevron is
     /// shown expanded and tapping it has no visible effect until the query is cleared.
     @ViewBuilder
-    private func outlineRow(_ row: PlacemarkOutline.Row, document: KMLDocument) -> some View {
+    private func outlineRow(
+        _ row: PlacemarkOutline.Row, document: KMLDocument, location: CLLocation?
+    ) -> some View {
         switch row.kind {
         case let .folder(name, id):
             folderRow(name: name, id: id)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
         case let .placemark(placemark):
-            placemarkLink(placemark, document: document)
+            placemarkLink(placemark, document: document, location: location)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
         }
     }
@@ -310,13 +358,20 @@ struct KMLDetailView: View {
 
     // MARK: - Placemark navigation link
 
-    private func placemarkLink(_ placemark: KMLPlacemark, document: KMLDocument) -> some View {
+    private func placemarkLink(
+        _ placemark: KMLPlacemark, document: KMLDocument, location: CLLocation?
+    ) -> some View {
         NavigationLink(destination: PlacemarkDetailView(
             placemark: placemark,
             document: document,
             entry: entry
         )) {
-            PlacemarkRow(placemark: placemark, document: document, entry: entry)
+            PlacemarkRow(
+                placemark: placemark,
+                document: document,
+                entry: entry,
+                distance: PlacemarkDistance.format(from: location, to: placemark.coordinate)
+            )
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if let annotations {

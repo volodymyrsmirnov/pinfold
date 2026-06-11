@@ -16,6 +16,11 @@ extension HomeView {
         } label: {
             Label("Rename", systemImage: "pencil")
         }
+        Button {
+            beginEditTags(entry)
+        } label: {
+            Label("Edit Tags\u{2026}", systemImage: "tag")
+        }
         // Share the original .kml/.kmz back out. `ShareLink` with a file URL shares the file
         // itself. Shown only when the original actually exists on disk: in iCloud mode an entry
         // can be a not-yet-downloaded placeholder, and ShareLink would otherwise render a
@@ -46,5 +51,12 @@ extension HomeView {
     private func beginRename(_ entry: CatalogEntry) {
         renameText = entry.displayName
         renameTarget = entry
+    }
+
+    /// Opens the Edit Tags alert for `entry`, prefilling the field with its current tags joined
+    /// by ", " (the same separator the Save action parses back on).
+    private func beginEditTags(_ entry: CatalogEntry) {
+        tagsText = entry.tags.joined(separator: ", ")
+        tagsTarget = entry
     }
 }

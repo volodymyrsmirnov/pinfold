@@ -25,11 +25,16 @@ struct EntryMetadata: Codable, Equatable {
     var favoriteKeys: Set<String> = []
     /// Stable keys of placemarks marked visited/seen.
     var visitedKeys: Set<String> = []
+    /// User-assigned labels on this entry (per-ENTRY, not per-placemark). Normalized by
+    /// `Catalog.setTags` (trimmed, de-duplicated case-insensitively, sorted); stored as a
+    /// plain array so the order is exactly the diff-stable sorted order written to disk.
+    var tags: [String] = []
 
     init(
         id: UUID, displayName: String, sourceFilename: String, importDate: Date,
         pointCount: Int, contentSHA256: String, trashedAt: Date?,
-        favoriteKeys: Set<String> = [], visitedKeys: Set<String> = []
+        favoriteKeys: Set<String> = [], visitedKeys: Set<String> = [],
+        tags: [String] = []
     ) {
         self.id = id
         self.displayName = displayName
@@ -40,6 +45,7 @@ struct EntryMetadata: Codable, Equatable {
         self.trashedAt = trashedAt
         self.favoriteKeys = favoriteKeys
         self.visitedKeys = visitedKeys
+        self.tags = tags
     }
 
     // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
@@ -47,7 +53,7 @@ struct EntryMetadata: Codable, Equatable {
     // property, update CodingKeys, init(from:), encode(to:), AND the memberwise init.
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
-        case contentSHA256, trashedAt, favoriteKeys, visitedKeys
+        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags
     }
 
     init(from decoder: any Decoder) throws {
@@ -61,6 +67,7 @@ struct EntryMetadata: Codable, Equatable {
         trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
         favoriteKeys = try Set(c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
         visitedKeys = try Set(c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -76,6 +83,9 @@ struct EntryMetadata: Codable, Equatable {
         // array order is otherwise nondeterministic, causing spurious sync churn).
         try c.encode(favoriteKeys.sorted(), forKey: .favoriteKeys)
         try c.encode(visitedKeys.sorted(), forKey: .visitedKeys)
+        // Tags are already kept sorted by `Catalog.setTags`, but sort again here so a
+        // hand-built/legacy-merged value still serializes diff-stably.
+        try c.encode(tags.sorted(), forKey: .tags)
     }
 
     /// Encodes to pretty-printed, key-sorted JSON for stable, diff-friendly files.
@@ -102,6 +112,9 @@ struct EntryMetadata: Codable, Equatable {
     /// Merge rules:
     /// - `favoriteKeys` / `visitedKeys`: **union** across all versions. Marks made on
     ///   different devices are additive — neither device's stars/visited flags are dropped.
+    /// - `tags`: **union** across all versions (case-sensitive set union, then re-sorted),
+    ///   consistent with `favoriteKeys` — a tag added on one device is never lost by a
+    ///   conflicting copy that never saw it.
     /// - Scalar identity/content fields (`id`, `displayName`, `sourceFilename`, `importDate`,
     ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
     ///   underlying file, so the winning version is authoritative; there is nothing to merge.
@@ -111,10 +124,13 @@ struct EntryMetadata: Codable, Equatable {
     ///   when two devices both trashed, the later timestamp survives.
     func merging(conflicts: [EntryMetadata]) -> EntryMetadata {
         var merged = self
+        var tagSet = Set(tags)
         for other in conflicts {
             merged.favoriteKeys.formUnion(other.favoriteKeys)
             merged.visitedKeys.formUnion(other.visitedKeys)
+            tagSet.formUnion(other.tags)
         }
+        merged.tags = tagSet.sorted()
         let trashStamps = ([self] + conflicts).compactMap(\.trashedAt)
         merged.trashedAt = trashStamps.max()
         return merged
