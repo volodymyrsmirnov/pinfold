@@ -2,11 +2,21 @@ import Foundation
 
 public enum KMLParseError: Error, Equatable {
     case malformedXML(String)
+    /// The document contains a DTD (`<!DOCTYPE …>`). KML never legitimately uses DTDs,
+    /// so any document carrying one is rejected outright: XMLParser has no entity-expansion
+    /// limit, and accepting DTDs would expose the parser to entity-expansion DoS payloads
+    /// ("billion laughs").
+    case dtdProhibited
 }
 
 public enum KMLParser {
     public static func parse(data: Data) throws -> KMLDocument {
+        // Reject DTDs before handing the bytes to XMLParser — see `dtdProhibited`.
+        if containsDoctype(data) { throw KMLParseError.dtdProhibited }
         let parser = XMLParser(data: data)
+        // External entity resolution must stay off. False is already XMLParser's default;
+        // setting it explicitly documents the intent.
+        parser.shouldResolveExternalEntities = false
         let delegate = KMLParserDelegate()
         parser.delegate = delegate
         guard parser.parse() else {
@@ -14,12 +24,33 @@ public enum KMLParser {
         }
         return delegate.makeDocument()
     }
+
+    /// True if the data contains the ASCII bytes `<!DOCTYPE` (case-insensitive).
+    private static func containsDoctype(_ data: Data) -> Bool {
+        let needle: [UInt8] = Array("<!DOCTYPE".utf8) // uppercase ASCII
+        guard data.count >= needle.count else { return false }
+        return data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+            let bytes = buffer.bindMemory(to: UInt8.self)
+            for start in 0 ... (bytes.count - needle.count) {
+                var matches = true
+                for offset in 0 ..< needle.count {
+                    var byte = bytes[start + offset]
+                    if byte >= 0x61, byte <= 0x7A { byte -= 0x20 } // ASCII-uppercase letters
+                    if byte != needle[offset] {
+                        matches = false
+                        break
+                    }
+                }
+                if matches { return true }
+            }
+            return false
+        }
+    }
 }
 
 /// SAX delegate that builds a KMLDocument. Containers (<Document>/<Folder>) are tracked
 /// on a stack; placemarks are accumulated into the container on top of the stack.
 final class KMLParserDelegate: NSObject, XMLParserDelegate {
-
     /// Mutable, reference-type container so parent/child builders share state on the stack.
     final class ContainerBuilder {
         let id: String
@@ -27,7 +58,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var description: String?
         var children: [ContainerBuilder] = []
         var placemarks: [KMLPlacemark] = []
-        init(id: String) { self.id = id }
+        init(id: String) {
+            self.id = id
+        }
+
         func build() -> KMLContainer {
             KMLContainer(id: id, name: name,
                          children: children.map { $0.build() },
@@ -36,7 +70,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     }
 
     private var idCounter = 0
-    private func nextID(_ prefix: String) -> String { idCounter += 1; return "\(prefix)\(idCounter)" }
+    private func nextID(_ prefix: String) -> String {
+        idCounter += 1; return "\(prefix)\(idCounter)"
+    }
 
     private let rootBuilder = ContainerBuilder(id: "root")
     private lazy var containerStack: [ContainerBuilder] = [rootBuilder]
@@ -56,10 +92,11 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var hasNonPointGeometry = false
         var sourceID: String?
     }
+
     private var placemark: PlacemarkBuilder?
 
-    // Set true while the parser is inside a <Point> element so that only Point
-    // coordinates are captured, not LineString/Polygon vertices in the same placemark.
+    /// Set true while the parser is inside a <Point> element so that only Point
+    /// coordinates are captured, not LineString/Polygon vertices in the same placemark.
     private var inPoint = false
 
     // Style assembly.
@@ -73,11 +110,12 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var iconScale: Double?
         var inIconStyle = false
     }
+
     private var styleBuilder: StyleBuilder?
 
     // StyleMap assembly.
     private var styleMapID: String?
-    private var styleMapCurrentKey: String?   // "normal" / "highlight"
+    private var styleMapCurrentKey: String? // "normal" / "highlight"
     private var styleMapNormalURL: String?
 
     // ExtendedData assembly.
@@ -87,19 +125,19 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     func makeDocument() -> KMLDocument {
         // Collapse a single top-level <Document>/<Folder> into the document's root.
-        let effective: ContainerBuilder
-        if rootBuilder.placemarks.isEmpty && rootBuilder.children.count == 1 {
-            effective = rootBuilder.children[0]
+        let effective: ContainerBuilder = if rootBuilder.placemarks.isEmpty, rootBuilder.children.count == 1 {
+            rootBuilder.children[0]
         } else {
-            effective = rootBuilder
+            rootBuilder
         }
         return KMLDocument(name: effective.name, descriptionHTML: effective.description,
                            root: effective.build(), styles: styles, styleMaps: styleMaps)
     }
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String,
-                namespaceURI: String?, qualifiedName qName: String?,
-                attributes attributeDict: [String: String] = [:]) {
+    func parser(_: XMLParser, didStartElement elementName: String,
+                namespaceURI _: String?, qualifiedName _: String?,
+                attributes attributeDict: [String: String] = [:])
+    {
         text = ""
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -139,14 +177,17 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
     }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) { text += string }
+    func parser(_: XMLParser, foundCharacters string: String) {
+        text += string
+    }
 
-    func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
+    func parser(_: XMLParser, foundCDATA CDATABlock: Data) {
         if let s = String(data: CDATABlock, encoding: .utf8) { text += s }
     }
 
-    func parser(_ parser: XMLParser, didEndElement elementName: String,
-                namespaceURI: String?, qualifiedName qName: String?) {
+    func parser(_: XMLParser, didEndElement elementName: String,
+                namespaceURI _: String?, qualifiedName _: String?)
+    {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -215,7 +256,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                 } else {
                     placemark?.extendedData.append(
                         KMLDataItem(name: name,
-                                    value: value.trimmingCharacters(in: .whitespacesAndNewlines)))
+                                    value: value.trimmingCharacters(in: .whitespacesAndNewlines))
+                    )
                 }
             }
             currentDataName = nil; currentDataValue = nil
