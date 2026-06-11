@@ -94,4 +94,95 @@ struct AttributedHTMLTests {
     @Test func readableText_emptyStringReturnsEmpty() {
         #expect(AttributedHTML.readableText("") == "")
     }
+
+    // MARK: - attributed (tappable links)
+
+    /// Returns every `URL` carried by a `.link` attribute, in run order.
+    private func linkURLs(_ attributed: AttributedString) -> [URL] {
+        attributed.runs.compactMap(\.link)
+    }
+
+    @Test func attributed_anchorBecomesTappableLink() throws {
+        let result = AttributedHTML.attributed(
+            "<a href=\"https://example.com/page\">See</a>"
+        )
+        #expect(String(result.characters) == "See")
+        #expect(try linkURLs(result) == [#require(URL(string: "https://example.com/page"))])
+        // The link covers exactly the visible anchor text.
+        let linkedText = result.runs
+            .filter { $0.link != nil }
+            .map { String(result[$0.range].characters) }
+            .joined()
+        #expect(linkedText == "See")
+    }
+
+    @Test func attributed_javascriptHrefStripped() {
+        let result = AttributedHTML.attributed(
+            "<a href=\"javascript:alert(1)\">Click</a>"
+        )
+        #expect(String(result.characters) == "Click")
+        #expect(linkURLs(result).isEmpty)
+    }
+
+    @Test func attributed_dataAndFileHrefStripped() {
+        let dataResult = AttributedHTML.attributed("<a href=\"data:text/html,x\">D</a>")
+        #expect(String(dataResult.characters) == "D")
+        #expect(linkURLs(dataResult).isEmpty)
+
+        let fileResult = AttributedHTML.attributed("<a href=\"file:///etc/passwd\">F</a>")
+        #expect(String(fileResult.characters) == "F")
+        #expect(linkURLs(fileResult).isEmpty)
+    }
+
+    @Test func attributed_mailtoAndTelAllowed() throws {
+        let mailto = AttributedHTML.attributed("<a href=\"mailto:a@b.com\">Email</a>")
+        #expect(String(mailto.characters) == "Email")
+        #expect(try linkURLs(mailto) == [#require(URL(string: "mailto:a@b.com"))])
+
+        let tel = AttributedHTML.attributed("<a href=\"tel:+15551234\">Call</a>")
+        #expect(String(tel.characters) == "Call")
+        #expect(try linkURLs(tel) == [#require(URL(string: "tel:+15551234"))])
+    }
+
+    @Test func attributed_bareURLDetected() throws {
+        let result = AttributedHTML.attributed("Visit https://x.example/path now")
+        #expect(String(result.characters) == "Visit https://x.example/path now")
+        #expect(try linkURLs(result) == [#require(URL(string: "https://x.example/path"))])
+    }
+
+    @Test func attributed_bareEmailAndPhoneDetected() throws {
+        let mail = AttributedHTML.attributed("Mail me@here.com today")
+        #expect(try linkURLs(mail).contains(#require(URL(string: "mailto:me@here.com"))))
+
+        let phone = AttributedHTML.attributed("Call +1 (800) 555-0199 now")
+        // NSDataDetector produces a tel: URL for recognised phone numbers.
+        #expect(linkURLs(phone).contains { $0.scheme == "tel" })
+    }
+
+    @Test func attributed_anchorTextNotDoubleLinked() throws {
+        // The anchor's visible text is itself URL-shaped, but the href differs. The result
+        // must carry exactly ONE link — the href — not a second detector link on the text.
+        let result = AttributedHTML.attributed(
+            "<a href=\"https://real.example/go\">https://shown.example</a>"
+        )
+        #expect(String(result.characters) == "https://shown.example")
+        #expect(try linkURLs(result) == [#require(URL(string: "https://real.example/go"))])
+    }
+
+    @Test func attributed_nestedFormattingInsideAnchor() throws {
+        let result = AttributedHTML.attributed(
+            "<a href=\"https://example.com\"><b>bold link</b></a>"
+        )
+        #expect(String(result.characters) == "bold link")
+        #expect(try linkURLs(result) == [#require(URL(string: "https://example.com"))])
+    }
+
+    @Test func attributed_plainTextParityWhenNoLinks() {
+        // For a fixture with no links, the attributed string's character content must equal
+        // readableText's output — guards the shared-passes refactor.
+        let html = "<p><b>Day 1:</b> Arrive</p><p>City &amp; Culture</p>"
+        let result = AttributedHTML.attributed(html)
+        #expect(String(result.characters) == AttributedHTML.readableText(html))
+        #expect(linkURLs(result).isEmpty)
+    }
 }
