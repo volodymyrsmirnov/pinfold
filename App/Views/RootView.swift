@@ -119,15 +119,27 @@ struct RootView: View {
                     )
                 }
             }
+            // The environment bundle is applied HERE — on the detail column's NavigationStack —
+            // in addition to the split view below. Pushed destinations resolve their
+            // environment from the stack root, and NavigationSplitView re-hosts the detail
+            // hierarchy in a different view controller on the Mac "Designed for iPad" runtime
+            // (and on iPad size-class transitions), which drops values injected only on the
+            // split view: PlacemarkDetailView then fatals on its non-optional MapAppService
+            // read when opening a placemark in Maps. Injecting on the stack itself is the
+            // pattern the pre-split-view root used and is hosting-change-proof.
+            // See https://developer.apple.com/forums/thread/740872
+            .modifier(AppEnvironmentBundle(
+                catalog: catalog, settings: settings, mapAppService: mapAppService,
+                migrationAlert: migrationAlert, importFailureLog: importFailureLog,
+                resourceCache: resourceCache
+            ))
         }
         .navigationSplitViewStyle(.balanced)
-        .environment(catalog)
-        .environment(settings)
-        .environment(mapAppService)
-        .environment(migrationAlert)
-        .environment(importFailureLog)
-        .environment(\.resourceCache, resourceCache)
-        .environment(\.storageLocations, catalog.storage)
+        .modifier(AppEnvironmentBundle(
+            catalog: catalog, settings: settings, mapAppService: mapAppService,
+            migrationAlert: migrationAlert, importFailureLog: importFailureLog,
+            resourceCache: resourceCache
+        ))
         .task { await bootstrap() }
         // Pick up files synced or shared while the app was already running.
         .onChange(of: scenePhase) { _, newPhase in
@@ -414,4 +426,35 @@ private func readPlacemarkName(forKey key: String, in resourcesDir: URL) async -
     await Task.detached(priority: .userInitiated) {
         PlacemarkIndex.read(from: resourcesDir)?.first { $0.key == key }?.name
     }.value
+}
+
+// MARK: - Environment bundle
+
+/// Applies the app's shared `@Observable` services and custom environment keys to a subtree.
+///
+/// Applied in TWO places by `RootView`: on the `NavigationSplitView` (sidebar, sheets) and
+/// again on the detail column's `NavigationStack`. The duplication is deliberate and
+/// load-bearing — `NavigationSplitView` re-hosts the detail hierarchy in a different view
+/// controller on the Mac "Designed for iPad" runtime and on iPad size-class transitions,
+/// which drops environment values injected only on the split view from *pushed* destinations
+/// (https://developer.apple.com/forums/thread/740872). Injecting on the stack root keeps
+/// pushes supplied through any re-hosting, matching the pre-split-view root's proven pattern.
+private struct AppEnvironmentBundle: ViewModifier {
+    let catalog: Catalog
+    let settings: AppSettings
+    let mapAppService: MapAppService
+    let migrationAlert: MigrationAlertState
+    let importFailureLog: ImportFailureLog
+    let resourceCache: ResourceCache
+
+    func body(content: Content) -> some View {
+        content
+            .environment(catalog)
+            .environment(settings)
+            .environment(mapAppService)
+            .environment(migrationAlert)
+            .environment(importFailureLog)
+            .environment(\.resourceCache, resourceCache)
+            .environment(\.storageLocations, catalog.storage)
+    }
 }
