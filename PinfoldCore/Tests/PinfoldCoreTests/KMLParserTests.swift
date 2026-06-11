@@ -145,6 +145,66 @@ struct KMLParserTests {
         #expect(pm?.stableKey == "id:marker-42")
     }
 
+    @Test func parse_rawDescriptionWithInlineHTML() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description>See <b>this</b> place &amp; more</description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML == "See <b>this</b> place & more")
+    }
+
+    @Test func parse_rawDescriptionNestedTags() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><div><a href="https://x.example">link</a> tail</div></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        let html = pm?.descriptionHTML
+        #expect(html?.contains(#"<a href="https://x.example">link</a>"#) == true)
+        #expect(html?.contains("tail") == true)
+    }
+
+    @Test func parse_cdataDescriptionStillWorks() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><![CDATA[<p>Hello <b>Bold</b> &amp; raw</p>]]></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        // CDATA content passes through byte-for-byte (entities inside CDATA stay literal).
+        #expect(pm?.descriptionHTML == "<p>Hello <b>Bold</b> &amp; raw</p>")
+    }
+
     @Test func parse_rejectsDOCTYPE() {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>

@@ -123,6 +123,18 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     private var currentDataName: String?
     private var currentDataValue: String?
 
+    // Description capture. While > 0, every SAX event between <description> and its
+    // matching </description> is re-serialized verbatim into `descriptionBuffer` so that
+    // raw (non-CDATA) descriptions keep their inline HTML instead of being truncated by
+    // the `text` reset on each child element. 0 = not capturing; 1 = directly inside
+    // <description>; each nested child element adds 1.
+    private var descriptionDepth = 0
+    private var descriptionBuffer = ""
+    /// True once a child element was re-serialized into the buffer. Used to decide
+    /// whether to trim: markup-bearing descriptions are trimmed, while plain-text/CDATA
+    /// descriptions pass through byte-identically to the pre-capture behavior.
+    private var descriptionSawMarkup = false
+
     func makeDocument() -> KMLDocument {
         // Collapse a single top-level <Document>/<Folder> into the document's root.
         let effective: ContainerBuilder = if rootBuilder.placemarks.isEmpty, rootBuilder.children.count == 1 {
@@ -138,6 +150,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                 namespaceURI _: String?, qualifiedName _: String?,
                 attributes attributeDict: [String: String] = [:])
     {
+        if descriptionDepth > 0 {
+            // Re-serialize the child element's open tag into the description verbatim;
+            // do NOT reset `text` or otherwise touch normal element handling.
+            descriptionBuffer += Self.serializedOpenTag(elementName, attributes: attributeDict)
+            descriptionSawMarkup = true
+            descriptionDepth += 1
+            return
+        }
         text = ""
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -148,6 +168,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             var builder = PlacemarkBuilder()
             builder.sourceID = attributeDict["id"]
             placemark = builder
+        case "description":
+            descriptionDepth = 1
+            descriptionBuffer = ""
+            descriptionSawMarkup = false
         case "Style":
             // Inline per-placemark styles (Style inside a Placemark) are intentionally not
             // captured in Phase 1 — only document-level styles are indexed. Phase 2 will
@@ -178,16 +202,40 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     }
 
     func parser(_: XMLParser, foundCharacters string: String) {
-        text += string
+        if descriptionDepth > 0 { descriptionBuffer += string } else { text += string }
     }
 
     func parser(_: XMLParser, foundCDATA CDATABlock: Data) {
-        if let s = String(data: CDATABlock, encoding: .utf8) { text += s }
+        guard let s = String(data: CDATABlock, encoding: .utf8) else { return }
+        if descriptionDepth > 0 { descriptionBuffer += s } else { text += s }
     }
 
     func parser(_: XMLParser, didEndElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?)
     {
+        if descriptionDepth > 0 {
+            descriptionDepth -= 1
+            if descriptionDepth == 0 {
+                // </description> itself: assign the captured content. Markup-bearing
+                // content is trimmed; plain-text/CDATA content is assigned untouched,
+                // byte-identical to the pre-capture behavior.
+                let html = descriptionSawMarkup
+                    ? descriptionBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                    : descriptionBuffer
+                if placemark != nil {
+                    placemark?.descriptionHTML = html
+                } else if let c = containerStack.last, c !== rootBuilder {
+                    c.description = html
+                }
+                descriptionBuffer = ""
+                descriptionSawMarkup = false
+                text = ""
+            } else {
+                // A child element inside the description closes: re-serialize it.
+                descriptionBuffer += "</\(elementName)>"
+            }
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -197,16 +245,6 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                 placemark?.name = trimmed
             } else if let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
-            }
-        case "description":
-            // Captures description assuming CDATA-wrapped HTML (all Phase 1 fixtures use CDATA).
-            // A raw non-CDATA <description> whose content includes child elements would be
-            // truncated here because `text` resets on every didStartElement. Known Phase 1
-            // limitation; revisit when rich-text / inline-HTML support is added.
-            if placemark != nil {
-                placemark?.descriptionHTML = text
-            } else if let c = containerStack.last, c !== rootBuilder {
-                c.description = text
             }
         case "Point":
             inPoint = false
@@ -281,6 +319,25 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             break
         }
         text = ""
+    }
+
+    /// Re-serializes an open tag (`<name attr="value" …>`) for description capture.
+    /// Attributes are sorted by name for deterministic output.
+    static func serializedOpenTag(_ name: String, attributes: [String: String]) -> String {
+        var tag = "<\(name)"
+        for (key, value) in attributes.sorted(by: { $0.key < $1.key }) {
+            tag += " \(key)=\"\(escapedAttributeValue(value))\""
+        }
+        return tag + ">"
+    }
+
+    /// XML-escapes an attribute value (& < > ").
+    static func escapedAttributeValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     /// Returns the local name without a namespace prefix (e.g. "gx:Track" -> "Track").
