@@ -37,7 +37,8 @@ struct HomeView: View {
     // active-row context menu (Share/Trash).
     @Environment(Catalog.self) var catalog
     @Environment(AppSettings.self) private var settings
-    @Environment(ImportFailureLog.self) private var importFailureLog
+    // Not `private`: read from the `HomeViewBanner` extension (a separate file).
+    @Environment(ImportFailureLog.self) var importFailureLog
     @Environment(AppCommands.self) private var appCommands
     @Environment(\.resourceCache) private var resourceCache
 
@@ -50,6 +51,10 @@ struct HomeView: View {
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State private var isSettingsPresented = false
+    /// Presents the consolidated Favorites sheet (catalogue-wide starred placemarks). A sheet,
+    /// like Settings, so it covers the whole window; tapping a favorite dismisses it and drives
+    /// the sidebar selection + deep-link.
+    @State private var isFavoritesPresented = false
     @State private var importCoordinator = ImportCoordinator()
 
     /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
@@ -204,6 +209,16 @@ struct HomeView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
+            // Favorites — the consolidated, catalogue-wide starred-placemarks sheet. Leads the
+            // trailing group (before sort/gear); shown on both segments since favorites span
+            // every file, not just the current segment's.
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isFavoritesPresented = true
+                } label: {
+                    Label("Favorites", systemImage: "star")
+                }
+            }
             // Sort menu — Files segment only (Trash keeps its trashed-date order). Sits next to
             // the gear in the trailing group rather than `.principal`, so it never replaces the
             // navigation title. The Picker drives `settings.entrySort`, which `sortedActive`
@@ -316,6 +331,12 @@ struct HomeView: View {
                     }
             }
         }
+        // Consolidated Favorites as a modal sheet. It owns its own NavigationStack (title +
+        // Done). Tapping a favorite dismisses the sheet and drives the same selection +
+        // `pendingDetailSearch` deep-link the catalogue "Places" search hits use.
+        .sheet(isPresented: $isFavoritesPresented) {
+            FavoritesView(selection: $selection, pendingDetailSearch: $pendingDetailSearch)
+        }
         // The "Import…" menu command (⌘I) flips a counter on AppCommands; presenting the
         // fileImporter here keeps that transient UI state owned by the view, not the scene.
         .onChange(of: appCommands.importRequested) { _, _ in
@@ -424,49 +445,6 @@ struct HomeView: View {
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 12)
-    }
-
-    // MARK: - Import failure banner
-
-    /// A dismissible banner listing recent import failures (parse or I/O) from any arrival
-    /// path. Non-empty only when `ImportFailureLog` has recorded failures; "Clear" empties it.
-    @ViewBuilder
-    private var importFailureBanner: some View {
-        if !importFailureLog.failures.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label {
-                        if importFailureLog.failures.count == 1 {
-                            Text("1 file couldn't be imported")
-                        } else {
-                            Text("\(importFailureLog.failures.count) files couldn't be imported")
-                        }
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Button("Clear") { importFailureLog.clear() }
-                        .font(.subheadline)
-                }
-                ForEach(importFailureLog.failures.prefix(5)) { failure in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(failure.filename)
-                            .font(.footnote.weight(.medium))
-                        Text(failure.reason)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // VoiceOver reads filename + reason as one element per failure.
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-        }
     }
 
     // MARK: - Import helpers

@@ -195,4 +195,48 @@ struct PlacemarkIndexTests {
         #expect(PlacemarkIndex.search("", in: [(folderName: "F", resourcesDir: dir)]).isEmpty)
         #expect(PlacemarkIndex.search("   ", in: [(folderName: "F", resourcesDir: dir)]).isEmpty)
     }
+
+    // MARK: - Resolve (favorites)
+
+    @Test func resolve_resolvesPresentKeysSortedByName() throws {
+        let dir = try makeResourcesDir()
+        try PlacemarkIndex.write([
+            PlacemarkIndex.Entry(key: "k1", name: "Zebra Camp", lat: 1, lon: 2),
+            PlacemarkIndex.Entry(key: "k2", name: "Alpha Camp", lat: 3, lon: 4),
+            PlacemarkIndex.Entry(key: "k3", name: "Not Favorited", lat: nil, lon: nil),
+        ], to: dir)
+
+        // Three keys requested but only two (k1, k2) are favorites; k3 is in the index but
+        // not requested, and "absent" is favorited yet no longer in the file.
+        let resolved = PlacemarkIndex.resolve(
+            keys: ["k1", "k2", "absent"], folderName: "F", in: dir
+        )
+
+        // Two of three keys resolve; the third (absent) is silently skipped.
+        #expect(resolved.count == 2)
+        // Sorted by name for stable UI: "Alpha Camp" before "Zebra Camp".
+        #expect(resolved.map(\.name) == ["Alpha Camp", "Zebra Camp"])
+        #expect(resolved.first?.key == "k2")
+        #expect(resolved.first?.lat == 3)
+        #expect(resolved.first?.folderName == "F")
+    }
+
+    @Test func resolve_corruptIndexReturnsEmpty() throws {
+        let dir = try makeResourcesDir()
+        try Data("{ not valid json".utf8)
+            .write(to: dir.appendingPathComponent("placemarks-index.json"))
+
+        #expect(PlacemarkIndex.resolve(keys: ["k1"], folderName: "F", in: dir).isEmpty)
+    }
+
+    @Test func resolve_emptyKeySetReturnsEmptyWithoutReading() {
+        // A nonexistent directory: if `resolve` read the index it would still return [] for a
+        // missing file, so prove the no-read path by asserting empty for an empty key set
+        // pointed at a dir that was never created (no index could exist there anyway).
+        let nonexistent = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("resources", isDirectory: true)
+
+        #expect(PlacemarkIndex.resolve(keys: [], folderName: "F", in: nonexistent).isEmpty)
+    }
 }

@@ -125,6 +125,42 @@ enum PlacemarkIndex {
         return hits
     }
 
+    // MARK: - Resolve (favorites)
+
+    /// Resolves a set of favorited placemark `keys` against the index in `resourcesDir`,
+    /// producing the same `Hit` shape search uses (so the consolidated Favorites UI can group
+    /// and deep-link identically to "Places" search hits).
+    ///
+    /// - Empty `keys` returns `[]` **without reading the index** — favorites with no marks for
+    ///   this entry never touch disk.
+    /// - Keys present in the index resolve to a `Hit`; keys absent from the index are silently
+    ///   skipped (a favorited placemark that is no longer in the file, e.g. after re-import).
+    /// - A missing or corrupt index returns `[]` (the entry's index hasn't been materialized
+    ///   yet; it self-heals on a later pass).
+    /// - Results are sorted by `name` (then `key` to break ties deterministically) for a stable
+    ///   UI ordering.
+    static func resolve(keys: Set<String>, folderName: String, in resourcesDir: URL) -> [Hit] {
+        guard !keys.isEmpty else { return [] }
+        guard let entries = read(from: resourcesDir) else { return [] }
+        return entries
+            .filter { keys.contains($0.key) }
+            .map { entry in
+                Hit(
+                    folderName: folderName,
+                    key: entry.key,
+                    name: entry.name,
+                    lat: entry.lat,
+                    lon: entry.lon
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.name != rhs.name {
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+                return lhs.key < rhs.key
+            }
+    }
+
     // MARK: - Path
 
     private static func url(in resourcesDir: URL) -> URL {
