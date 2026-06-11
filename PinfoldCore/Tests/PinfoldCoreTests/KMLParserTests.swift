@@ -145,6 +145,38 @@ struct KMLParserTests {
         #expect(pm?.stableKey == "id:marker-42")
     }
 
+    @Test func parse_schemaDataSimpleData() throws {
+        let doc = try parse("schemadata.kml")
+        let pm = doc.root.allPlacemarks.first { $0.name == "Trailhead" }
+        #expect(pm != nil)
+        #expect(pm?.extendedData.contains(KMLDataItem(name: "elevation", value: "120")) == true)
+        #expect(pm?.extendedData.contains(KMLDataItem(name: "surface", value: "gravel")) == true)
+    }
+
+    @Test func parse_valueOutsideDataIgnored() throws {
+        // A stray <value> directly under <ExtendedData> (not inside <Data>) must not
+        // create a data item.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Stray</name>
+              <ExtendedData>
+                <value>x</value>
+              </ExtendedData>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Stray" }
+        #expect(pm != nil)
+        #expect(pm?.extendedData.isEmpty == true)
+    }
+
     @Test func parse_rawDescriptionWithInlineHTML() throws {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>

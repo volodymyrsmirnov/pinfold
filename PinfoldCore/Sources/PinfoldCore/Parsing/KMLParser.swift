@@ -118,10 +118,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     private var styleMapCurrentKey: String? // "normal" / "highlight"
     private var styleMapNormalURL: String?
 
-    // ExtendedData assembly.
+    /// ExtendedData assembly.
     private var inExtendedData = false
+    /// True while inside a <Data> element; <value> is only meaningful there.
+    private var inDataElement = false
     private var currentDataName: String?
     private var currentDataValue: String?
+    /// `name` attribute of the currently open <SimpleData> (SchemaData child).
+    private var currentSimpleDataName: String?
 
     // Description capture. While > 0, every SAX event between <description> and its
     // matching </description> is re-serialized verbatim into `descriptionBuffer` so that
@@ -189,8 +193,11 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "ExtendedData":
             inExtendedData = true
         case "Data":
+            inDataElement = true
             currentDataName = attributeDict["name"]
             currentDataValue = nil
+        case "SimpleData":
+            currentSimpleDataName = attributeDict["name"]
         case "Point":
             placemark?.hasPoint = true
             inPoint = true
@@ -282,7 +289,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "ExtendedData":
             inExtendedData = false
         case "value":
-            if inExtendedData { currentDataValue = text }
+            // Only meaningful inside an open <Data>; a stray <value> elsewhere in
+            // <ExtendedData> must not leak into the next data item.
+            if inExtendedData, inDataElement { currentDataValue = text }
+        case "SimpleData":
+            if let name = currentSimpleDataName {
+                placemark?.extendedData.append(KMLDataItem(name: name, value: trimmed))
+            }
+            currentSimpleDataName = nil
         case "Data":
             if let name = currentDataName {
                 let value = currentDataValue ?? ""
@@ -298,6 +312,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                     )
                 }
             }
+            inDataElement = false
             currentDataName = nil; currentDataValue = nil
         case "Placemark":
             if let pm = placemark {

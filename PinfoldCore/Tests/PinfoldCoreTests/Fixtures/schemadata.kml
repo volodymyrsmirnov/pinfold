@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>SchemaData Sample</name>
+    <Schema name="trail" id="s">
+      <SimpleField type="int" name="elevation"/>
+      <SimpleField type="string" name="surface"/>
+    </Schema>
+    <Placemark>
+      <name>Trailhead</name>
+      <ExtendedData>
+        <SchemaData schemaUrl="#s">
+          <SimpleData name="elevation">120</SimpleData>
+          <SimpleData name="surface">gravel</SimpleData>
+        </SchemaData>
+      </ExtendedData>
+      <Point><coordinates>-122.1,47.6,0</coordinates></Point>
+    </Placemark>
+  </Document>
+</kml>
