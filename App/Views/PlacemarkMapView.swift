@@ -10,7 +10,6 @@ import SwiftUI
 /// `placemarks` is pre-filtered by the caller (`KMLDetailView`) to those with a
 /// coordinate, honoring any active search query.
 struct PlacemarkMapView: View {
-
     let placemarks: [KMLPlacemark]
     let document: KMLDocument
     let entry: CatalogEntry
@@ -20,12 +19,12 @@ struct PlacemarkMapView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
 
-    @State private var selectedPlacemarkID: String?
-    @State private var placemarkToOpenID: String?
+    @State private var selectedPlacemarkKey: String?
+    @State private var placemarkToOpenKey: String?
     @State private var locationAuth = LocationAuthorization()
 
     private var selectedPlacemark: KMLPlacemark? {
-        placemarks.first { $0.id == selectedPlacemarkID }
+        placemarks.first { $0.stableKey == selectedPlacemarkKey }
     }
 
     var body: some View {
@@ -43,26 +42,26 @@ struct PlacemarkMapView: View {
                 clusterPins: settings.clusterMapPins,
                 favoriteKeys: annotations?.favoriteKeys ?? [],
                 visitedKeys: annotations?.visitedKeys ?? [],
-                selectedID: $selectedPlacemarkID
+                selectedKey: $selectedPlacemarkKey
             )
             .ignoresSafeArea()
 
             if let placemark = selectedPlacemark {
                 PlacemarkPreviewCard(placemark: placemark, document: document, entry: entry) {
-                    placemarkToOpenID = placemark.id
+                    placemarkToOpenKey = placemark.stableKey
                 }
                 .padding()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(.snappy, value: selectedPlacemarkID)
+        .animation(.snappy, value: selectedPlacemarkKey)
         // Let the map show through the navigation bar; the glass back button floats over
         // it. No title — a label with no scrim would be unreadable over varied map tiles
         // (matches Apple Maps' full-screen presentation).
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationDestination(item: $placemarkToOpenID) { id in
-            if let placemark = placemarks.first(where: { $0.id == id }) {
+        .navigationDestination(item: $placemarkToOpenKey) { key in
+            if let placemark = placemarks.first(where: { $0.stableKey == key }) {
                 // Re-inject the store: this map is itself a pushed view, so its own pushed
                 // destination does not inherit the environment store automatically.
                 PlacemarkDetailView(placemark: placemark, document: document, entry: entry)
@@ -81,7 +80,6 @@ struct PlacemarkMapView: View {
 /// `StyleIcon` and the photo-thumbnail pattern from `PlacemarkRow`. Tapping it invokes
 /// `onOpen` (which pushes the detail screen).
 private struct PlacemarkPreviewCard: View {
-
     let placemark: KMLPlacemark
     let document: KMLDocument
     let entry: CatalogEntry

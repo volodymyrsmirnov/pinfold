@@ -3,53 +3,15 @@ import PinfoldCore
 import SwiftUI
 import UIKit
 
-// MARK: - EmbeddedMapStyle
-
-/// The basemap style for the in-app map, surfaced as a picker on the map screen.
-enum EmbeddedMapStyle: String, CaseIterable, Identifiable {
-    /// Standard vector ("geo") map.
-    case standard
-    /// Satellite imagery only.
-    case satellite
-    /// Satellite imagery with roads and labels.
-    case hybrid
-
-    var id: String {
-        rawValue
-    }
-
-    var label: String {
-        switch self {
-        case .standard: "Map"
-        case .satellite: "Satellite"
-        case .hybrid: "Hybrid"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .standard: "map"
-        case .satellite: "globe.americas"
-        case .hybrid: "globe.americas.fill"
-        }
-    }
-
-    /// The MapKit configuration realizing this style.
-    var configuration: MKMapConfiguration {
-        switch self {
-        case .standard: MKStandardMapConfiguration()
-        case .satellite: MKImageryMapConfiguration()
-        case .hybrid: MKHybridMapConfiguration()
-        }
-    }
-}
-
 // MARK: - PlacemarkAnnotation
 
-/// An `MKAnnotation` for a single KML point placemark, carrying its parse-session id
-/// (for selection lookup) and its pre-rendered pin image.
+/// An `MKAnnotation` for a single KML point placemark, carrying its durable `stableKey`
+/// (for selection and favorite/visited lookup) and its pre-rendered pin image.
+///
+/// Identity is keyed entirely by `stableKey` — durable across re-parses — so selection
+/// and decoration survive the document being re-parsed while a map is open. The
+/// parse-order `placemark.id` is intentionally *not* stored.
 final class PlacemarkAnnotation: NSObject, MKAnnotation {
-    let placemarkID: String
     let stableKey: String
     let coordinate: CLLocationCoordinate2D
     let title: String?
@@ -61,14 +23,12 @@ final class PlacemarkAnnotation: NSObject, MKAnnotation {
     var image: UIImage
 
     init(
-        placemarkID: String,
         stableKey: String,
         coordinate: CLLocationCoordinate2D,
         title: String?,
         baseImage: UIImage,
         image: UIImage
     ) {
-        self.placemarkID = placemarkID
         self.stableKey = stableKey
         self.coordinate = coordinate
         self.title = title
@@ -110,8 +70,9 @@ final class FittingMapView: MKMapView {
 ///   clusters (tapping a cluster zooms to its members); when off, every pin renders
 ///   individually even when overlapping.
 /// - Highlights the selected pin (scaled up, raised to front).
-/// - Bridges selection to `selectedID`: tapping a pin writes its id; clearing
-///   `selectedID` deselects on the map.
+/// - Bridges selection to `selectedKey`: tapping a pin writes its `stableKey`; clearing
+///   `selectedKey` deselects on the map. Keying by `stableKey` (not the parse-order
+///   `placemark.id`) means selection survives the document being re-parsed while open.
 struct PlacemarkMapRepresentable: UIViewRepresentable {
     let placemarks: [KMLPlacemark]
     let document: KMLDocument
@@ -122,7 +83,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     let clusterPins: Bool
     let favoriteKeys: Set<String>
     let visitedKeys: Set<String>
-    @Binding var selectedID: String?
+    @Binding var selectedKey: String?
 
     /// UserDefaults key for the persisted basemap style. The style control and its
     /// persistence are owned entirely by this representable / its coordinator.
@@ -149,29 +110,16 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         context.coordinator.mapView = mapView
         context.coordinator.currentStyle = initialStyle
 
-        let annotations = placemarks.compactMap { placemark -> PlacemarkAnnotation? in
-            guard let coordinate = placemark.coordinate else { return nil }
-            let base = PlacemarkPinImage.image(
-                for: placemark, document: document, entry: entry,
-                resourceCache: resourceCache, storage: storage
-            )
-            let image = PlacemarkPinImage.decorated(
-                base,
-                isFavorite: favoriteKeys.contains(placemark.stableKey),
-                isVisited: visitedKeys.contains(placemark.stableKey)
-            )
-            return PlacemarkAnnotation(
-                placemarkID: placemark.id,
-                stableKey: placemark.stableKey,
-                coordinate: CLLocationCoordinate2D(
-                    latitude: coordinate.latitude, longitude: coordinate.longitude
-                ),
-                title: placemark.name,
-                baseImage: base,
-                image: image
-            )
+        // Single creation path (shared with updateUIView's reconciliation): build one
+        // annotation per placemark and register it in the coordinator's index.
+        for placemark in placemarks {
+            guard let annotation = makeAnnotation(for: placemark) else { continue }
+            mapView.addAnnotation(annotation)
+            context.coordinator.annotationsByKey[annotation.stableKey] = annotation
         }
-        mapView.addAnnotations(annotations)
+        context.coordinator.lastPlacemarkKeys = Set(context.coordinator.annotationsByKey.keys)
+        context.coordinator.lastFavoriteKeys = favoriteKeys
+        context.coordinator.lastVisitedKeys = visitedKeys
 
         let coordinates = placemarks.compactMap(\.coordinate)
         mapView.onFirstLayout = { [weak mapView] in
@@ -184,26 +132,57 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
+        // Standard idiom: refresh the coordinator's parent so delegate callbacks
+        // (viewFor's clusterPins, didSelect/didDeselect's selection binding) read the
+        // live struct rather than the makeCoordinator-time snapshot.
+        let coordinator = context.coordinator
+        coordinator.parent = self
+
         mapView.showsUserLocation = showsUserLocation
+
+        // Reconcile placemark set: add new pins, drop removed ones. Only recompute when the
+        // desired key-set actually changed (selection/favorite toggles re-enter updateUIView
+        // too) — and re-fit only when the set changed, never on a bare re-render.
+        let desiredKeys = Set(placemarks.map(\.stableKey))
+        if desiredKeys != coordinator.lastPlacemarkKeys {
+            let diff = Self.annotationDiff(
+                currentKeys: coordinator.lastPlacemarkKeys, desired: placemarks
+            )
+            for key in diff.toRemove {
+                if let annotation = coordinator.annotationsByKey.removeValue(forKey: key) {
+                    mapView.removeAnnotation(annotation)
+                }
+            }
+            for placemark in diff.toAdd {
+                guard let annotation = makeAnnotation(for: placemark) else { continue }
+                mapView.addAnnotation(annotation)
+                coordinator.annotationsByKey[annotation.stableKey] = annotation
+            }
+            coordinator.lastPlacemarkKeys = Set(coordinator.annotationsByKey.keys)
+            // Re-fit to the new pin set (mirrors the first-layout fit).
+            Self.fit(coordinates: placemarks.compactMap(\.coordinate), in: mapView, animated: true)
+        }
 
         // Reconcile SwiftUI -> map selection: if SwiftUI cleared it, deselect on the map
         // (which reverts the highlight via didDeselect).
-        if selectedID == nil {
+        if selectedKey == nil {
             for annotation in mapView.selectedAnnotations where annotation is PlacemarkAnnotation {
                 mapView.deselectAnnotation(annotation, animated: true)
             }
         }
 
         // Re-decorate pins only when the sets actually changed — selection flips
-        // selectedID and triggers updateUIView too, so without this guard every tap
+        // selectedKey and triggers updateUIView too, so without this guard every tap
         // would re-composite UIGraphicsImageRenderer images for all N annotations.
-        // `view(for:)` is nil for offscreen annotations — annotation.image still lands,
-        // so viewFor(_:) picks up the correct image on next reuse.
-        if context.coordinator.lastFavoriteKeys != favoriteKeys
-            || context.coordinator.lastVisitedKeys != visitedKeys {
-            context.coordinator.lastFavoriteKeys = favoriteKeys
-            context.coordinator.lastVisitedKeys = visitedKeys
-            for annotation in mapView.annotations.compactMap({ $0 as? PlacemarkAnnotation }) {
+        // Walk the coordinator's own index (not mapView.annotations) so we touch exactly
+        // the placemark pins. `view(for:)` is nil for offscreen annotations — annotation.image
+        // still lands, so viewFor(_:) picks up the correct image on next reuse.
+        let decorationChanged = coordinator.lastFavoriteKeys != favoriteKeys
+            || coordinator.lastVisitedKeys != visitedKeys
+        if decorationChanged {
+            coordinator.lastFavoriteKeys = favoriteKeys
+            coordinator.lastVisitedKeys = visitedKeys
+            for annotation in coordinator.annotationsByKey.values {
                 let fresh = PlacemarkPinImage.decorated(
                     annotation.baseImage,
                     isFavorite: favoriteKeys.contains(annotation.stableKey),
@@ -213,6 +192,61 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 mapView.view(for: annotation)?.image = fresh
             }
         }
+    }
+
+    // MARK: - Annotation reconciliation
+
+    /// Pure diff between the annotations currently on the map (`currentKeys`, a set of
+    /// `stableKey`s) and the `desired` placemarks. Returns the placemarks to add and the
+    /// keys to remove.
+    ///
+    /// Keyed by `stableKey` (durable across re-parses), matching how favorites/visited and
+    /// selection identify placemarks. If two desired placemarks share a `stableKey`,
+    /// **last wins** deterministically (the later element in `desired` is the one kept),
+    /// so exactly one annotation exists per key. A sibling overlay diff (for line/polygon
+    /// geometry) will follow the same shape in a later task.
+    nonisolated static func annotationDiff(
+        currentKeys: Set<String>,
+        desired: [KMLPlacemark]
+    ) -> (toAdd: [KMLPlacemark], toRemove: Set<String>) {
+        // Last-wins dedup: build an ordered, deduplicated list keyed by stableKey.
+        var byKey: [String: KMLPlacemark] = [:]
+        var order: [String] = []
+        for placemark in desired {
+            let key = placemark.stableKey
+            if byKey[key] == nil { order.append(key) }
+            byKey[key] = placemark
+        }
+        let desiredKeys = Set(order)
+        let toAdd = order.compactMap { currentKeys.contains($0) ? nil : byKey[$0] }
+        let toRemove = currentKeys.subtracting(desiredKeys)
+        return (toAdd, toRemove)
+    }
+
+    /// Builds a `PlacemarkAnnotation` for `placemark`, loading its base pin image and
+    /// applying the current favorite/visited decoration. Returns `nil` for a placemark
+    /// without a coordinate. Single creation path shared by `makeUIView` and the
+    /// `updateUIView` reconciliation.
+    func makeAnnotation(for placemark: KMLPlacemark) -> PlacemarkAnnotation? {
+        guard let coordinate = placemark.coordinate else { return nil }
+        let base = PlacemarkPinImage.image(
+            for: placemark, document: document, entry: entry,
+            resourceCache: resourceCache, storage: storage
+        )
+        let image = PlacemarkPinImage.decorated(
+            base,
+            isFavorite: favoriteKeys.contains(placemark.stableKey),
+            isVisited: visitedKeys.contains(placemark.stableKey)
+        )
+        return PlacemarkAnnotation(
+            stableKey: placemark.stableKey,
+            coordinate: CLLocationCoordinate2D(
+                latitude: coordinate.latitude, longitude: coordinate.longitude
+            ),
+            title: placemark.name,
+            baseImage: base,
+            image: image
+        )
     }
 
     // MARK: - Fit to pins
@@ -289,12 +323,25 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     // MARK: - Coordinator
 
     final class Coordinator: NSObject, MKMapViewDelegate {
-        private let parent: PlacemarkMapRepresentable
+        /// The current representable. Refreshed at the top of every `updateUIView`
+        /// (`context.coordinator.parent = self`) so delegate callbacks read live values
+        /// (e.g. `clusterPins`, selection binding) rather than the makeCoordinator-time
+        /// snapshot.
+        var parent: PlacemarkMapRepresentable
         weak var mapView: MKMapView?
         weak var styleButton: UIButton?
         var currentStyle: EmbeddedMapStyle?
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
+        /// The set of placemark `stableKey`s currently realized as annotations on the map.
+        /// Compared against the desired set each `updateUIView` to skip reconciliation when
+        /// nothing changed.
+        var lastPlacemarkKeys: Set<String> = []
+        /// Live index of the placemark annotations on the map, keyed by `stableKey`. Lets
+        /// favorite/visited re-decoration touch exactly the annotations it owns instead of
+        /// walking every `mapView.annotations` (which also includes the user-location dot
+        /// and any future overlays' annotations).
+        var annotationsByKey: [String: PlacemarkAnnotation] = [:]
 
         init(_ parent: PlacemarkMapRepresentable) {
             self.parent = parent
@@ -373,27 +420,20 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, didSelect annotation: MKAnnotation) {
             if let cluster = annotation as? MKClusterAnnotation {
-                let rect = cluster.memberAnnotations.reduce(MKMapRect.null) { acc, member in
-                    let point = MKMapPoint(member.coordinate)
-                    return acc.union(MKMapRect(origin: point, size: MKMapSize(width: 0, height: 0)))
-                }
-                if rect.size.width == 0, rect.size.height == 0 {
-                    let region = MKCoordinateRegion(
-                        center: MKMapPoint(x: rect.origin.x, y: rect.origin.y).coordinate,
-                        latitudinalMeters: 1000,
-                        longitudinalMeters: 1000
-                    )
-                    mapView.setRegion(region, animated: true)
-                } else {
-                    mapView.setVisibleMapRect(
-                        rect, edgePadding: PlacemarkMapRepresentable.edgePadding, animated: true
+                // Zoom to the cluster's members. Reuse Self.fit so the single-/coincident-
+                // member case (zero-size rect → fixed ~1 km span) matches the first-layout
+                // fit exactly.
+                let coordinates = cluster.memberAnnotations.map { member in
+                    Coordinate(
+                        longitude: member.coordinate.longitude, latitude: member.coordinate.latitude
                     )
                 }
+                PlacemarkMapRepresentable.fit(coordinates: coordinates, in: mapView, animated: true)
                 mapView.deselectAnnotation(annotation, animated: false)
                 return
             }
             if let placemark = annotation as? PlacemarkAnnotation {
-                parent.selectedID = placemark.placemarkID
+                parent.selectedKey = placemark.stableKey
                 setHighlighted(true, for: annotation, in: mapView)
             }
         }
@@ -406,7 +446,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             // After the runloop turn, selectedAnnotations reflects the new selection.
             DispatchQueue.main.async {
                 if mapView.selectedAnnotations.isEmpty {
-                    self.parent.selectedID = nil
+                    self.parent.selectedKey = nil
                 }
             }
         }
