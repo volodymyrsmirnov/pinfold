@@ -230,6 +230,20 @@ import Testing
                 "entry identity must equal its folder UUID")
     }
 
+    @Test func commit_writesPlacemarkIndex() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        #expect(!result.indexEntries.isEmpty, "prepare must build the index entries")
+
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        let onDisk = PlacemarkIndex.read(from: resourcesDir)
+        #expect(onDisk != nil, "placemarks-index.json must exist after commit")
+        #expect(onDisk?.count == result.indexEntries.count)
+    }
+
     @Test func commit_writesSidecarMatchingEntry() throws {
         let storage = makeStorage()
         let data = try AppFixture.data("Rome.kml")

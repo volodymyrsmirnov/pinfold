@@ -58,6 +58,8 @@ struct CatalogScanner {
         let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
         try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
         try? cache.writeEmbedded(derived.embeddedResources, to: resourcesDir)
+        // We parsed the original anyway — write the local search index in the same pass.
+        try? PlacemarkIndex.write(derived.indexEntries, to: resourcesDir)
         let hrefs = derived.remoteResourceHrefs
         let cache = cache
         Task.detached { await cache.downloadRemote(hrefs, to: resourcesDir) }
@@ -96,7 +98,8 @@ struct CatalogScanner {
             metadata: meta,
             entry: CatalogEntry(metadata: meta, storageFolderName: name),
             embeddedResources: result.embeddedResources,
-            remoteResourceHrefs: result.remoteResourceHrefs
+            remoteResourceHrefs: result.remoteResourceHrefs,
+            indexEntries: result.indexEntries
         )
     }
 
@@ -122,6 +125,12 @@ struct CatalogScanner {
                 // already covers them, and no re-parse is needed — the expected href list
                 // was recorded to disk at download time.
                 await cache.retryPending(in: resourcesDir)
+                // Self-heal: a folder materialized before the search feature shipped has a
+                // resource cache but no `placemarks-index.json`. Backfill it once by parsing
+                // the original (the only re-parse here, gated on the index being absent).
+                if PlacemarkIndex.read(from: resourcesDir) == nil {
+                    backfillIndex(forFolderNamed: name, to: resourcesDir)
+                }
                 continue
             }
 
@@ -137,10 +146,27 @@ struct CatalogScanner {
             // has no resources (a plain KML with no icons/photos won't be re-parsed next scan).
             try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
             try? cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
+            // Build the local search index in the same pass (we parsed the original anyway).
+            try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
             await cache.downloadRemote(result.remoteResourceHrefs, to: resourcesDir)
             didWork = true
         }
         return didWork
+    }
+
+    /// Parses the original in `name` and writes its `placemarks-index.json` into an
+    /// already-materialized `resourcesDir`. Used to backfill the index for entries imported
+    /// before catalogue-wide search existed. Silent no-op if the original can't be read or
+    /// parsed (retried on a later pass).
+    private func backfillIndex(forFolderNamed name: String, to resourcesDir: URL) {
+        guard let fileURL = storage.originalFileURL(inFolderNamed: name),
+              let data = try? UbiquityContainer.readDownloadingIfNeeded(fileURL),
+              let result = try? ImportService.prepare(
+                  data: data,
+                  sourceFilename: fileURL.lastPathComponent
+              )
+        else { return }
+        try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
     }
 
     private func fileCreationDate(_ url: URL) -> Date {
@@ -157,4 +183,5 @@ private struct DerivedEntry {
     let entry: CatalogEntry
     let embeddedResources: [String: Data]
     let remoteResourceHrefs: [String]
+    let indexEntries: [PlacemarkIndex.Entry]
 }

@@ -26,6 +26,10 @@ struct ImportResult {
     let embeddedResources: [String: Data]
     /// Remote http(s) resource URLs gathered from icon styles and placemark photo links.
     let remoteResourceHrefs: [String]
+    /// Flattened placemark search-index entries (stableKey + name + coordinate), built from
+    /// the parsed document so `commit` can write the local `placemarks-index.json` without a
+    /// re-parse. Backs catalogue-wide search.
+    let indexEntries: [PlacemarkIndex.Entry]
 }
 
 // MARK: - ImportError
@@ -118,7 +122,8 @@ enum ImportService {
             storageFolderName: UUID().uuidString,
             originalData: data,
             embeddedResources: parsed.embeddedResources,
-            remoteResourceHrefs: remoteResourceHrefs
+            remoteResourceHrefs: remoteResourceHrefs,
+            indexEntries: PlacemarkIndex.entries(for: document)
         )
     }
 
@@ -177,6 +182,9 @@ enum ImportService {
         // Write KMZ-embedded resources synchronously (no network needed).
         let resourcesDir = storage.resourcesDirectory(for: entry)
         try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
+
+        // Write the local search index alongside the resource cache (derivable, never synced).
+        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
 
         // Kick off remote downloads in the background — non-blocking, offline-first.
         let hrefs = result.remoteResourceHrefs

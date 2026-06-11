@@ -26,6 +26,11 @@ struct HomeView: View {
     /// entry id so it survives `catalog.reload()`; see `RootView.selectedEntryID`.
     @Binding var selection: CatalogEntry.ID?
 
+    /// One-shot deep-link search string, owned by `RootView`. Set (together with `selection`)
+    /// when the user taps a catalogue-wide "Places" search hit so the opened file's outline
+    /// pre-filters to that placemark. Left nil for ordinary file taps. See `RootView`.
+    @Binding var pendingDetailSearch: String?
+
     // MARK: - Environment
 
     @Environment(Catalog.self) private var catalog
@@ -44,14 +49,59 @@ struct HomeView: View {
     @State private var isSettingsPresented = false
     @State private var importCoordinator = ImportCoordinator()
 
+    /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
+    @State private var searchQuery = ""
+    /// Keyboard focus for the search field, driven by the ⌘F command (see `AppCommands`).
+    @FocusState private var isSearchFocused: Bool
+    /// "Places" hits for the current query, read off-main from each active entry's local
+    /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
+    @State private var placeHits: [PlacemarkIndex.Hit] = []
+
+    /// Debounce before reading every entry's index off disk, matching `KMLDetailView`'s
+    /// in-file search debounce so rapid typing doesn't fan out a read storm.
+    private static let searchDebounce: Duration = .milliseconds(250)
+
+    /// Identity for the search `.task`: the query plus the active segment. Re-running on a
+    /// segment change lets Files repopulate its hits after a detour through Trash.
+    private struct SearchTrigger: Equatable {
+        let query: String
+        let segment: Segment
+    }
+
     // MARK: - Computed partitions
 
-    private var active: [CatalogEntry] {
+    var active: [CatalogEntry] {
         catalog.active
     }
 
     private var trashed: [CatalogEntry] {
         catalog.trashed
+    }
+
+    /// Trimmed query; non-empty means the Files segment shows search results instead of the
+    /// plain entry list. Trash is never searched (active entries only).
+    var trimmedQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var isSearching: Bool {
+        segment == .files && !trimmedQuery.isEmpty
+    }
+
+    /// Active entries whose display name matches the query — the "Files" results section.
+    /// Same `localizedCaseInsensitiveContains` primitive as the placemark search.
+    var matchingFiles: [CatalogEntry] {
+        active.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+    }
+
+    /// Place hits grouped by the entry that contains them, in catalogue order, so the results
+    /// list can show one section per file. Resolves each hit's folder name to its entry.
+    var groupedPlaceHits: [(entry: CatalogEntry, hits: [PlacemarkIndex.Hit])] {
+        let byFolder = Dictionary(grouping: placeHits, by: \.folderName)
+        return active.compactMap { entry in
+            guard let hits = byFolder[entry.storageFolderName], !hits.isEmpty else { return nil }
+            return (entry, hits)
+        }
     }
 
     // MARK: - Body
@@ -63,6 +113,42 @@ struct HomeView: View {
             fileList
         }
         .navigationTitle("Pinfold")
+        // Catalogue-wide search lives only on the Files segment (active entries); Trash is not
+        // searched. `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F
+        // command move keyboard focus here.
+        .searchable(
+            text: $searchQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text("Search files and places")
+        )
+        .searchFocused($isSearchFocused)
+        // Debounced, off-main search over each active entry's local placemark index. Re-keys on
+        // the query AND the segment so returning to Files with a live query recomputes the hits
+        // (Trash isn't searched). Single trigger — simpler than KMLDetailView's two-trigger
+        // split, which existed only to handle un-debounced collapse toggles.
+        .task(id: SearchTrigger(query: searchQuery, segment: segment)) {
+            let query = trimmedQuery
+            guard segment == .files, !query.isEmpty else {
+                placeHits = []
+                return
+            }
+            try? await Task.sleep(for: Self.searchDebounce)
+            if Task.isCancelled { return }
+            // Snapshot the (folderName, resourcesDir) pairs on the main actor, then read the
+            // index files off-main — the read is pure disk I/O over Sendable URLs.
+            let dirs = active.map {
+                (folderName: $0.storageFolderName, resourcesDir: catalog.storage.resourcesDirectory(for: $0))
+            }
+            let hits = await Task.detached(priority: .userInitiated) {
+                PlacemarkIndex.search(query, in: dirs)
+            }.value
+            if Task.isCancelled { return }
+            placeHits = hits
+        }
+        // ⌘F (Search command) → focus the search field. Counter bump fires on every press.
+        .onChange(of: appCommands.searchFocusRequested) { _, _ in
+            isSearchFocused = true
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -191,7 +277,9 @@ struct HomeView: View {
     @ViewBuilder
     private var fileList: some View {
         if segment == .files {
-            if active.isEmpty {
+            if isSearching {
+                searchResults
+            } else if active.isEmpty {
                 ContentUnavailableView {
                     Label("No Files", systemImage: "map")
                 } description: {

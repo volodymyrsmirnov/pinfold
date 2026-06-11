@@ -252,6 +252,52 @@ import Testing
                 "embedded KMZ icon must be extracted into the local cache")
     }
 
+    /// A folder that synced in before the search feature existed has an original + sidecar
+    /// but no `placemarks-index.json`. The materialization pass (which re-parses to build the
+    /// resource cache anyway) must also build the missing index so the file becomes
+    /// searchable — existing installs self-heal on the next reload.
+    @Test func materialize_buildsMissingIndex() async throws {
+        let (scanner, storage) = makeScanner()
+        let folder = "needsIndex"
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Rome", sourceFilename: "Rome.kml",
+            importDate: .now, pointCount: 1, contentSHA256: "x", trashedAt: nil
+        )
+        try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: folder)
+        #expect(PlacemarkIndex.read(from: resourcesDir) == nil, "precondition: no index yet")
+
+        _ = await scanner.materializeMissingResources()
+
+        let index = PlacemarkIndex.read(from: resourcesDir)
+        #expect(index != nil, "materialization must build the missing index")
+        // The index must reflect the actual placemarks in the parsed original.
+        let expected = try ImportService.prepare(
+            data: AppFixture.data("Rome.kml"), sourceFilename: "Rome.kml"
+        ).indexEntries
+        #expect(index?.count == expected.count)
+    }
+
+    /// The bare-original self-heal path (`scan` → `rebuildFromBareOriginal`) parses the file
+    /// to backfill the sidecar; it must also write the search index in the same pass.
+    @Test func rebuildFromBareOriginal_writesIndex() throws {
+        let (scanner, storage) = makeScanner()
+        let folder = "bareIndexed"
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+
+        _ = scanner.scan()
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: folder)
+        #expect(PlacemarkIndex.read(from: resourcesDir) != nil,
+                "rebuilding from a bare original must also write the search index")
+    }
+
     /// Idempotent: once the resources directory exists it is treated as the done-marker and
     /// the original is not re-parsed (no duplicate work, no clobbering).
     @Test func materialize_skipsFolderWithExistingResourcesDir() async throws {

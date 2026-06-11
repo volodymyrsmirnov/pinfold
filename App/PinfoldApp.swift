@@ -22,9 +22,16 @@ struct PinfoldApp: App {
                 }
                 .keyboardShortcut("i", modifiers: .command)
             }
-            // No "Search" command: there is no catalogue-wide search field yet (global
-            // search is a later task — see plan task 26). Adding a ⌘F no-op now would be
-            // speculative plumbing, so it is intentionally omitted until that field exists.
+            // ⌘F focuses HomeView's catalogue search field. Like ⌘I it bumps a counter on
+            // AppCommands (Commands can't move focus directly); HomeView observes it and
+            // drives its `.searchFocused` binding. Placed in `.textEditing` so it sits with
+            // the standard Find commands in the menu bar.
+            CommandGroup(after: .textEditing) {
+                Button("Search") {
+                    appCommands.requestSearchFocus()
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
         }
     }
 }
@@ -77,6 +84,16 @@ private struct RootView: View {
     /// trashed (the sidebar only exposes active entries for selection).
     @State private var selectedEntryID: CatalogEntry.ID?
 
+    /// A one-shot search string handed to the detail view when a selection is triggered by a
+    /// catalogue-wide "Places" search hit (see `HomeView`). It carries the tapped placemark's
+    /// NAME so `KMLDetailView` opens with its in-file outline pre-filtered to that placemark.
+    ///
+    /// Consume-once flow: `HomeView` sets this AND `selectedEntryID` together when a hit is
+    /// tapped; this view passes it into `KMLDetailView(initialSearch:)`, then clears it in the
+    /// detail's `.task(id:)` lifetime by resetting it whenever the selection changes. A normal
+    /// row tap only changes `selectedEntryID` (leaving this nil), so it does not pre-filter.
+    @State private var pendingDetailSearch: String?
+
     @Environment(\.scenePhase) private var scenePhase
 
     /// The active (non-trashed) entry matching the current selection, or `nil` when nothing is
@@ -98,7 +115,7 @@ private struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            HomeView(selection: $selectedEntryID)
+            HomeView(selection: $selectedEntryID, pendingDetailSearch: $pendingDetailSearch)
                 // 320–380pt keeps file rows comfortable on iPad/Mac without crowding the map
                 // detail; the system still lets the user drag the divider.
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380)
@@ -110,8 +127,14 @@ private struct RootView: View {
             // own `.task(id: entry.id)`.
             NavigationStack {
                 if let selectedEntry {
-                    KMLDetailView(entry: selectedEntry)
-                        .id(selectedEntry.id)
+                    KMLDetailView(
+                        entry: selectedEntry,
+                        initialSearch: pendingDetailSearch,
+                        // Consumed once by the detail view's load `.task`; clearing here ensures
+                        // a later normal selection of the same file doesn't re-apply the filter.
+                        onConsumeInitialSearch: { pendingDetailSearch = nil }
+                    )
+                    .id(selectedEntry.id)
                 } else {
                     ContentUnavailableView(
                         "No File Selected",

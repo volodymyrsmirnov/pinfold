@@ -25,4 +25,14 @@ final class AppCommands {
     func requestImport() {
         importRequested += 1
     }
+
+    /// Bumped each time the user invokes the "Search" command. `HomeView` observes changes
+    /// and moves keyboard focus to its `.searchable` field (the same counter-vs-Bool rationale
+    /// as `importRequested`: every ⌘F must re-focus, even after the field already had focus).
+    private(set) var searchFocusRequested = 0
+
+    /// Invoked by the "Search" menu command / ⌘F shortcut.
+    func requestSearchFocus() {
+        searchFocusRequested += 1
+    }
 }

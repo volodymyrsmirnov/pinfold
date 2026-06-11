@@ -18,6 +18,17 @@ struct KMLDetailView: View {
 
     let entry: CatalogEntry
 
+    /// A one-shot initial search string, supplied when this file was opened from a
+    /// catalogue-wide "Places" search hit (see `HomeView`/`RootView`). It carries the tapped
+    /// placemark's name so the in-file outline opens pre-filtered to show it. `nil` for a
+    /// normal selection. Consumed once in the load `.task` (then `onConsumeInitialSearch`
+    /// clears the source so re-selecting the file normally doesn't re-apply it).
+    var initialSearch: String?
+
+    /// Called once after `initialSearch` has been applied, so the owner can clear its
+    /// one-shot source. Defaults to a no-op for callers (e.g. previews) that don't plumb it.
+    var onConsumeInitialSearch: () -> Void = {}
+
     // MARK: - Environment
 
     @Environment(\.storageLocations) private var storage
@@ -81,6 +92,14 @@ struct KMLDetailView: View {
             loadError = nil
             outline = nil
             collapsedFolderIDs = []
+            // Seed the in-file search from a Places-hit deep link (if any), then tell the
+            // owner it was consumed so it isn't re-applied on a later normal re-selection.
+            if let initialSearch, !initialSearch.isEmpty {
+                searchText = initialSearch
+                onConsumeInitialSearch()
+            } else {
+                searchText = ""
+            }
             await loadDocument()
         }
         // The outline rebuild is driven by TWO independent triggers so the debounce policy
