@@ -27,6 +27,15 @@ struct CoordinateTests {
         #expect(c?.longitude == 12.5)
     }
 
+    @Test func parse_tupleWithSpacesAfterCommas() {
+        // Some producers emit "lon, lat, alt" with spaces after the commas; whitespace is
+        // normally the tuple separator, so this needs the comma-resplit fallback.
+        let c = Coordinate(parsingFirstTuple: "-122.08, 37.42, 0")
+        #expect(c?.longitude == -122.08)
+        #expect(c?.latitude == 37.42)
+        #expect(c?.altitude == 0)
+    }
+
     @Test func returnsNilForGarbage() {
         #expect(Coordinate(parsingFirstTuple: "   ") == nil)
         #expect(Coordinate(parsingFirstTuple: "abc") == nil)
