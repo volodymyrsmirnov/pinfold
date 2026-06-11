@@ -52,7 +52,7 @@ enum SpotlightID {
 /// the app's offline content is reachable from system search.
 ///
 /// The **pure builder** (`items(for:indexEntries:)` + `SpotlightID`) is the unit-tested
-/// surface. The thin wrappers (`index`/`deindex`/`reindexEntryItem`) are fire-and-forget over
+/// surface. The thin wrappers (`index`/`deindex`) are fire-and-forget over
 /// the live `CSSearchableIndex.default()`: they detach in `nonisolated` free functions (so the
 /// `Task.detached` closures don't get compiled into a `@MainActor` caller's SIL) and log any
 /// failure rather than surfacing it — a missing search index is non-fatal and self-heals on the
@@ -121,20 +121,6 @@ enum SpotlightIndexer {
     static func index(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
         let items = items(for: entry, indexEntries: indexEntries)
         spotlightIndex(items)
-    }
-
-    /// Re-indexes only the entry-level item (its placemark items are unchanged), e.g. after a
-    /// rename. Fire-and-forget.
-    static func reindexEntryItem(entry: CatalogEntry) {
-        let attributes = CSSearchableItemAttributeSet(contentType: .content)
-        attributes.title = entry.displayName
-        attributes.contentDescription = "\(entry.pointCount) places"
-        let item = CSSearchableItem(
-            uniqueIdentifier: SpotlightID.entry(folderName: entry.storageFolderName),
-            domainIdentifier: entryDomain,
-            attributeSet: attributes
-        )
-        spotlightIndex([item])
     }
 
     /// Removes every Spotlight item belonging to `folderName`: its entry item plus all of its

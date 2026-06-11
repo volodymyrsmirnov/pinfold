@@ -83,7 +83,7 @@ struct HomeView: View {
     @FocusState private var isSearchFocused: Bool
     /// "Places" hits for the current query, read off-main from each active entry's local
     /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
-    /// Not `private`: `groupedPlaceHits` lives in the `HomeSearchResults` extension (a separate file).
+    /// Not `private`: `groupedPlaceHits` lives in the `HomeView+Sections` extension (a separate file).
     @State var placeHits: [PlacemarkIndex.Hit] = []
 
     /// Debounce before reading every entry's index off disk, matching `KMLDetailView`'s
