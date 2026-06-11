@@ -103,4 +103,47 @@ struct KMZArchiveTests {
         let contents = try KMZArchive.extract(Fixture.data("Rome.kmz"))
         #expect(contents.resources.isEmpty == false)
     }
+
+    @Test func read_nestedRootKML_resourceKeysAreRootRelative() throws {
+        // Root KML lives in `folder/`; its Style references `icons/pin.png`, which in the
+        // archive is `folder/icons/pin.png`. Consumers look the resource up by the href as
+        // written in the KML (root-relative), so the embeddedResources key must be
+        // `icons/pin.png`, not the raw `folder/icons/pin.png`.
+        let nestedKML = Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Nested</name>
+            <Style id="s"><IconStyle><Icon><href>icons/pin.png</href></Icon></IconStyle></Style>
+          </Document>
+        </kml>
+        """.utf8)
+        let zip = try makeZip([
+            ("folder/doc.kml", nestedKML),
+            ("folder/icons/pin.png", Data([0xAA, 0xBB])),
+            ("other/x.png", Data([0xCC, 0xDD])),
+        ])
+        let parsed = try KMLReader.read(data: zip)
+        #expect(parsed.rootKMLPath == "folder/doc.kml")
+        // Key under the root KML's directory is remapped to root-relative.
+        #expect(parsed.embeddedResources["icons/pin.png"] == Data([0xAA, 0xBB]))
+        #expect(parsed.embeddedResources["folder/icons/pin.png"] == nil)
+        // Sibling entry outside the root dir keeps its raw archive path.
+        #expect(parsed.embeddedResources["other/x.png"] == Data([0xCC, 0xDD]))
+        // No remapped key introduces a traversal component.
+        #expect(parsed.embeddedResources.keys.allSatisfy { key in
+            !key.split(separator: "/").contains("..")
+        })
+    }
+
+    @Test func read_topLevelRootKML_resourceKeysUnchanged() throws {
+        // The common case: a top-level root KML is a no-op — keys stay raw.
+        let zip = try makeZip([
+            ("doc.kml", minimalKML),
+            ("images/icon.png", Data([0x01, 0x02])),
+        ])
+        let parsed = try KMLReader.read(data: zip)
+        #expect(parsed.rootKMLPath == "doc.kml")
+        #expect(parsed.embeddedResources["images/icon.png"] == Data([0x01, 0x02]))
+    }
 }
