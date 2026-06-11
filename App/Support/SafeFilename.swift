@@ -29,6 +29,9 @@ enum SafeFilename {
     static func sanitize(_ raw: String) -> String {
         // 1. Keep only the final path component. Split on both POSIX and Windows separators so
         //    "a/b/c", "a\b\c", and mixed forms all reduce to the last segment.
+        //    Order is significant: the component split must precede control-character
+        //    replacement (step 2) so a newline inside one segment can't merge content
+        //    across a separator boundary ("a/b\nc.kml" → "b-c.kml", not "a-b-c.kml").
         let lastComponent = raw.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? ""
 
         // 2. Replace control characters and any stray separators with "-".
