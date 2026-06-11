@@ -20,14 +20,14 @@ public struct KMLDocument: Equatable, Sendable {
     }
 
     public var placemarkCount: Int {
-        root.allPlacemarks.count
+        root.placemarkCount
     }
 
     /// Number of placemarks with an explicit `<Point>` geometry. A point-less placemark that
     /// carries only line/polygon/track geometry has a representative `coordinate` but is NOT
     /// counted here.
     public var pointCount: Int {
-        root.allPlacemarks.filter(\.hasPoint).count
+        root.pointCount
     }
 
     /// Resolves a styleUrl (e.g. "#foo") to a KMLStyle, following one StyleMap hop to its

@@ -1,7 +1,10 @@
 import Foundation
 
 public enum KMLParseError: Error, Equatable {
-    case malformedXML(String)
+    /// XMLParser rejected the document. `line`/`column` come from `XMLParser.lineNumber`/
+    /// `.columnNumber` at the point of failure; `detail` describes the underlying NSError by
+    /// domain and code (not its localized message, which is locale-dependent).
+    case malformedXML(line: Int, column: Int, detail: String)
     /// The document contains a DTD (`<!DOCTYPE …>`). KML never legitimately uses DTDs,
     /// so any document carrying one is rejected outright: XMLParser has no entity-expansion
     /// limit, and accepting DTDs would expose the parser to entity-expansion DoS payloads
@@ -20,7 +23,11 @@ public enum KMLParser {
         let delegate = KMLParserDelegate()
         parser.delegate = delegate
         guard parser.parse() else {
-            throw KMLParseError.malformedXML(parser.parserError?.localizedDescription ?? "unknown")
+            let nsError = parser.parserError as NSError?
+            let detail = nsError.map { "\($0.domain) code \($0.code)" } ?? "unknown"
+            throw KMLParseError.malformedXML(line: parser.lineNumber,
+                                             column: parser.columnNumber,
+                                             detail: detail)
         }
         return delegate.makeDocument()
     }
@@ -121,6 +128,21 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     /// Current text accumulation for the open element.
     var text = ""
+
+    /// True only while inside an element whose character data is actually consumed on close
+    /// (name, coordinates, gx:coord, style fields, key, styleUrl, value, SimpleData). When
+    /// false, `foundCharacters`/`foundCDATA` skip accumulation entirely — most elements
+    /// (containers, geometry wrappers, ExtendedData wrappers) carry text we never read, and
+    /// appending it is wasted work on large documents. Description capture has its own buffer
+    /// and is unaffected by this gate.
+    var wantsText = false
+
+    /// Element local names whose closing handler reads `text`/`trimmed`. Used to arm
+    /// `wantsText` in `didStartElement`.
+    static let textBearingElements: Set<String> = [
+        "name", "coordinates", "coord", "color", "width", "fill", "scale", "href",
+        "key", "styleUrl", "value", "SimpleData",
+    ]
 
     /// Current placemark being assembled.
     struct PlacemarkBuilder {
@@ -236,6 +258,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         if startElementWhileCapturingDescription(elementName, attributes: attributeDict) { return }
         text = ""
         let local = Self.localName(elementName)
+        // Arm text accumulation only for elements whose close actually reads it.
+        wantsText = Self.textBearingElements.contains(local)
         if startGeometryElement(local) { return }
         switch local {
         case "Document", "Folder":
@@ -287,12 +311,20 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     }
 
     func parser(_: XMLParser, foundCharacters string: String) {
-        if descriptionDepth > 0 { descriptionBuffer += string } else { text += string }
+        if descriptionDepth > 0 {
+            descriptionBuffer += string
+        } else if wantsText {
+            text += string
+        }
     }
 
     func parser(_: XMLParser, foundCDATA CDATABlock: Data) {
         guard let s = String(data: CDATABlock, encoding: .utf8) else { return }
-        if descriptionDepth > 0 { descriptionBuffer += s } else { text += s }
+        if descriptionDepth > 0 {
+            descriptionBuffer += s
+        } else if wantsText {
+            text += s
+        }
     }
 
     func parser(_: XMLParser, didEndElement elementName: String,

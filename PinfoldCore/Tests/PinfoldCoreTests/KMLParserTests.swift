@@ -134,6 +134,28 @@ struct KMLParserTests {
         }
     }
 
+    @Test func parse_truncatedDocumentThrowsWithLineInfo() {
+        // Valid KML cut off mid-element. The thrown malformedXML must carry positional info.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Truncated</name>
+            <Placemark>
+              <name>Spot</name>
+              <Point><coordinates>1.0,2.0,0
+        """
+        do {
+            _ = try KMLParser.parse(data: Data(xml.utf8))
+            Issue.record("expected a parse error")
+        } catch let KMLParseError.malformedXML(line, _, detail) {
+            #expect(line > 0)
+            #expect(!detail.isEmpty)
+        } catch {
+            Issue.record("expected malformedXML, got \(error)")
+        }
+    }
+
     @Test func capturesPlacemarkIDAttribute() throws {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>

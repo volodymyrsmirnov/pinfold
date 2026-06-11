@@ -67,6 +67,15 @@ struct GeometryTests {
         #expect(pm?.geometries.contains { if case .lineString = $0 { true } else { false } } == true)
     }
 
+    @Test func counts_matchAllPlacemarksDerivation() throws {
+        // The recursive placemarkCount/pointCount must equal the array-materializing
+        // allPlacemarks derivation they replace.
+        let doc = try parse("geometry.kml")
+        let all = doc.root.allPlacemarks
+        #expect(doc.placemarkCount == all.count)
+        #expect(doc.pointCount == all.filter(\.hasPoint).count)
+    }
+
     @Test func parse_lineAndPolyStyleParsed() throws {
         let doc = try parse("geometry.kml")
         let style = doc.styles["ls"]

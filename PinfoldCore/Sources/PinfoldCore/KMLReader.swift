@@ -15,18 +15,31 @@ public struct ParsedKML: Sendable {
     }
 }
 
+/// Errors surfaced by `KMLReader` above the bare-bytes `KMLParser` layer.
+public enum KMLReadError: Error {
+    /// A KMZ archive extracted fine, but its root KML entry failed to parse. Carries the
+    /// archive-relative entry name so the failure can be attributed to the right file.
+    case kmzEntryParseFailed(entry: String, underlying: Error)
+}
+
 public enum KMLReader {
     /// Reads KML or KMZ bytes and returns the parsed document plus any embedded resources.
     public static func read(data: Data) throws -> ParsedKML {
         if KMZArchive.isKMZ(data) {
             let contents = try KMZArchive.extract(data)
-            return ParsedKML(document: try KMLParser.parse(data: contents.rootKML),
+            let document: KMLDocument
+            do {
+                document = try KMLParser.parse(data: contents.rootKML)
+            } catch {
+                throw KMLReadError.kmzEntryParseFailed(entry: contents.rootKMLPath, underlying: error)
+            }
+            return ParsedKML(document: document,
                              embeddedResources: contents.resources,
                              rootKMLPath: contents.rootKMLPath)
         } else {
-            return ParsedKML(document: try KMLParser.parse(data: data),
-                             embeddedResources: [:],
-                             rootKMLPath: nil)
+            return try ParsedKML(document: KMLParser.parse(data: data),
+                                 embeddedResources: [:],
+                                 rootKMLPath: nil)
         }
     }
 }
