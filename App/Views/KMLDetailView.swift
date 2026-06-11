@@ -28,6 +28,19 @@ struct KMLDetailView: View {
     @State private var loadError: Error?
     @State private var searchText = ""
     @State private var annotations: PlacemarkAnnotations?
+    /// Collapsed folder ids (tree paths like "0/2"). Toggled by tapping a folder row;
+    /// ignored while searching (the outline force-expands then).
+    @State private var collapsedFolderIDs: Set<String> = []
+    /// The memoized flattened outline, recomputed off-main (debounced for search-text
+    /// changes) via the `.task(id:)` below. `nil` until the first build completes.
+    @State private var outline: PlacemarkOutline?
+    /// The query the current `outline` was built for. Used to tell a search-text change
+    /// (debounce) from a collapse toggle (rebuild immediately) inside `rebuildOutline`.
+    @State private var lastBuiltQuery = ""
+
+    /// Debounce window for search-text changes before rebuilding the outline. Collapse
+    /// toggles are not debounced (they compare equal query and skip the sleep).
+    private static let searchDebounce: Duration = .milliseconds(250)
 
     // MARK: - Body
 
@@ -53,7 +66,7 @@ struct KMLDetailView: View {
                 NavigationLink {
                     if let document {
                         PlacemarkMapView(
-                            placemarks: mappablePlacemarks,
+                            placemarks: outline?.mappablePlacemarks ?? [],
                             document: document,
                             entry: entry
                         )
@@ -67,25 +80,67 @@ struct KMLDetailView: View {
                     Image(systemName: "map")
                 }
                 .accessibilityLabel("Map")
-                .disabled(mappablePlacemarks.isEmpty)
+                .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
             }
         }
         .task(id: entry.id) {
             annotations = nil
             document = nil
             loadError = nil
+            outline = nil
+            lastBuiltQuery = ""
+            collapsedFolderIDs = []
             await loadDocument()
+        }
+        // Recompute the flattened outline off-main when the document, query, or collapse
+        // set changes. `.task(id:)` auto-cancels the in-flight build when the trigger
+        // changes again, so rapid typing only keeps the latest. A ~250ms debounce is
+        // applied only when the *query* changed (collapse toggles rebuild immediately).
+        .task(id: OutlineTrigger(
+            documentID: entry.id,
+            documentLoaded: document != nil,
+            query: searchText,
+            collapsed: collapsedFolderIDs
+        )) {
+            await rebuildOutline()
         }
         .environment(annotations)
     }
 
-    // MARK: - Mappable placemarks
+    // MARK: - Outline rebuild
 
-    /// Point placemarks to plot on the map: the current search results (all placemarks
-    /// when the query is empty) filtered to those that have a coordinate.
-    private var mappablePlacemarks: [KMLPlacemark] {
-        guard let document else { return [] }
-        return placemarksMatching(searchText, in: document).filter { $0.coordinate != nil }
+    /// Identity that drives the outline rebuild `.task`. Equatable so SwiftUI restarts the
+    /// task only on a real change; carries enough to detect query-vs-collapse changes.
+    private struct OutlineTrigger: Equatable {
+        let documentID: CatalogEntry.ID
+        /// Flips false→true when the parsed document finishes loading, so the first outline
+        /// build fires then (the document is loaded asynchronously after first appearance).
+        let documentLoaded: Bool
+        let query: String
+        let collapsed: Set<String>
+    }
+
+    /// Debounced, cancel-safe rebuild of `outline`. When the only thing that changed since
+    /// the last build was the search text, waits `searchDebounce` first (coalescing
+    /// keystrokes); collapse toggles skip the wait. The build itself runs in a detached
+    /// task because `KMLContainer`/`KMLPlacemark` are `Sendable` value types.
+    private func rebuildOutline() async {
+        guard let document else { return }
+        let query = searchText
+        let collapsed = collapsedFolderIDs
+        // Debounce only when the query changed; a collapse toggle leaves the query equal
+        // to the last-built one, so it rebuilds immediately.
+        if query != lastBuiltQuery {
+            try? await Task.sleep(for: Self.searchDebounce)
+            if Task.isCancelled { return }
+        }
+        let root = document.root
+        let built = await Task.detached(priority: .userInitiated) {
+            PlacemarkOutline.build(from: root, matching: query, collapsed: collapsed)
+        }.value
+        if Task.isCancelled { return }
+        outline = built
+        lastBuiltQuery = query
     }
 
     // MARK: - Load document
@@ -108,27 +163,86 @@ struct KMLDetailView: View {
 
     // MARK: - Content list
 
-    /// A single inset-grouped list: the search field row, then either the full hierarchy
-    /// (no query) or the pruned hierarchy (active query). Folders are force-expanded while
-    /// searching so matches nested in collapsed folders aren't hidden.
+    /// A single inset-grouped list: the search field row, then the flattened placemark
+    /// outline. Rendering a flat `[PlacemarkOutline.Row]` (instead of nested `Section`/
+    /// `DisclosureGroup` trees built via `AnyView`) lets `List` lazily realize and diff
+    /// rows, and confines per-keystroke work to one memoized, debounced tree walk.
     @ViewBuilder
     private func contentList(_ document: KMLDocument) -> some View {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         List {
             searchSection
-            if query.isEmpty {
-                hierarchyContent(document.root, document: document, forceExpanded: false)
-            } else if let root = filteredContainer(document.root, matching: query) {
-                hierarchyContent(root, document: document, forceExpanded: true)
-            } else {
-                Section {
-                    Text("No placemarks match \u{201C}\(query)\u{201D}.")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
+            if let outline {
+                if outline.rows.isEmpty, !query.isEmpty {
+                    Section {
+                        Text("No placemarks match \u{201C}\(query)\u{201D}.")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                } else {
+                    Section {
+                        ForEach(outline.rows) { row in
+                            outlineRow(row, document: document)
+                        }
+                    }
                 }
             }
         }
         .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Outline row
+
+    /// Renders a single flattened outline row by kind, indented by its depth. Folder rows
+    /// toggle their membership in `collapsedFolderIDs` (and rotate a chevron like a
+    /// `DisclosureGroup`); while searching the outline ignores that set, so the chevron is
+    /// shown expanded and tapping it has no visible effect until the query is cleared.
+    @ViewBuilder
+    private func outlineRow(_ row: PlacemarkOutline.Row, document: KMLDocument) -> some View {
+        switch row.kind {
+        case let .folder(name, id):
+            folderRow(name: name, id: id)
+                .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+        case let .placemark(placemark):
+            placemarkLink(placemark, document: document)
+                .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+        }
+    }
+
+    /// Base list-row leading inset plus the per-depth indent.
+    private func leadingInset(_ depth: Int) -> CGFloat {
+        16 + CGFloat(depth) * 16
+    }
+
+    /// A tappable folder header row with a disclosure chevron that rotates with the
+    /// collapsed state. A non-empty search ignores the collapsed set, so the chevron is
+    /// pinned open while searching.
+    private func folderRow(name: String, id: String) -> some View {
+        let searching = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        let collapsed = !searching && collapsedFolderIDs.contains(id)
+        return Button {
+            if collapsedFolderIDs.contains(id) {
+                collapsedFolderIDs.remove(id)
+            } else {
+                collapsedFolderIDs.insert(id)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(searching)
+        .accessibilityLabel(name)
+        .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
     }
 
     // MARK: - Search field row
@@ -156,58 +270,6 @@ struct KMLDetailView: View {
                     .accessibilityLabel("Clear search")
                 }
             }
-        }
-    }
-
-    // MARK: - Hierarchy content
-
-    /// The hierarchy rows for `root`, intended to be composed directly inside `contentList`'s
-    /// `List` (it deliberately does not wrap itself in a `List`).
-    @ViewBuilder
-    private func hierarchyContent(_ root: KMLContainer, document: KMLDocument, forceExpanded: Bool) -> some View {
-        // Root-level placemarks (before any folders)
-        ForEach(root.placemarks) { placemark in
-            placemarkLink(placemark, document: document)
-        }
-        // Root-level folders rendered as Sections
-        ForEach(root.children) { container in
-            AnyView(containerSection(container, document: document, forceExpanded: forceExpanded))
-        }
-    }
-
-    // MARK: - Recursive container view (uses AnyView to break the self-referencing opaque type cycle)
-
-    private func containerSection(_ container: KMLContainer, document: KMLDocument, forceExpanded: Bool) -> some View {
-        Section {
-            ForEach(container.placemarks) { placemark in
-                placemarkLink(placemark, document: document)
-            }
-            ForEach(container.children) { child in
-                AnyView(nestedContainerDisclosure(child, document: document, forceExpanded: forceExpanded))
-            }
-        } header: {
-            Text(container.name ?? "Folder")
-        }
-    }
-
-    @ViewBuilder
-    private func nestedContainerDisclosure(
-        _ container: KMLContainer,
-        document: KMLDocument,
-        forceExpanded: Bool
-    ) -> some View {
-        let content = Group {
-            ForEach(container.placemarks) { placemark in
-                placemarkLink(placemark, document: document)
-            }
-            ForEach(container.children) { child in
-                AnyView(nestedContainerDisclosure(child, document: document, forceExpanded: forceExpanded))
-            }
-        }
-        if forceExpanded {
-            DisclosureGroup(container.name ?? "Folder", isExpanded: .constant(true)) { content }
-        } else {
-            DisclosureGroup(container.name ?? "Folder") { content }
         }
     }
 
