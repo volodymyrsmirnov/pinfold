@@ -87,7 +87,6 @@ The catalogue is **folder-as-source-of-truth**: each imported file lives in its 
 ├── ShareExtension/       # Share-sheet extension that drops files into the shared inbox
 ├── AppTests/             # App test suite (Swift Testing)
 ├── PinfoldCore/          # Standalone KML/KMZ parser package (+ its own tests)
-├── samples/              # Sample .kml / .kmz files for testing
 ├── scripts/              # build.sh, test.sh
 ├── docs/                 # Design specs, plans, icon assets
 ├── project.yml           # XcodeGen source of truth (generates Pinfold.xcodeproj)
