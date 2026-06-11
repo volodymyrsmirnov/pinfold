@@ -11,6 +11,10 @@ import Observation
 /// `importRequested` is a monotonically-increasing counter rather than a `Bool`: a counter
 /// triggers `.onChange` on every invocation, so pressing ⌘I again after dismissing the picker
 /// re-presents it. A `Bool` toggled true-then-reset would need careful resetting to fire twice.
+///
+/// This environment-object approach assumes effectively single-active-importer semantics: in a
+/// multi-window iPad setup every window observes the same counter. If true multi-window command
+/// routing is ever needed, `FocusedValues` (routing to the key window) is the upgrade path.
 @MainActor @Observable
 final class AppCommands {
     /// Bumped each time the user invokes the "Import…" command. `HomeView` observes changes

@@ -13,7 +13,7 @@ private enum Segment: Hashable {
 /// The root screen of Pinfold.
 ///
 /// Shows a segmented Files / Trash list. The "+" toolbar button opens a `fileImporter`
-/// to pick KML/KMZ files. The gear toolbar button navigates to Settings (Chunk 4b stub).
+/// to pick KML/KMZ files. The gear toolbar button presents Settings as a modal sheet.
 ///
 /// Layout: the `NavigationTitle` "Pinfold" stays in the nav bar; the segmented Picker
 /// lives in a `safeAreaInset` bar above the List so it never replaces the title; empty
