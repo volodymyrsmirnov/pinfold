@@ -171,6 +171,11 @@ struct HomeView: View {
         .onChange(of: appCommands.searchFocusRequested) { _, _ in
             isSearchFocused = true
         }
+        // Reset a stale tag filter when its tag vanishes. MUST hang off the always-mounted
+        // body, not `tagChipsBar` (which unmounts when the last tag goes — see HomeViewTags).
+        .onChange(of: allTags) { _, tags in
+            resetStaleTagFilter(tags)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -318,27 +323,9 @@ struct HomeView: View {
             }
             Button("Cancel", role: .cancel) { renameTarget = nil }
         }
-        // Edit Tags alert — a single TextField of comma-separated tags, prefilled by joining the
-        // entry's current tags. Save splits on commas and hands the raw parts to
-        // `catalog.setTags`, which trims/dedupes/sorts them (see `Catalog.normalizeTags`).
-        .alert(
-            "Edit Tags",
-            isPresented: Binding(
-                get: { tagsTarget != nil },
-                set: { if !$0 { tagsTarget = nil } }
-            ),
-            presenting: tagsTarget
-        ) { entry in
-            TextField("Tags, comma-separated", text: $tagsText)
-            Button("Save") {
-                let parsed = tagsText.split(separator: ",").map(String.init)
-                Task { await catalog.setTags(parsed, for: entry) }
-                tagsTarget = nil
-            }
-            Button("Cancel", role: .cancel) { tagsTarget = nil }
-        } message: { _ in
-            Text("Separate tags with commas.")
-        }
+        // Edit Tags alert — the full alert tree lives in `EditTagsAlertModifier`
+        // (HomeViewTags.swift) so this body chain stays inside the type-checker's budget.
+        .modifier(EditTagsAlertModifier(target: $tagsTarget, text: $tagsText, save: saveTags))
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.

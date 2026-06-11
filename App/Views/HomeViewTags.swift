@@ -28,6 +28,26 @@ extension HomeView {
         return result.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
+    /// Clears `selectedTag` when it is no longer one of the live tags, so the Files list never
+    /// silently filters to empty. Called from an `.onChange(of: allTags)` on HomeView's
+    /// always-mounted body — NOT from inside `tagChipsBar` — because the bar is conditionally
+    /// mounted on `!allTags.isEmpty`: when the LAST tagged entry is untagged/trashed while its
+    /// tag is the active filter, the bar (and any `.onChange` attached to it) unmounts in the
+    /// same update WITHOUT firing, leaving `selectedTag` stale, `displayedActive` empty, and no
+    /// chips visible to recover. Hoisted to the body, the reset covers BOTH that all-tags-gone
+    /// case (`tags` empty → `contains` fails → reset) and the partial-vanish case (the selected
+    /// tag gone while other tags remain).
+    func resetStaleTagFilter(_ tags: [String]) {
+        if let selectedTag, !tags.contains(selectedTag) { self.selectedTag = nil }
+    }
+
+    /// Commits the Edit Tags alert: hands the raw comma-split parts to `catalog.setTags`, which
+    /// trims/dedupes/sorts them (see `Catalog.normalizeTags`). A named method (not an inline
+    /// closure in `body`) so the `.modifier(...)` line stays cheap to type-check.
+    func saveTags(_ entry: CatalogEntry, _ parts: [String]) {
+        Task { await catalog.setTags(parts, for: entry) }
+    }
+
     /// A horizontally-scrolling row of tag filter chips, shown only on the Files segment, only
     /// when not searching, and only when at least one active entry has a tag. An "All" chip
     /// clears the filter; each tag chip toggles `selectedTag`. Hidden during search to keep the
@@ -49,11 +69,49 @@ extension HomeView {
                 .padding(.horizontal)
             }
             .padding(.bottom, 8)
-            // If the selected tag disappears (e.g. its last entry is renamed/untagged/trashed),
-            // fall back to "All" so the list never silently shows nothing.
-            .onChange(of: allTags) { _, tags in
-                if let selectedTag, !tags.contains(selectedTag) { self.selectedTag = nil }
+            // NOTE: the stale-selectedTag reset deliberately does NOT live here. This bar is
+            // conditionally mounted (`!allTags.isEmpty`): when the LAST tagged entry loses its
+            // tag, the bar unmounts in the same update and an `.onChange` attached here would
+            // never fire — `selectedTag` would go stale and the list would filter to empty
+            // with no chips visible to recover. The reset lives on HomeView's always-mounted
+            // body instead (`.onChange(of: allTags)` in HomeView.swift), which calls
+            // `resetStaleTagFilter` above.
+        }
+    }
+}
+
+// MARK: - EditTagsAlertModifier
+
+/// The Edit Tags alert — a single TextField of comma-separated tags, prefilled by joining the
+/// entry's current tags (see `beginEditTags` in HomeViewRows). Packaged as a `ViewModifier` so
+/// `HomeView.body`'s already-long modifier chain carries one `.modifier(...)` line instead of
+/// the full alert closure tree, which pushed the expression past the type-checker's budget.
+struct EditTagsAlertModifier: ViewModifier {
+    /// The entry being edited; non-nil presents the alert, dismissal nils it.
+    @Binding var target: CatalogEntry?
+    /// The comma-separated tags text bound to the alert's TextField.
+    @Binding var text: String
+    /// Commit callback: the entry plus the raw comma-split parts (normalization is the
+    /// callee's job — see `HomeView.saveTags`).
+    let save: (CatalogEntry, [String]) -> Void
+
+    func body(content: Content) -> some View {
+        content.alert(
+            "Edit Tags",
+            isPresented: Binding(
+                get: { target != nil },
+                set: { if !$0 { target = nil } }
+            ),
+            presenting: target
+        ) { entry in
+            TextField("Tags, comma-separated", text: $text)
+            Button("Save") {
+                save(entry, text.split(separator: ",").map(String.init))
+                target = nil
             }
+            Button("Cancel", role: .cancel) { target = nil }
+        } message: { _ in
+            Text("Separate tags with commas.")
         }
     }
 }
