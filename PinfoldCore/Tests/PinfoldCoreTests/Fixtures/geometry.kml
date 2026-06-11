@@ -65,5 +65,43 @@
         </LineString>
       </MultiGeometry>
     </Placemark>
+    <Placemark>
+      <name>TwoPolys</name>
+      <MultiGeometry>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates>
+                100.0,10.0,0
+                101.0,10.0,0
+                101.0,11.0,0
+                100.0,11.0,0
+              </coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+          <innerBoundaryIs>
+            <LinearRing>
+              <coordinates>
+                100.4,10.4,0
+                100.6,10.4,0
+                100.5,10.6,0
+              </coordinates>
+            </LinearRing>
+          </innerBoundaryIs>
+        </Polygon>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates>
+                120.0,20.0,0
+                121.0,20.0,0
+                121.0,21.0,0
+                120.0,21.0,0
+              </coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+        </Polygon>
+      </MultiGeometry>
+    </Placemark>
   </Document>
 </kml>

@@ -63,8 +63,36 @@ struct GeometryTests {
         // Point coordinate preserved, not clobbered by line vertices.
         #expect(pm?.coordinate?.longitude == 55.5)
         #expect(pm?.coordinate?.latitude == 33.3)
-        // Line still captured.
-        #expect(pm?.geometries.contains { if case .lineString = $0 { true } else { false } } == true)
+        // Line still captured, with its vertices in document order.
+        guard case let .lineString(coords)? = pm?.geometries.first else {
+            Issue.record("expected a lineString geometry")
+            return
+        }
+        #expect(coords.map(\.longitude) == [10.0, 11.0])
+        #expect(coords.map(\.latitude) == [20.0, 21.0])
+    }
+
+    @Test func parse_multiPolygonBuffersResetBetweenGeometries() throws {
+        // Two consecutive Polygons inside one MultiGeometry: pins the buffer-reset path —
+        // the second polygon must not inherit the first one's outer ring or inner rings.
+        let doc = try parse("geometry.kml")
+        let pm = placemark("TwoPolys", in: doc)
+        #expect(pm?.geometries.count == 2)
+        guard case let .polygon(outer1, inners1)? = pm?.geometries.first,
+              case let .polygon(outer2, inners2)? = pm?.geometries.last
+        else {
+            Issue.record("expected two polygon geometries")
+            return
+        }
+        // Distinct outer rings, each with its own coordinates.
+        #expect(outer1.map(\.longitude) == [100.0, 101.0, 101.0, 100.0])
+        #expect(outer1.map(\.latitude) == [10.0, 10.0, 11.0, 11.0])
+        #expect(outer2.map(\.longitude) == [120.0, 121.0, 121.0, 120.0])
+        #expect(outer2.map(\.latitude) == [20.0, 20.0, 21.0, 21.0])
+        // The inner ring belongs to the FIRST polygon only.
+        #expect(inners1.count == 1)
+        #expect(inners1.first?.map(\.longitude) == [100.4, 100.6, 100.5])
+        #expect(inners2.isEmpty)
     }
 
     @Test func counts_matchAllPlacemarksDerivation() throws {
