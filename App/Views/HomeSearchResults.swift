@@ -61,6 +61,14 @@ extension HomeView {
 
     /// Opens the file containing a Places hit, deep-linking to the placemark: selects the
     /// entry and hands the placemark name to the detail view as a one-shot outline filter.
+    ///
+    /// Works for both selection states:
+    /// - **Different file**: the selection change rebuilds `KMLDetailView` under a new
+    ///   identity; its `.task(id: entry.id)` reads `initialSearch` on first load.
+    /// - **Already-open file**: `selection = entry.id` is a same-value write (no identity
+    ///   change), but the `pendingDetailSearch` nil→name change alone re-evaluates the detail
+    ///   body with the new `initialSearch` param, which the detail's
+    ///   `.onChange(of: initialSearch)` consumes live.
     private func openPlaceHit(_ hit: PlacemarkIndex.Hit) {
         guard let entry = active.first(where: { $0.storageFolderName == hit.folderName }) else { return }
         // Seed the deep-link filter BEFORE changing the selection so the detail view, rebuilt

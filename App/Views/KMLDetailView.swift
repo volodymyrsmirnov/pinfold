@@ -102,6 +102,20 @@ struct KMLDetailView: View {
             }
             await loadDocument()
         }
+        // Second consume path: a deep link into the file that is ALREADY open. The view keeps
+        // its identity (`.id(entry.id)` unchanged), so the `.task(id: entry.id)` above does NOT
+        // refire — but SwiftUI still re-evaluates the body with the new `initialSearch` param
+        // (same identity, new data), and this `.onChange` observes that nil→"X" transition.
+        // Without it the deep link would silently no-op AND the un-consumed value would leak
+        // into the next normal selection's fresh `.task`, pre-filtering the wrong file.
+        // No double-apply with the `.task` path: consuming nils the source, so the param's
+        // follow-up "X"→nil change is guarded out, and `.onChange` never fires for the value
+        // a fresh identity was *created* with (only the `.task` handles that one).
+        .onChange(of: initialSearch) { _, newValue in
+            guard let newValue, !newValue.isEmpty else { return }
+            searchText = newValue
+            onConsumeInitialSearch()
+        }
         // The outline rebuild is driven by TWO independent triggers so the debounce policy
         // derives from *which trigger fired*, never from mutable post-build state (a single
         // task comparing against a "last built query" could mis-debounce a collapse toggle
