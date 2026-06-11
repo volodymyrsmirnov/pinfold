@@ -95,4 +95,28 @@ struct EntryMetadata: Codable, Equatable {
     static func decoded(from data: Data) throws -> EntryMetadata {
         try JSONDecoder().decode(EntryMetadata.self, from: data)
     }
+
+    /// Resolves an iCloud edit conflict by merging this (the current, on-disk winner) with
+    /// the loser `conflicts` versions, producing a single sidecar that loses no user intent.
+    ///
+    /// Merge rules:
+    /// - `favoriteKeys` / `visitedKeys`: **union** across all versions. Marks made on
+    ///   different devices are additive — neither device's stars/visited flags are dropped.
+    /// - Scalar identity/content fields (`id`, `displayName`, `sourceFilename`, `importDate`,
+    ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
+    ///   underlying file, so the winning version is authoritative; there is nothing to merge.
+    /// - `trashedAt`: the **maximum** of all non-nil `trashedAt` values across current and
+    ///   conflicts, or `nil` if every version is non-trashed. A trash performed on one device
+    ///   therefore wins over an unaware copy (deletion is the user's most recent intent), and
+    ///   when two devices both trashed, the later timestamp survives.
+    func merging(conflicts: [EntryMetadata]) -> EntryMetadata {
+        var merged = self
+        for other in conflicts {
+            merged.favoriteKeys.formUnion(other.favoriteKeys)
+            merged.visitedKeys.formUnion(other.visitedKeys)
+        }
+        let trashStamps = ([self] + conflicts).compactMap(\.trashedAt)
+        merged.trashedAt = trashStamps.max()
+        return merged
+    }
 }

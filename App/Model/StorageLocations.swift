@@ -143,17 +143,54 @@ struct StorageLocations {
             .first
     }
 
+    // MARK: - Coordinated file I/O
+
+    /// Reads `url` under an `NSFileCoordinator` read lock, so a concurrent iCloud daemon
+    /// write can't tear the file out from under us. Applied unconditionally: for local
+    /// (non-ubiquitous) files coordination is cheap and a transparent pass-through, and the
+    /// synced root may be the iCloud container, where racing the daemon is the actual bug.
+    private func coordinatedRead(at url: URL) throws -> Data {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        // NSFileCoordinator surfaces accessor failures through the `byAccessor` closure, not
+        // its own `error` out-param, so capture into an outer var and rethrow afterwards.
+        var accessorError: Error?
+        var result: Data?
+        var coordinationError: NSError?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
+            do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let accessorError { throw accessorError }
+        // `result` is non-nil whenever neither error fired.
+        return result ?? Data()
+    }
+
+    /// Writes `data` to `url` under an `NSFileCoordinator` write lock (`.forReplacing`),
+    /// atomically. Applied unconditionally for the same reason as `coordinatedRead`.
+    private func coordinatedWrite(_ data: Data, to url: URL) throws {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var accessorError: Error?
+        var coordinationError: NSError?
+        coordinator.coordinate(
+            writingItemAt: url, options: .forReplacing, error: &coordinationError
+        ) { writeURL in
+            do { try data.write(to: writeURL, options: .atomic) } catch { accessorError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let accessorError { throw accessorError }
+    }
+
     // MARK: - Sidecar I/O
 
     /// Writes the sidecar `metadata.json` for `entry` (folder must already exist).
     func writeMetadata(_ metadata: EntryMetadata, for entry: CatalogEntry) throws {
-        try metadata.encoded().write(to: metadataFile(for: entry), options: .atomic)
+        try coordinatedWrite(metadata.encoded(), to: metadataFile(for: entry))
     }
 
     /// Writes the sidecar into a raw folder name (used by the reconciler to backfill a
     /// sidecar for a pre-existing entry that predates iCloud sync). Folder must exist.
     func writeMetadata(_ metadata: EntryMetadata, forFolderNamed name: String) throws {
-        try metadata.encoded().write(to: metadataFile(forFolderNamed: name), options: .atomic)
+        try coordinatedWrite(metadata.encoded(), to: metadataFile(forFolderNamed: name))
     }
 
     /// Reads the sidecar for a raw folder name, or `nil` if the file is absent.
@@ -161,7 +198,8 @@ struct StorageLocations {
     func readMetadata(forFolderNamed name: String) throws -> EntryMetadata? {
         let url = metadataFile(forFolderNamed: name)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        return try EntryMetadata.decoded(from: Data(contentsOf: url))
+        let meta = try EntryMetadata.decoded(from: coordinatedRead(at: url))
+        return resolvingConflicts(of: meta, at: url)
     }
 
     /// Reads the sidecar for a raw folder name, distinguishing *absent* from *undecodable*.
@@ -174,10 +212,45 @@ struct StorageLocations {
     func readSidecar(forFolderNamed name: String) -> SidecarReadResult {
         let url = metadataFile(forFolderNamed: name)
         guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
-        guard let data = try? Data(contentsOf: url),
+        guard let data = try? coordinatedRead(at: url),
               let meta = try? EntryMetadata.decoded(from: data)
         else { return .unreadable }
-        return .ok(meta)
+        return .ok(resolvingConflicts(of: meta, at: url))
+    }
+
+    /// Best-effort resolution of iCloud edit conflicts for a sidecar we've **already decoded
+    /// successfully** (`current`). When two devices edited the same `metadata.json`, iCloud
+    /// keeps the losing versions as conflict siblings; left alone they're never reconciled and
+    /// one device's favorites/visited/trash silently disappears.
+    ///
+    /// We union-merge every decodable conflict version into `current` (see
+    /// `EntryMetadata.merging(conflicts:)`), write the merged result back, and mark the
+    /// conflicts resolved. The entire block is best-effort (`try?`-style): a failure here must
+    /// never block reading, and on local roots / in tests there are never any conflict
+    /// versions, so it is fully inert (returns `current` unchanged). Gating on a successful
+    /// decode of `current` preserves the never-overwrite-an-unreadable-sidecar invariant.
+    private func resolvingConflicts(of current: EntryMetadata, at url: URL) -> EntryMetadata {
+        let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) ?? []
+        guard !conflicts.isEmpty else { return current }
+
+        let decoded = conflicts.compactMap { version -> EntryMetadata? in
+            guard let data = try? Data(contentsOf: version.url) else { return nil }
+            return try? EntryMetadata.decoded(from: data)
+        }
+        let merged = current.merging(conflicts: decoded)
+
+        do {
+            try coordinatedWrite(merged.encoded(), to: url)
+            for version in conflicts {
+                version.isResolved = true
+            }
+            try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+            return merged
+        } catch {
+            // Couldn't persist the merge; return the in-memory union so the caller at least
+            // sees the combined state for this read, leaving conflicts to retry next time.
+            return merged
+        }
     }
 
     /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field

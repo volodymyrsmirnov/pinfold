@@ -1,11 +1,10 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `StorageLocations` — pure on-disk path construction and
 /// folder create/remove operations under a temporary root.
-@Suite struct StorageLocationsTests {
-
+struct StorageLocationsTests {
     // MARK: - Helpers
 
     /// Returns a fresh temp root that does NOT yet exist on disk, so each test
@@ -215,6 +214,31 @@ import Foundation
         #expect(reloaded.visitedKeys == ["id:seen"])
         #expect(reloaded.pointCount == 1)
         #expect(reloaded.contentSHA256 == "x")
+    }
+
+    @Test func coordinatedIO_metadataRoundTripUnchanged() throws {
+        // NSFileCoordinator-routed write/read must be transparent for plain (non-ubiquitous)
+        // files on a local temp root: the round-tripped metadata is byte-for-byte equal.
+        let locations = StorageLocations(root: makeTempRoot(), cacheRoot: makeTempRoot())
+        let entry = makeEntry(storageFolderName: "coordinated")
+        try locations.createFolders(for: entry)
+
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "Coord", sourceFilename: "c.kml",
+            importDate: Date(timeIntervalSince1970: 42), pointCount: 7,
+            contentSHA256: "sha", trashedAt: nil,
+            favoriteKeys: ["id:a", "id:b"], visitedKeys: ["id:c"]
+        )
+        try locations.writeMetadata(meta, for: entry)
+
+        let viaForName = try #require(try locations.readMetadata(forFolderNamed: "coordinated"))
+        #expect(viaForName == meta)
+
+        guard case let .ok(viaSidecar) = locations.readSidecar(forFolderNamed: "coordinated") else {
+            Issue.record("expected .ok from readSidecar")
+            return
+        }
+        #expect(viaSidecar == meta)
     }
 
     @Test func updateMetadata_isNoOp_whenSidecarAbsent() throws {

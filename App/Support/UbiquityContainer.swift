@@ -8,7 +8,6 @@ import Foundation
 /// (not signed in, restricted, or — as on the unsigned simulator — no container at all),
 /// in which case the app falls back to local Application Support storage.
 enum UbiquityContainer {
-
     /// Matches the iCloud container declared in the entitlements and `NSUbiquitousContainers`.
     static let identifier = "iCloud.tech.inkhorn.pinfold"
 
@@ -39,6 +38,17 @@ enum UbiquityContainer {
                 Thread.sleep(forTimeInterval: 0.3)
             }
         }
-        return try Data(contentsOf: url)
+        // Read under a file-coordination read lock so a concurrent iCloud daemon write of the
+        // freshly-materialized file can't tear the read. Transparent for local files.
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var accessorError: Error?
+        var result: Data?
+        var coordinationError: NSError?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
+            do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
+        }
+        if let coordinationError { throw coordinationError }
+        if let accessorError { throw accessorError }
+        return result ?? Data()
     }
 }
