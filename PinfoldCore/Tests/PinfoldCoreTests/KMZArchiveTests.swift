@@ -1,8 +1,57 @@
 import Foundation
 @testable import PinfoldCore
 import Testing
+import ZIPFoundation
 
 struct KMZArchiveTests {
+    /// Builds an in-memory zip archive containing the given entries.
+    private func makeZip(_ entries: [(path: String, data: Data)]) throws -> Data {
+        let archive = try Archive(accessMode: .create)
+        for (path, data) in entries {
+            try archive.addEntry(with: path, type: .file,
+                                 uncompressedSize: Int64(data.count))
+            { position, size in
+                data.subdata(in: Int(position) ..< (Int(position) + size))
+            }
+        }
+        return archive.data!
+    }
+
+    private var minimalKML: Data {
+        Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document><name>Zipped</name></Document>
+        </kml>
+        """.utf8)
+    }
+
+    @Test func extract_skipsPathTraversalEntries() throws {
+        let zip = try makeZip([
+            ("../evil.png", Data([0x01, 0x02])),
+            ("/abs.png", Data([0x03, 0x04])),
+            ("doc.kml", minimalKML),
+        ])
+        let contents = try KMZArchive.extract(zip)
+        #expect(contents.resources["../evil.png"] == nil)
+        #expect(contents.resources["/abs.png"] == nil)
+        // Parsing the root KML still succeeds despite the skipped entries.
+        let doc = try KMLParser.parse(data: contents.rootKML)
+        #expect(doc.name == "Zipped")
+    }
+
+    @Test func extract_normalizesDotSegments() throws {
+        let zip = try makeZip([
+            ("images/./icon.png", Data([0x05, 0x06])),
+            ("doc.kml", minimalKML),
+        ])
+        let contents = try KMZArchive.extract(zip)
+        #expect(contents.resources.keys.contains("images/icon.png"))
+        #expect(contents.resources.keys.allSatisfy { key in
+            !key.split(separator: "/").contains("..")
+        })
+    }
+
     @Test func detectsKMZMagic() throws {
         #expect(try KMZArchive.isKMZ(Fixture.data("Rome.kmz")) == true)
         #expect(try KMZArchive.isKMZ(Fixture.data("Rome.kml")) == false)
