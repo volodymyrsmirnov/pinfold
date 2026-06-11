@@ -86,14 +86,19 @@ import Observation
     }
 
     /// Moves an entry to Trash by setting `trashedAt` in its sidecar, then reloading.
+    ///
+    /// A trashed entry should disappear from system (Core Spotlight) search, so its items are
+    /// removed here. Restore re-indexes them.
     func moveToTrash(_ entry: CatalogEntry) async {
         writeTrashedAt(.now, to: entry)
+        SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries(for: entry))
         await reload()
     }
 
     /// Restores a trashed entry by clearing `trashedAt` in its sidecar, then reloading.
     func restore(_ entry: CatalogEntry) async {
         writeTrashedAt(nil, to: entry)
+        SpotlightIndexer.index(entry: entry, indexEntries: indexEntries(for: entry))
         await reload()
     }
 
@@ -107,6 +112,14 @@ import Observation
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.displayName = trimmed }
+        // Re-index the whole entry so Spotlight reflects the new name everywhere: the entry
+        // item's title AND every placemark item's contentDescription embed the display name, so
+        // a name-only reindex would leave stale "<old name>" subtitles on the placemark hits.
+        // The index file is one cheap read and we're already reloading from disk — correctness
+        // over the marginal cost of re-pushing the items.
+        var renamed = entry
+        renamed.displayName = trimmed
+        SpotlightIndexer.index(entry: renamed, indexEntries: indexEntries(for: entry))
         await reload()
     }
 
@@ -140,7 +153,11 @@ import Observation
 
     /// Permanently removes an entry's folder (and its resource cache), then reloads.
     func deleteForever(_ entry: CatalogEntry) async {
+        // Read the index BEFORE removing the folder so the placemark item ids can be
+        // reconstructed; otherwise the cache is gone and only the entry item would be removable.
+        let toRemove = indexEntries(for: entry)
         try? storage.removeFolder(named: entry.storageFolderName)
+        SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
         await reload()
     }
 
@@ -155,6 +172,12 @@ import Observation
     func setStorage(_ newStorage: StorageLocations) async {
         storage = newStorage
         await reload()
+    }
+
+    /// Reads an entry's `placemarks-index.json` rows (or `[]` when the index isn't present),
+    /// used to reconstruct Spotlight placemark item ids for (de)indexing.
+    private func indexEntries(for entry: CatalogEntry) -> [PlacemarkIndex.Entry] {
+        PlacemarkIndex.read(from: storage.resourcesDirectory(for: entry)) ?? []
     }
 
     private func writeTrashedAt(_ date: Date?, to entry: CatalogEntry) {

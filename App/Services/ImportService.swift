@@ -192,6 +192,10 @@ enum ImportService {
             await cache.downloadRemote(hrefs, to: resourcesDir)
         }
 
+        // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
+        // Fire-and-forget — a missing index is non-fatal and self-heals on the next pass.
+        SpotlightIndexer.index(entry: entry, indexEntries: result.indexEntries)
+
         return entry
     }
 }

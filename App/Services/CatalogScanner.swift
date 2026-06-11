@@ -64,6 +64,11 @@ struct CatalogScanner {
         let cache = cache
         Task.detached { await cache.downloadRemote(hrefs, to: resourcesDir) }
 
+        // A bare original we just rebuilt is searchable too (e.g. an entry that synced in as a
+        // sidecar-less original). Don't index a trashed entry (the sidecar's the source of trash
+        // state; a freshly-rebuilt one is always active here).
+        SpotlightIndexer.index(entry: derived.entry, indexEntries: derived.indexEntries)
+
         return derived.entry
     }
 
@@ -149,6 +154,10 @@ struct CatalogScanner {
             // Build the local search index in the same pass (we parsed the original anyway).
             try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
             await cache.downloadRemote(result.remoteResourceHrefs, to: resourcesDir)
+            // A folder freshly materialized on THIS device (synced in from another) becomes
+            // searchable here. Index from the sidecar (so the entry's display name + trash state
+            // are correct); skip trashed entries.
+            indexMaterializedEntry(forFolderNamed: name, indexEntries: result.indexEntries)
             didWork = true
         }
         return didWork
@@ -167,6 +176,18 @@ struct CatalogScanner {
               )
         else { return }
         try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        // Backfilled the index for an already-materialized folder — make it searchable too.
+        indexMaterializedEntry(forFolderNamed: name, indexEntries: result.indexEntries)
+    }
+
+    /// Adds the entry in `name` (plus its placemarks) to Core Spotlight, sourcing the entry's
+    /// display name and trash state from its sidecar. Skips a folder without a readable sidecar
+    /// or one that is trashed (a trashed entry shouldn't surface in system search). Fire-and-
+    /// forget via `SpotlightIndexer`.
+    private func indexMaterializedEntry(forFolderNamed name: String, indexEntries: [PlacemarkIndex.Entry]) {
+        guard case let .ok(meta) = storage.readSidecar(forFolderNamed: name), meta.trashedAt == nil else { return }
+        let entry = CatalogEntry(metadata: meta, storageFolderName: name)
+        SpotlightIndexer.index(entry: entry, indexEntries: indexEntries)
     }
 
     private func fileCreationDate(_ url: URL) -> Date {

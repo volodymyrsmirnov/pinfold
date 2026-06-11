@@ -1,3 +1,4 @@
+import CoreSpotlight
 import os
 import SwiftUI
 
@@ -63,11 +64,21 @@ private struct RootView: View {
         category: "import"
     )
 
+    /// Diagnostics for deep-link routing (App Intents + Spotlight taps) that resolve to a
+    /// missing/trashed entry — surfaced here rather than to the user (a no-op is fine).
+    private static let routingLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "spotlight"
+    )
+
     @State private var settings: AppSettings
     @State private var catalog: Catalog
     @State private var mapAppService: MapAppService
     @State private var resourceCache: ResourceCache
     @State private var watcher: CatalogWatcher?
+    /// Deep-link sink for App Intents (and any future programmatic navigation). Published to
+    /// `AppDependencies` at bootstrap so the out-of-tree `OpenEntryIntent` can drive selection.
+    @State private var router = NavigationRouter()
     /// Surfaces partial-migration failures to the Settings flow as an alert.
     @State private var migrationAlert = MigrationAlertState()
     /// Surfaces import failures (parse or I/O) from every arrival path to `HomeView`.
@@ -169,10 +180,75 @@ private struct RootView: View {
         .onChange(of: settings.syncEnabled) { _, _ in
             Task { await applyStorage(migrate: true) }
         }
+        // App Intents ("Open <file> in Pinfold") route here: the out-of-tree intent sets a
+        // pending folder name on the shared router; resolve it to an active entry and select it.
+        // Consume-once — clear the router so the same folder set twice still re-fires.
+        .onChange(of: router.pendingEntryFolderName) { _, folderName in
+            guard let folderName else { return }
+            router.pendingEntryFolderName = nil
+            openEntry(folderName: folderName)
+        }
+        // A Core Spotlight result tap arrives as a continued user activity. Parse the tapped
+        // item's identifier and route into the catalogue (entry → select; placemark → select +
+        // pre-filter the outline to the placemark name, the same flow as a "Places" search hit).
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            Task { await handleSpotlightActivity(activity) }
+        }
+    }
+
+    // MARK: - Deep-link routing (App Intents + Spotlight)
+
+    /// Selects the active entry with `folderName`, or logs and no-ops when it's missing/trashed.
+    private func openEntry(folderName: String) {
+        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
+            Self.routingLogger.info(
+                "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
+            )
+            return
+        }
+        pendingDetailSearch = nil
+        selectedEntryID = entry.id
+    }
+
+    /// Handles a Core Spotlight result tap. The identifier is the tapped item's `SpotlightID`:
+    /// an entry item selects its file; a placemark item selects the file AND pre-filters its
+    /// outline to the placemark's name (resolved off-main from the entry's `placemarks-index.json`).
+    private func handleSpotlightActivity(_ activity: NSUserActivity) async {
+        guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+              let parsed = SpotlightID.parse(raw)
+        else { return }
+
+        guard let entry = catalog.active.first(where: { $0.storageFolderName == parsed.folderName }) else {
+            Self.routingLogger.info(
+                "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
+            )
+            return
+        }
+
+        if let placemarkKey = parsed.placemarkKey {
+            // Resolve the placemark's name off-main from the entry's index file, then drive the
+            // existing consume-once outline pre-filter (same as Favorites / "Places" search).
+            let resourcesDir = catalog.storage.resourcesDirectory(for: entry)
+            let name = await placemarkName(forKey: placemarkKey, in: resourcesDir)
+            pendingDetailSearch = (name?.isEmpty == false) ? name : nil
+        } else {
+            pendingDetailSearch = nil
+        }
+        selectedEntryID = entry.id
+    }
+
+    /// Reads the name of the placemark with `key` from an entry's `placemarks-index.json`,
+    /// off the main actor. A `nonisolated` free function (called from the view) so the
+    /// `Task.detached` closure stays out of the view's SIL — mirrors `FavoritesView`'s pattern.
+    private func placemarkName(forKey key: String, in resourcesDir: URL) async -> String? {
+        await readPlacemarkName(forKey: key, in: resourcesDir)
     }
 
     /// One-time startup: resolve the active root, drain the inbox, reload, start watching.
     private func bootstrap() async {
+        // Publish the live services so out-of-tree App Intents can resolve entities and route.
+        AppDependencies.shared.catalog = catalog
+        AppDependencies.shared.router = router
         await applyStorage(migrate: false)
         await drainInbox()
         await drainDocumentsInbox()
@@ -367,4 +443,16 @@ private struct RootView: View {
         )
         await inbox.drain()
     }
+}
+
+// MARK: - Off-main placemark name lookup
+
+/// Reads the name of the placemark with `key` from the `placemarks-index.json` in
+/// `resourcesDir`, off the main actor. Returns `nil` if the index is absent or the key isn't
+/// found. A top-level `nonisolated` function (not a method on the `@MainActor` view) so the
+/// `Task.detached` closure compiles outside the view's SIL — see `FavoritesView.load()`.
+private func readPlacemarkName(forKey key: String, in resourcesDir: URL) async -> String? {
+    await Task.detached(priority: .userInitiated) {
+        PlacemarkIndex.read(from: resourcesDir)?.first { $0.key == key }?.name
+    }.value
 }
