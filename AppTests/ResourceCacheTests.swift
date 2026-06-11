@@ -133,9 +133,13 @@ struct ResourceCacheTests {
 
     // MARK: - downloadRemote
 
+    /// Minimal valid PNG header bytes — `downloadRemote` now image-sniffs payloads, so stub
+    /// downloaders must return real image magic bytes (not arbitrary text) to be cached.
+    private static let pngBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+
     @Test func downloadRemote_stubWritesFilesAndUpdatesManifest() async throws {
         let dir = try makeTempDir()
-        let stubData = Data("fake-image-bytes".utf8)
+        let stubData = Self.pngBytes
 
         // Stub downloader always succeeds
         let cache = ResourceCache { _ in stubData }
@@ -159,7 +163,7 @@ struct ResourceCacheTests {
 
     @Test func downloadRemote_offlineFirst_failingURLDoesNotBlockOthers() async throws {
         let dir = try makeTempDir()
-        let successData = Data("success-bytes".utf8)
+        let successData = Self.pngBytes
         let failHref = "https://example.com/fail.png"
         let successHref = "https://example.com/success.png"
 
@@ -215,7 +219,7 @@ struct ResourceCacheTests {
 
         let cache = ResourceCache { url in
             await box.set(url)
-            return Data("icon-bytes".utf8)
+            return Self.pngBytes
         }
 
         let httpHref = "http://maps.google.com/mapfiles/kml/paddle/blu-5.png"
@@ -228,6 +232,104 @@ struct ResourceCacheTests {
 
         // But the manifest/lookup key remains the original http href so UI lookups resolve.
         #expect(cache.localURL(forHref: httpHref, in: dir) != nil)
+    }
+
+    // MARK: - download limits (DoS bounds for untrusted input)
+
+    @Test func download_skipsResponsesOverSizeCap() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/huge.png"
+        // 21 MB of zeros — over the 20 MB cap.
+        let oversized = Data(count: 21 * 1024 * 1024)
+        let cache = ResourceCache { _ in oversized }
+
+        await cache.downloadRemote([href], to: dir)
+
+        // The file must NOT be written / resolvable.
+        #expect(cache.localURL(forHref: href, in: dir) == nil,
+                "Oversized response must not be written")
+
+        // It must be permanently skipped: a subsequent retry (even with a now-valid,
+        // small image) must NOT re-attempt it.
+        actor CallCounter { var count = 0; func increment() {
+            count += 1
+        } }
+        let counter = CallCounter()
+        let retry = ResourceCache { _ in
+            await counter.increment()
+            return Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) // PNG
+        }
+        await retry.retryPending(in: dir)
+        #expect(await counter.count == 0,
+                "A permanently-skipped href must not be re-attempted by retryPending")
+        #expect(retry.localURL(forHref: href, in: dir) == nil)
+    }
+
+    @Test func download_skipsNonImageData() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/notimage.png"
+        let html = Data("<!doctype html><html><body>nope</body></html>".utf8)
+        let cache = ResourceCache { _ in html }
+
+        await cache.downloadRemote([href], to: dir)
+
+        #expect(cache.localURL(forHref: href, in: dir) == nil,
+                "Non-image payload must not be written")
+
+        // Permanently skipped — retry must not re-attempt.
+        actor CallCounter { var count = 0; func increment() {
+            count += 1
+        } }
+        let counter = CallCounter()
+        let retry = ResourceCache { _ in
+            await counter.increment()
+            return Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        }
+        await retry.retryPending(in: dir)
+        #expect(await counter.count == 0,
+                "A non-image href must be permanently skipped, not retried")
+    }
+
+    @Test func download_acceptsRealImageMagicBytes() async throws {
+        let dir = try makeTempDir()
+        let pngHref = "https://example.com/real.png"
+        let jpegHref = "https://example.com/real.jpg"
+        // Minimal valid magic-byte headers.
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10])
+
+        let cache = ResourceCache { url in
+            url.absoluteString.hasSuffix(".png") ? png : jpeg
+        }
+        await cache.downloadRemote([pngHref, jpegHref], to: dir)
+
+        #expect(cache.localURL(forHref: pngHref, in: dir) != nil, "Valid PNG must be cached")
+        #expect(cache.localURL(forHref: jpegHref, in: dir) != nil, "Valid JPEG must be cached")
+    }
+
+    @Test func download_capsHrefCountPerEntry() async throws {
+        let dir = try makeTempDir()
+        actor CallCounter { var count = 0; func increment() {
+            count += 1
+        } }
+        let counter = CallCounter()
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let cache = ResourceCache { _ in
+            await counter.increment()
+            return png
+        }
+
+        // 600 distinct hrefs — over the 500 per-entry cap.
+        let hrefs = (0 ..< 600).map { "https://example.com/icon-\($0).png" }
+        await cache.downloadRemote(hrefs, to: dir)
+
+        #expect(await counter.count == 500,
+                "At most maxRemoteResourcesPerEntry (500) downloads should be attempted")
+        // Deterministic: the first 500 in input order are the ones attempted.
+        #expect(cache.localURL(forHref: hrefs[0], in: dir) != nil)
+        #expect(cache.localURL(forHref: hrefs[499], in: dir) != nil)
+        #expect(cache.localURL(forHref: hrefs[500], in: dir) == nil,
+                "Hrefs beyond the cap must not be downloaded")
     }
 
     // MARK: - retryPending
@@ -243,12 +345,12 @@ struct ResourceCacheTests {
         let pendingHref = "https://example.com/pending.png"
 
         // Pre-write the "already cached" resource
-        let preCache = ResourceCache { _ in Data("pre-cached".utf8) }
+        let preCache = ResourceCache { _ in Self.pngBytes }
         await preCache.downloadRemote([alreadyCachedHref], to: dir)
 
         let retryCache = ResourceCache { _ in
             await counter.increment()
-            return Data("retry-bytes".utf8)
+            return Self.pngBytes
         }
 
         await retryCache.retryPending([alreadyCachedHref, pendingHref], to: dir)
@@ -274,7 +376,7 @@ struct ResourceCacheTests {
 
         // Connectivity restored: a retry that is NOT handed the href list reads the recorded
         // one (no re-parse) and succeeds.
-        let succeeding = ResourceCache { _ in Data("ok".utf8) }
+        let succeeding = ResourceCache { _ in Self.pngBytes }
         await succeeding.retryPending(in: dir)
         #expect(succeeding.localURL(forHref: href, in: dir) != nil,
                 "retryPending(in:) should fetch the recorded pending href without being given it")

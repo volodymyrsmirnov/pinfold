@@ -97,7 +97,12 @@ enum ImportService {
                 }
             }
         }
-        let remoteResourceHrefs = Array(hrefSet)
+        // Cap the carried array (DoS bound): a crafted file can reference thousands of
+        // distinct remote hrefs. `ResourceCache.downloadRemote` enforces the authoritative
+        // per-entry cap for *all* callers; trimming here just avoids carrying a huge array
+        // through commit and the recorded-hrefs file. Sorted first so the prefix is
+        // deterministic (the set is unordered).
+        let remoteResourceHrefs = Array(hrefSet.sorted().prefix(500))
 
         return ImportResult(
             displayName: displayName,

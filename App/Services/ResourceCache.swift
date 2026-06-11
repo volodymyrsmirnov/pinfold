@@ -1,5 +1,19 @@
 import CryptoKit
 import Foundation
+import os
+
+// MARK: - DoS bounds for untrusted input
+
+/// Maximum byte size accepted for a single downloaded remote resource. Remote hrefs come
+/// from untrusted KML/KMZ; without a cap a malicious file could point at an arbitrarily
+/// large URL and fill the device's disk. Responses over this size are rejected and the
+/// href is permanently skipped (never retried).
+private let maxResourceBytes = 20 * 1024 * 1024
+
+/// Maximum number of remote resources downloaded per imported entry. Caps the fan-out of a
+/// crafted file that lists thousands of hrefs (disk + arbitrary outbound requests). Enforced
+/// at the download stage so every caller is covered; the first N in input order are kept.
+private let maxRemoteResourcesPerEntry = 500
 
 /// Manages the `resources/` cache directory for an imported KML/KMZ file.
 ///
@@ -33,6 +47,12 @@ final class ResourceCache: Sendable {
     // MARK: - Properties
 
     private let downloader: Downloader
+
+    /// Diagnostics for download bounds (dropped over-cap hrefs, rejected payloads).
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "resources"
+    )
 
     // MARK: - Init
 
@@ -105,8 +125,19 @@ final class ResourceCache: Sendable {
     ///   - hrefs: Remote resource URLs to download.
     ///   - resourcesDir: Destination `resources/` directory.
     func downloadRemote(_ hrefs: [String], to resourcesDir: URL) async {
-        let remote = hrefs.filter { $0.hasPrefix("http://") || $0.hasPrefix("https://") }
-        // Record the full expected set up front so a later retry pass can fill in any that
+        var remote = hrefs.filter { $0.hasPrefix("http://") || $0.hasPrefix("https://") }
+        // Count cap (DoS bound): a crafted file can list thousands of hrefs. Keep the first N
+        // in input order so the cap is deterministic, and drop the rest before recording or
+        // downloading anything.
+        if remote.count > maxRemoteResourcesPerEntry {
+            let dropped = remote.count - maxRemoteResourcesPerEntry
+            let cap = maxRemoteResourcesPerEntry
+            Self.logger.warning(
+                "Dropping \(dropped, privacy: .public) href(s) over per-entry cap \(cap, privacy: .public)"
+            )
+            remote = Array(remote.prefix(maxRemoteResourcesPerEntry))
+        }
+        // Record the (capped) expected set up front so a later retry pass can fill in any that
         // fail now, without re-parsing the original file.
         recordExpectedRemoteHrefs(remote, to: resourcesDir)
         for href in remote {
@@ -120,6 +151,22 @@ final class ResourceCache: Sendable {
             let downloadURL = Self.httpsUpgraded(url)
             do {
                 let data = try await downloader(downloadURL)
+                // Reject payloads that are too large or aren't an image we can render. These
+                // are *content* failures, not network failures: mark the href permanently
+                // skipped (see `markSkipped`) so `retryPending` never re-fetches it.
+                guard data.count <= maxResourceBytes else {
+                    let size = data.count
+                    Self.logger.warning(
+                        "Rejecting resource over size cap (\(size, privacy: .public) bytes); skipping"
+                    )
+                    markSkipped(href, to: resourcesDir)
+                    continue
+                }
+                guard Self.looksLikeImage(data) else {
+                    Self.logger.warning("Rejecting non-image remote resource; skipping permanently")
+                    markSkipped(href, to: resourcesDir)
+                    continue
+                }
                 let filename = cachedFilename(for: href)
                 let dest = resourcesDir.appendingPathComponent(filename)
                 try data.write(to: dest, options: .atomic)
@@ -127,10 +174,66 @@ final class ResourceCache: Sendable {
                 manifest[href] = filename
                 try saveManifest(manifest, to: resourcesDir)
             } catch {
-                // Offline-first: skip this href. The recorded-hrefs file lets `retryPending`
-                // re-attempt it on a later materialization pass / app foreground.
+                // Offline-first: skip this href *transiently*. The recorded-hrefs file lets
+                // `retryPending` re-attempt it on a later materialization pass / app foreground.
             }
         }
+    }
+
+    // MARK: - Image sniffing
+
+    /// Returns `true` if `data` begins with the magic bytes of an image format we render.
+    ///
+    /// Content-type response headers are unreliable (and absent for archive resources), and we
+    /// hand these bytes straight to the image pipeline, so we sniff the actual bytes. Covers
+    /// PNG, JPEG, GIF, WebP, BMP, TIFF, and the ISO-BMFF `ftyp` family (HEIC/HEIF/AVIF).
+    static func looksLikeImage(_ data: Data) -> Bool {
+        // Need at least the largest signature window we inspect (12 bytes for RIFF/WEBP & ftyp).
+        guard data.count >= 12 else {
+            // BMP ("BM") and the shortest TIFF/JPEG headers still fit in fewer bytes.
+            return shortSignatureMatch(data)
+        }
+        let b = [UInt8](data.prefix(12))
+
+        // PNG: 89 50 4E 47
+        if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 { return true }
+        // JPEG: FF D8 FF
+        if b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF { return true }
+        // GIF: 47 49 46 38 ("GIF8")
+        if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 { return true }
+        // BMP: 42 4D ("BM")
+        if b[0] == 0x42, b[1] == 0x4D { return true }
+        // TIFF little-endian "II*\0" / big-endian "MM\0*"
+        if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 { return true }
+        if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A { return true }
+        // WebP: "RIFF"...."WEBP"
+        if b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46,
+           b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50 { return true }
+        // ISO-BMFF ftyp box (bytes 4-7 == "ftyp"), brand at bytes 8-11. Compare the brand as
+        // raw ASCII bytes to avoid a Data→String conversion.
+        if b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 {
+            let brand = Array(b[8 ..< 12])
+            let imageBrands: Set<[UInt8]> = [
+                Array("heic".utf8), Array("heix".utf8), Array("hevc".utf8),
+                Array("mif1".utf8), Array("msf1".utf8), Array("avif".utf8),
+            ]
+            if imageBrands.contains(brand) { return true }
+        }
+        return false
+    }
+
+    /// Signature check for payloads shorter than the 12-byte window (BMP, short TIFF/JPEG).
+    private static func shortSignatureMatch(_ data: Data) -> Bool {
+        let b = [UInt8](data.prefix(4))
+        if b.count >= 2, b[0] == 0x42, b[1] == 0x4D { return true } // BMP
+        if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF { return true } // JPEG
+        if b.count >= 4 {
+            if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 { return true } // PNG
+            if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 { return true } // GIF
+            if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 { return true } // TIFF LE
+            if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A { return true } // TIFF BE
+        }
+        return false
     }
 
     /// Returns `url` with its scheme upgraded from `http` to `https`; other URLs unchanged.
@@ -179,10 +282,28 @@ final class ResourceCache: Sendable {
     /// - Returns: A file `URL` that exists on disk, or `nil`.
     func localURL(forHref href: String, in resourcesDir: URL) -> URL? {
         let manifest = loadManifest(from: resourcesDir)
-        guard let filename = manifest[href] else { return nil }
+        // A non-nil but empty filename is the permanent-skip sentinel (see `markSkipped`):
+        // the href is "resolved" but maps to no on-disk file.
+        guard let filename = manifest[href], !filename.isEmpty else { return nil }
         let url = resourcesDir.appendingPathComponent(filename)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         return url
+    }
+
+    // MARK: - Permanent skip
+
+    /// Records `href` as permanently rejected (over-size or non-image content).
+    ///
+    /// Skip-tracking representation: a manifest entry mapping the href to an **empty filename**.
+    /// This reuses the existing "is this href done?" mechanism — `retryPending` filters on
+    /// `manifest[href] == nil`, so a skipped href (non-nil, empty) is treated as resolved and
+    /// never re-fetched. `localURL` appends the empty filename and then fails its
+    /// `fileExists` check, so a skipped href resolves to no image (UI falls back to a generic
+    /// pin). No separate sidecar is needed.
+    private func markSkipped(_ href: String, to resourcesDir: URL) {
+        var manifest = loadManifest(from: resourcesDir)
+        manifest[href] = ""
+        try? saveManifest(manifest, to: resourcesDir)
     }
 
     // MARK: - Manifest helpers
