@@ -46,9 +46,14 @@ struct FileRow: View {
 
     private var secondaryLine: String {
         let dateStr = entry.importDate.formatted(date: .abbreviated, time: .omitted)
-        // `inflect: true` picks the singular/plural form ("1 point" vs "2 points") for the
-        // current language without us hardcoding English plural rules.
-        let points = String(localized: "^[\(entry.pointCount) point](inflect: true)")
+        // Explicit singular/plural branch rather than `^[…](inflect: true)`: the automatic
+        // grammar-agreement markup is only guaranteed to render once verified on every
+        // destination (final review flagged it showing literally on the Mac "Designed for
+        // iPad" build), and the project ships no string catalog. Same pattern as the
+        // import-failure banner.
+        let points = entry.pointCount == 1
+            ? String(localized: "1 point")
+            : String(localized: "\(entry.pointCount) points")
         return "\(points) · \(dateStr)"
     }
 }
