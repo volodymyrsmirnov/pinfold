@@ -1,7 +1,30 @@
 import SwiftUI
+import UIKit
+
+extension UIColor {
+    /// Creates a `UIColor` from a KML color hex string in `aabbggrr` order.
+    ///
+    /// Mirrors `Color(kmlHex:)` exactly (see that initializer for the byte-order rationale),
+    /// but produces a `UIColor` directly — used by `OverlayBuilder`, which configures
+    /// `MKPolylineRenderer`/`MKPolygonRenderer` (UIKit) rather than SwiftUI.
+    ///
+    /// - Parameter kmlHex: An 8-character hexadecimal string in `aabbggrr` format. Any other
+    ///   length or non-hex content returns `nil`.
+    convenience init?(kmlHex: String) {
+        guard kmlHex.count == 8,
+              let value = UInt32(kmlHex, radix: 16) else { return nil }
+
+        // KML byte order: aa bb gg rr (most-significant byte first in the 8-char string).
+        let alpha = CGFloat((value >> 24) & 0xFF) / 255.0
+        let blue = CGFloat((value >> 16) & 0xFF) / 255.0
+        let green = CGFloat((value >> 8) & 0xFF) / 255.0
+        let red = CGFloat((value >> 0) & 0xFF) / 255.0
+
+        self.init(red: red, green: green, blue: blue, alpha: alpha)
+    }
+}
 
 extension Color {
-
     /// Creates a SwiftUI `Color` from a KML color hex string.
     ///
     /// KML encodes colors in `aabbggrr` order (alpha, blue, green, red), which is the
@@ -18,9 +41,9 @@ extension Color {
 
         // KML byte order: aa bb gg rr (most-significant byte first in the 8-char string)
         let alpha = Double((value >> 24) & 0xFF) / 255.0
-        let blue  = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >>  8) & 0xFF) / 255.0
-        let red   = Double((value >>  0) & 0xFF) / 255.0
+        let blue = Double((value >> 16) & 0xFF) / 255.0
+        let green = Double((value >> 8) & 0xFF) / 255.0
+        let red = Double((value >> 0) & 0xFF) / 255.0
 
         self.init(red: red, green: green, blue: blue, opacity: alpha)
     }

@@ -3,59 +3,6 @@ import PinfoldCore
 import SwiftUI
 import UIKit
 
-// MARK: - PlacemarkAnnotation
-
-/// An `MKAnnotation` for a single KML point placemark, carrying its durable `stableKey`
-/// (for selection and favorite/visited lookup) and its pre-rendered pin image.
-///
-/// Identity is keyed entirely by `stableKey` — durable across re-parses — so selection
-/// and decoration survive the document being re-parsed while a map is open. The
-/// parse-order `placemark.id` is intentionally *not* stored.
-final class PlacemarkAnnotation: NSObject, MKAnnotation {
-    let stableKey: String
-    let coordinate: CLLocationCoordinate2D
-    let title: String?
-    /// The un-decorated base image (loaded from disk or SF Symbol). Stored so
-    /// `updateUIView` can re-composite favorite/visited badges cheaply without re-reading disk.
-    let baseImage: UIImage
-    /// The currently decorated pin image. Updated in `updateUIView` when favorite/visited
-    /// state changes; the `viewFor` delegate reads this to set `view.image`.
-    var image: UIImage
-
-    init(
-        stableKey: String,
-        coordinate: CLLocationCoordinate2D,
-        title: String?,
-        baseImage: UIImage,
-        image: UIImage
-    ) {
-        self.stableKey = stableKey
-        self.coordinate = coordinate
-        self.title = title
-        self.baseImage = baseImage
-        self.image = image
-    }
-}
-
-// MARK: - FittingMapView
-
-/// `MKMapView` subclass that fires `onFirstLayout` exactly once, the first time it
-/// receives a non-zero size. Fitting all pins here (rather than in
-/// `updateUIView`'s render-timing-dependent path) guarantees the initial region is
-/// computed against the real map bounds, so the map opens centered on the pins and
-/// never "jumps" to a deferred fit on a later re-render.
-final class FittingMapView: MKMapView {
-    var onFirstLayout: (() -> Void)?
-    private var didLayoutOnce = false
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard !didLayoutOnce, bounds.width > 0, bounds.height > 0 else { return }
-        didLayoutOnce = true
-        onFirstLayout?()
-    }
-}
-
 // MARK: - PlacemarkMapRepresentable
 
 /// Wraps `MKMapView` directly (SwiftUI's `Map` is more limited) to render many pins
@@ -124,21 +71,32 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         context.coordinator.currentStyle = initialStyle
 
         // Single creation path (shared with updateUIView's reconciliation): build one
-        // annotation per placemark and register it in the coordinator's index.
-        for placemark in placemarks {
+        // annotation per pin-bearing placemark and register it in the coordinator's index.
+        // `shouldShowPin` suppresses pins for pure line/polygon placemarks (the overlay is
+        // their representation); track and point placemarks keep their pin.
+        for placemark in placemarks where Self.shouldShowPin(placemark) {
             guard let annotation = makeAnnotation(for: placemark, coordinator: context.coordinator)
             else { continue }
             mapView.addAnnotation(annotation)
             context.coordinator.annotationsByKey[annotation.stableKey] = annotation
         }
         context.coordinator.lastPlacemarkKeys = Set(context.coordinator.annotationsByKey.keys)
+        context.coordinator.lastDesiredKeys = Set(placemarks.map(\.stableKey))
         context.coordinator.lastFavoriteKeys = favoriteKeys
         context.coordinator.lastVisitedKeys = visitedKeys
+
+        // Build + add geometry overlays (lines/polygons/tracks) and register them in the
+        // sibling `overlaysByKey` index, keyed (like annotations) by placemark stableKey.
+        let overlays = OverlayBuilder.overlays(for: placemarks, document: document)
+        for styled in overlays {
+            mapView.addOverlay(styled.overlay)
+            context.coordinator.overlaysByKey[styled.stableKey, default: []].append(styled)
+        }
 
         let coordinates = placemarks.compactMap(\.coordinate)
         mapView.onFirstLayout = { [weak mapView] in
             guard let mapView else { return }
-            Self.fit(coordinates: coordinates, in: mapView, animated: false)
+            Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
         }
 
         addControls(to: mapView, coordinator: context.coordinator)
@@ -157,8 +115,16 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         // Reconcile placemark set: add new pins, drop removed ones. Only recompute when the
         // desired key-set actually changed (selection/favorite toggles re-enter updateUIView
         // too) — and re-fit only when the set changed, never on a bare re-render.
+        // Reconcile by the full placemark key-set (not just pin-bearing placemarks): an
+        // overlay-only placemark has no annotation but still owns overlays, so the diff must
+        // see it. Pin suppression is then applied per-placemark when realizing annotations.
+        // Guard on the FULL desired key-set (`lastDesiredKeys`), not `lastPlacemarkKeys`:
+        // the latter only holds *pin-bearing* keys, so an overlay-only placemark would make
+        // `desiredKeys != lastPlacemarkKeys` perpetually true and re-reconcile/re-fit on
+        // every bare re-render (e.g. a selection toggle). `lastPlacemarkKeys` /
+        // `overlaysByKey.keys` remain the realized-content sets the two diffs reconcile from.
         let desiredKeys = Set(placemarks.map(\.stableKey))
-        if desiredKeys != coordinator.lastPlacemarkKeys {
+        if desiredKeys != coordinator.lastDesiredKeys {
             let diff = Self.annotationDiff(
                 currentKeys: coordinator.lastPlacemarkKeys, desired: placemarks
             )
@@ -167,15 +133,38 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                     mapView.removeAnnotation(annotation)
                 }
             }
-            for placemark in diff.toAdd {
+            for placemark in diff.toAdd where Self.shouldShowPin(placemark) {
                 guard let annotation = makeAnnotation(for: placemark, coordinator: coordinator)
                 else { continue }
                 mapView.addAnnotation(annotation)
                 coordinator.annotationsByKey[annotation.stableKey] = annotation
             }
             coordinator.lastPlacemarkKeys = Set(coordinator.annotationsByKey.keys)
-            // Re-fit to the new pin set (mirrors the first-layout fit).
-            Self.fit(coordinates: placemarks.compactMap(\.coordinate), in: mapView, animated: true)
+
+            // Mirror the diff onto overlays. Overlays are rebuilt from the desired set and
+            // reconciled by the same stableKey identity, so a multi-geometry placemark's
+            // overlays are added/removed together.
+            let overlayDiff = Self.overlayDiff(
+                currentKeys: Set(coordinator.overlaysByKey.keys), desired: placemarks
+            )
+            for key in overlayDiff.toRemove {
+                if let styledList = coordinator.overlaysByKey.removeValue(forKey: key) {
+                    mapView.removeOverlays(styledList.map(\.overlay))
+                }
+            }
+            let addedOverlays = OverlayBuilder.overlays(for: overlayDiff.toAdd, document: document)
+            for styled in addedOverlays {
+                mapView.addOverlay(styled.overlay)
+                coordinator.overlaysByKey[styled.stableKey, default: []].append(styled)
+            }
+            coordinator.lastDesiredKeys = desiredKeys
+
+            // Re-fit to the new pin + overlay set (mirrors the first-layout fit).
+            let allOverlays = coordinator.overlaysByKey.values.flatMap(\.self)
+            Self.fit(
+                coordinates: placemarks.compactMap(\.coordinate),
+                overlays: allOverlays, in: mapView, animated: true
+            )
         }
 
         // Reconcile SwiftUI -> map selection: if SwiftUI cleared it, deselect on the map
@@ -211,32 +200,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
     // MARK: - Annotation reconciliation
 
-    /// Pure diff between the annotations currently on the map (`currentKeys`, a set of
-    /// `stableKey`s) and the `desired` placemarks. Returns the placemarks to add and the
-    /// keys to remove.
-    ///
-    /// Keyed by `stableKey` (durable across re-parses), matching how favorites/visited and
-    /// selection identify placemarks. If two desired placemarks share a `stableKey`,
-    /// **last wins** deterministically (the later element in `desired` is the one kept),
-    /// so exactly one annotation exists per key. A sibling overlay diff (for line/polygon
-    /// geometry) will follow the same shape in a later task.
-    nonisolated static func annotationDiff(
-        currentKeys: Set<String>,
-        desired: [KMLPlacemark]
-    ) -> (toAdd: [KMLPlacemark], toRemove: Set<String>) {
-        // Last-wins dedup: build an ordered, deduplicated list keyed by stableKey.
-        var byKey: [String: KMLPlacemark] = [:]
-        var order: [String] = []
-        for placemark in desired {
-            let key = placemark.stableKey
-            if byKey[key] == nil { order.append(key) }
-            byKey[key] = placemark
-        }
-        let desiredKeys = Set(order)
-        let toAdd = order.compactMap { currentKeys.contains($0) ? nil : byKey[$0] }
-        let toRemove = currentKeys.subtracting(desiredKeys)
-        return (toAdd, toRemove)
-    }
+    //
+    // The pure diff/pin-rule helpers (`annotationDiff`, `overlayDiff`, `shouldShowPin`) live
+    // in `PlacemarkMapSupport.swift` as a `nonisolated` extension on this type.
 
     /// Builds a `PlacemarkAnnotation` for `placemark` (returns `nil` if it has no
     /// coordinate). Single creation path shared by `makeUIView` and `updateUIView`'s
@@ -274,8 +240,24 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
     // MARK: - Fit to pins
 
-    static func fit(coordinates: [Coordinate], in mapView: MKMapView, animated: Bool) {
-        guard let rect = MapRectBuilder.boundingRect(for: coordinates) else { return }
+    /// Fits the map to the union of all pin coordinates and overlay bounding rects.
+    ///
+    /// Overlay rects are folded in via `MKMapRect.union` on each overlay's
+    /// `boundingMapRect`. Antimeridian handling for *overlays* stays naive (a line that
+    /// straddles the 180° seam can over-expand the fit) — `MapRectBuilder`'s wrapped-rect
+    /// logic applies only to the point set; overlay coordinates are typically dense enough
+    /// that a seam-crossing fit is an acceptable edge case here.
+    static func fit(
+        coordinates: [Coordinate],
+        overlays: [StyledOverlay] = [],
+        in mapView: MKMapView,
+        animated: Bool
+    ) {
+        var rect = MapRectBuilder.boundingRect(for: coordinates) ?? .null
+        for styled in overlays {
+            rect = rect.union(styled.overlay.boundingMapRect)
+        }
+        guard !rect.isNull else { return }
         if rect.size.width == 0, rect.size.height == 0 {
             // Single pin (or all coincident): use a fixed ~1 km span centered on it.
             let region = MKCoordinateRegion(
@@ -287,60 +269,6 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         } else {
             mapView.setVisibleMapRect(rect, edgePadding: edgePadding, animated: animated)
         }
-    }
-
-    // MARK: - Native controls
-
-    private func addControls(to mapView: MKMapView, coordinator: Coordinator) {
-        let tracking = MKUserTrackingButton(mapView: mapView)
-        tracking.translatesAutoresizingMaskIntoConstraints = false
-        let trackingContainer = Self.glassContainer()
-        trackingContainer.contentView.addSubview(tracking)
-        NSLayoutConstraint.activate([
-            tracking.centerXAnchor.constraint(equalTo: trackingContainer.contentView.centerXAnchor),
-            tracking.centerYAnchor.constraint(equalTo: trackingContainer.contentView.centerYAnchor),
-            trackingContainer.widthAnchor.constraint(equalToConstant: 44),
-            trackingContainer.heightAnchor.constraint(equalToConstant: 44),
-        ])
-
-        // Basemap-style button: a menu of Map / Satellite / Hybrid, placed at the top of
-        // the control column.
-        let styleButton = UIButton(configuration: .plain())
-        styleButton.translatesAutoresizingMaskIntoConstraints = false
-        styleButton.setImage(
-            UIImage(systemName: "map", withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)),
-            for: .normal
-        )
-        styleButton.showsMenuAsPrimaryAction = true
-        coordinator.styleButton = styleButton
-        styleButton.menu = coordinator.makeStyleMenu()
-        let styleContainer = Self.glassContainer()
-        styleContainer.contentView.addSubview(styleButton)
-        NSLayoutConstraint.activate([
-            styleButton.centerXAnchor.constraint(equalTo: styleContainer.contentView.centerXAnchor),
-            styleButton.centerYAnchor.constraint(equalTo: styleContainer.contentView.centerYAnchor),
-            styleContainer.widthAnchor.constraint(equalToConstant: 44),
-            styleContainer.heightAnchor.constraint(equalToConstant: 44),
-        ])
-
-        let stack = UIStackView(arrangedSubviews: [styleContainer, trackingContainer])
-        stack.axis = .vertical
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        mapView.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.trailingAnchor.constraint(equalTo: mapView.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            stack.bottomAnchor.constraint(equalTo: mapView.safeAreaLayoutGuide.bottomAnchor, constant: -100),
-        ])
-    }
-
-    private static func glassContainer() -> UIVisualEffectView {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-        view.layer.cornerRadius = 12
-        view.layer.cornerCurve = .continuous
-        view.clipsToBounds = true
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
     }
 
     // MARK: - Coordinator
@@ -363,8 +291,32 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// Live index of the placemark annotations on the map, keyed by `stableKey`. Lets
         /// favorite/visited re-decoration touch exactly the annotations it owns instead of
         /// walking every `mapView.annotations` (which also includes the user-location dot
-        /// and any future overlays' annotations).
+        /// and the geometry overlays' renderers).
+        ///
+        /// ## Registry invariant (WP-G)
+        /// This index — together with `overlaysByKey` — is the **sole mutator** of the
+        /// placemark annotations and overlays on the `MKMapView`: nothing else may
+        /// `addAnnotation`/`removeAnnotation`/`addOverlay`/`removeOverlay` for placemark
+        /// content. Reconciliation is purely by **identity** — the `stableKey` set, not
+        /// content. A same-key *content* change is never observed live: the document is
+        /// re-parsed from disk on open, which re-derives every hash-based `stableKey`
+        /// ("h:…") from the placemark's own name/coordinate, so a content change yields a
+        /// *new* key (an add+remove), not an in-place mutation. Only an author-supplied
+        /// id-keyed placemark ("id:…") could in theory keep its key while its content
+        /// changes — and that cannot happen within a single parse, where each id appears
+        /// once. The diff therefore never needs to compare content under a stable key.
         var annotationsByKey: [String: PlacemarkAnnotation] = [:]
+        /// Live index of the geometry overlays on the map, keyed by the owning placemark's
+        /// `stableKey`. A multi-geometry placemark maps to several `StyledOverlay`s under one
+        /// key (added/removed as a group). Mirrors `annotationsByKey`; see that property's
+        /// **Registry invariant** doc — the same sole-mutator / identity-reconciliation rules
+        /// apply here.
+        var overlaysByKey: [String: [StyledOverlay]] = [:]
+        /// The full set of placemark `stableKey`s desired on the last reconcile (pins +
+        /// overlay-only placemarks). The reconciliation guard compares against this — not
+        /// `lastPlacemarkKeys` (pins only) — so an overlay-only placemark doesn't trigger a
+        /// reconcile/re-fit on every bare re-render.
+        var lastDesiredKeys: Set<String> = []
         /// Base (un-decorated) pin images keyed by style identity. A KML file has FEW
         /// distinct styles, so this turns the O(placemarks) disk-read + scale work in
         /// `makeAnnotation` into O(styles): the first placemark of each style builds its
@@ -444,6 +396,28 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             view.transform = .identity
             view.zPriority = .defaultUnselected
             return view
+        }
+
+        // MARK: Overlay rendering
+
+        /// Renders a geometry overlay from the style baked into its `StyledPolyline`/
+        /// `StyledPolygon` subclass — read by overlay identity, so no side table is needed.
+        /// Any non-styled overlay falls back to a plain renderer.
+        func mapView(_: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polygon = overlay as? StyledPolygon {
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                renderer.strokeColor = polygon.stroke
+                renderer.fillColor = polygon.fill
+                renderer.lineWidth = polygon.lineWidth
+                return renderer
+            }
+            if let polyline = overlay as? StyledPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = polyline.stroke
+                renderer.lineWidth = polyline.lineWidth
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
         }
 
         // MARK: Selection

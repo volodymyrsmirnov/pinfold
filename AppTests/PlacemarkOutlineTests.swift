@@ -143,4 +143,30 @@ struct PlacemarkOutlineTests {
         // ...but only the coordinate-bearing one is mappable.
         #expect(outline.mappablePlacemarks.map(\.stableKey) == ["id:r1"])
     }
+
+    // MARK: - Geometry (point-less) placemarks are mappable
+
+    /// A route file (point-less line/polygon placemarks with a representative coordinate)
+    /// must enable the map button: such placemarks carry a `coordinate`, so they appear in
+    /// `mappablePlacemarks` exactly like point placemarks. Without this the "map only
+    /// routes" case would leave the map button disabled.
+    @Test func mappable_includesPointLessGeometryPlacemarks() {
+        let route = KMLPlacemark(
+            id: "route", name: "Trail", descriptionHTML: nil, styleUrl: nil,
+            coordinate: Coordinate(longitude: 5, latitude: 6), hasPoint: false,
+            geometries: [.lineString([
+                Coordinate(longitude: 5, latitude: 6),
+                Coordinate(longitude: 7, latitude: 8),
+            ])],
+            extendedData: [], photoLinks: [], sourceID: "route"
+        )
+        let root = KMLContainer(
+            id: "root", name: nil, children: [], placemarks: [route]
+        )
+        let outline = PlacemarkOutline.build(from: root, matching: "", collapsed: [])
+
+        // The route placemark is a row AND is mappable despite having no explicit point.
+        #expect(outline.rows.map(\.id) == ["id:route"])
+        #expect(outline.mappablePlacemarks.map(\.stableKey) == ["id:route"])
+    }
 }
