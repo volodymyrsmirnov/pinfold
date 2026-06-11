@@ -3,16 +3,40 @@ import SwiftUI
 
 @main
 struct PinfoldApp: App {
+    /// Bridges the "Import…" menu command to `HomeView`'s file importer (see `AppCommands`).
+    @State private var appCommands = AppCommands()
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(appCommands)
+        }
+        .commands {
+            // ⌘I mirrors HomeView's "+" toolbar button. Placed after the standard "New"
+            // group so it sits with the file-creation commands in the menu bar (Mac /
+            // hardware-keyboard iPad). The flag-bump is observed by HomeView, which owns
+            // the fileImporter — Commands can't present sheets directly.
+            CommandGroup(after: .newItem) {
+                Button("Import\u{2026}") {
+                    appCommands.requestImport()
+                }
+                .keyboardShortcut("i", modifiers: .command)
+            }
+            // No "Search" command: there is no catalogue-wide search field yet (global
+            // search is a later task — see plan task 26). Adding a ⌘F no-op now would be
+            // speculative plumbing, so it is intentionally omitted until that field exists.
         }
     }
 }
 
 // MARK: - RootView
 
-/// Bootstraps the app's services once and provides the root `NavigationStack`.
+/// Bootstraps the app's services once and provides the root `NavigationSplitView`.
+///
+/// The sidebar hosts the catalogue (`HomeView`); the detail column hosts the selected
+/// entry's `KMLDetailView` inside its own `NavigationStack` (so placemark/map pushes stay
+/// in the detail column on a regular-width canvas). On compact width the split view
+/// collapses to a single stack and selection drives a push, preserving the old phone flow.
 ///
 /// There is no SwiftData container: the catalogue lives in the folders on disk and is held
 /// in memory by `Catalog`, which is sourced from whichever root is active (local Application
@@ -45,7 +69,22 @@ private struct RootView: View {
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
     @State private var rootIsUbiquitous = false
 
+    /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
+    /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
+    /// stale (and break `List` selection equality) after any reload, trash, or rename. Storing
+    /// the stable `UUID` and resolving it against `catalog.entries` keeps the selection alive
+    /// across reloads, and naturally clears it when the entry disappears (deleted) or is
+    /// trashed (the sidebar only exposes active entries for selection).
+    @State private var selectedEntryID: CatalogEntry.ID?
+
     @Environment(\.scenePhase) private var scenePhase
+
+    /// The active (non-trashed) entry matching the current selection, or `nil` when nothing is
+    /// selected or the selected entry is no longer active. The detail column keys off this.
+    private var selectedEntry: CatalogEntry? {
+        guard let selectedEntryID else { return nil }
+        return catalog.active.first { $0.id == selectedEntryID }
+    }
 
     init() {
         // Start on local storage (synchronously knowable). `bootstrap()` resolves the real
@@ -58,9 +97,31 @@ private struct RootView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            HomeView()
+        NavigationSplitView {
+            HomeView(selection: $selectedEntryID)
+                // 320–380pt keeps file rows comfortable on iPad/Mac without crowding the map
+                // detail; the system still lets the user drag the divider.
+                .navigationSplitViewColumnWidth(min: 320, ideal: 380)
+        } detail: {
+            // The detail column owns its own NavigationStack so KMLDetailView's placemark and
+            // map pushes stay within this column on regular width. `.id(entry.id)` forces a
+            // fresh KMLDetailView identity per selection so its `@State` (document, outline,
+            // annotations) resets when switching files — belt-and-braces alongside the view's
+            // own `.task(id: entry.id)`.
+            NavigationStack {
+                if let selectedEntry {
+                    KMLDetailView(entry: selectedEntry)
+                        .id(selectedEntry.id)
+                } else {
+                    ContentUnavailableView(
+                        "No File Selected",
+                        systemImage: "sidebar.leading",
+                        description: Text("Select a file from the catalogue to view its placemarks.")
+                    )
+                }
+            }
         }
+        .navigationSplitViewStyle(.balanced)
         .environment(catalog)
         .environment(settings)
         .environment(mapAppService)

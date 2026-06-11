@@ -67,11 +67,6 @@ struct KMLDetailView: View {
                             document: document,
                             entry: entry
                         )
-                        // A NavigationStack resolves a pushed destination's environment from
-                        // the stack root, not from this (itself-pushed) view, so the
-                        // `.environment(annotations)` on our body does not reach the map.
-                        // Inject it directly on the destination.
-                        .environment(annotations)
                     }
                 } label: {
                     Image(systemName: "map")
@@ -110,6 +105,12 @@ struct KMLDetailView: View {
         )) {
             await buildOutlineNow()
         }
+        // KMLDetailView is the root of the detail column's NavigationStack, so this single
+        // injection reaches both this view's in-body uses (swipe/context favorite & visited
+        // actions) AND every destination pushed from this stack — the map, the placemark
+        // detail, and the map's own onward push to placemark detail — because a NavigationStack
+        // resolves a pushed destination's environment from the stack root. This is the one
+        // consolidation point that replaced four scattered re-injections.
         .environment(annotations)
     }
 
@@ -281,11 +282,7 @@ struct KMLDetailView: View {
             placemark: placemark,
             document: document,
             entry: entry
-        )
-        // Inject the store directly on the destination: a pushed view does not inherit
-        // the `.environment(annotations)` applied within this view's body (the stack
-        // resolves a destination's environment from the stack root).
-        .environment(annotations)) {
+        )) {
             PlacemarkRow(placemark: placemark, document: document, entry: entry)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {

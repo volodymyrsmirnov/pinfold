@@ -62,10 +62,10 @@ struct PlacemarkMapView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationDestination(item: $placemarkToOpenKey) { key in
             if let placemark = placemarks.first(where: { $0.stableKey == key }) {
-                // Re-inject the store: this map is itself a pushed view, so its own pushed
-                // destination does not inherit the environment store automatically.
+                // No `.environment(annotations)` here: the detail column's NavigationStack root
+                // (KMLDetailView) injects it once, and a NavigationStack resolves every pushed
+                // destination's environment from that root — including this map's onward push.
                 PlacemarkDetailView(placemark: placemark, document: document, entry: entry)
-                    .environment(annotations)
             }
         }
         .task {

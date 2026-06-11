@@ -20,10 +20,17 @@ private enum Segment: Hashable {
 /// states are shown as `overlay`s on the List so `ContentUnavailableView` has the full
 /// view bounds it needs to centre itself.
 struct HomeView: View {
+    // MARK: - Bindings
+
+    /// The catalogue selection, owned by `RootView` (drives the detail column). Stored by
+    /// entry id so it survives `catalog.reload()`; see `RootView.selectedEntryID`.
+    @Binding var selection: CatalogEntry.ID?
+
     // MARK: - Environment
 
     @Environment(Catalog.self) private var catalog
     @Environment(ImportFailureLog.self) private var importFailureLog
+    @Environment(AppCommands.self) private var appCommands
     @Environment(\.resourceCache) private var resourceCache
 
     // MARK: - Local state
@@ -32,6 +39,9 @@ struct HomeView: View {
     /// Presents the `fileImporter` picker sheet. Distinct from
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
     @State private var isFileImporterPresented = false
+    /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
+    /// it covers the whole window on iPad/Mac rather than landing in one split column.
+    @State private var isSettingsPresented = false
     @State private var importCoordinator = ImportCoordinator()
 
     // MARK: - Computed partitions
@@ -70,8 +80,12 @@ struct HomeView: View {
             }
             // Import progress: a spinner plus the current filename, shown only while the
             // coordinator is draining its queue (e.g. a large KMZ that takes a moment).
+            // Placed in the bottom bar (`.bottomBar`) rather than `.principal`: a principal
+            // item REPLACES the navigation title on compact width, which made the "Pinfold"
+            // title vanish mid-import. The status bar floats below the list and leaves the
+            // title intact on every size class.
             if importCoordinator.isImporting {
-                ToolbarItem(placement: .principal) {
+                ToolbarItem(placement: .bottomBar) {
                     HStack(spacing: 8) {
                         ProgressView()
                         if let name = importCoordinator.currentFilename {
@@ -88,7 +102,9 @@ struct HomeView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: SettingsView()) {
+                Button {
+                    isSettingsPresented = true
+                } label: {
                     Label("Settings", systemImage: "gear")
                 }
             }
@@ -148,6 +164,24 @@ struct HomeView: View {
         } message: { error in
             Text(error.localizedDescription)
         }
+        // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
+        // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
+        // split column, and wraps it in its own NavigationStack so its title bar renders.
+        .sheet(isPresented: $isSettingsPresented) {
+            NavigationStack {
+                SettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isSettingsPresented = false }
+                        }
+                    }
+            }
+        }
+        // The "Import…" menu command (⌘I) flips a counter on AppCommands; presenting the
+        // fileImporter here keeps that transient UI state owned by the view, not the scene.
+        .onChange(of: appCommands.importRequested) { _, _ in
+            isFileImporterPresented = true
+        }
         // Inbox draining (share-extension handoff) is performed once in RootView's
         // .task on launch; it is intentionally NOT duplicated here.
     }
@@ -164,25 +198,27 @@ struct HomeView: View {
                     Text("Import a KML or KMZ file using the + button.")
                 }
             } else {
-                List {
+                // `List(selection:)` drives the detail column on regular width and pushes the
+                // detail on compact width (collapsed split view) — replacing the old explicit
+                // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
+                List(selection: $selection) {
                     ForEach(active) { entry in
-                        NavigationLink(destination: KMLDetailView(entry: entry)) {
-                            FileRow(entry: entry)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task { await catalog.moveToTrash(entry) }
-                            } label: {
-                                Label("Trash", systemImage: "trash")
+                        FileRow(entry: entry)
+                            .tag(entry.id)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task { await catalog.moveToTrash(entry) }
+                                } label: {
+                                    Label("Trash", systemImage: "trash")
+                                }
                             }
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                Task { await catalog.moveToTrash(entry) }
-                            } label: {
-                                Label("Trash", systemImage: "trash")
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    Task { await catalog.moveToTrash(entry) }
+                                } label: {
+                                    Label("Trash", systemImage: "trash")
+                                }
                             }
-                        }
                     }
                 }
                 .listStyle(.insetGrouped)
