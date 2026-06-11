@@ -24,7 +24,42 @@ struct PendingImportInbox {
     /// tests that don't care about failures keep compiling; production paths thread it in.
     var failureLog: ImportFailureLog?
 
+    // MARK: - Concurrency guard
+
+    /// In-flight drains keyed by inbox directory path. `PendingImportInbox` is a short-lived
+    /// value type reconstructed at each call site (bootstrap, scenePhase, onOpenURL), so a
+    /// guard living on an instance wouldn't see sibling drains. This `@MainActor` static
+    /// registry makes draining the *same inbox directory* idempotent under concurrency: a
+    /// second `drain()` arriving while one is in flight joins the existing task instead of
+    /// starting a parallel pass that would double-import the same files (the dedup check reads
+    /// pre-drain catalogue state, so two parallel passes both see a file as "new").
+    @MainActor private static var inFlight: [String: Task<Int, Never>] = [:]
+
     // MARK: - Drain
+
+    /// Imports every file in the inbox, skipping content-duplicates — coalescing concurrent
+    /// calls on the same inbox directory so each file is imported exactly once.
+    ///
+    /// If a drain for this inbox path is already running, this awaits that one rather than
+    /// starting a second parallel pass (see `inFlight`). The actual import work is in
+    /// `performDrain`.
+    ///
+    /// - Returns: The number of newly imported files (the count from the shared pass when
+    ///   coalesced).
+    @discardableResult
+    func drain() async -> Int {
+        let key = inboxURL.path
+        if let existing = Self.inFlight[key] {
+            return await existing.value
+        }
+        let task = Task { @MainActor in
+            await performDrain()
+        }
+        Self.inFlight[key] = task
+        let result = await task.value
+        Self.inFlight[key] = nil
+        return result
+    }
 
     /// Imports every file in the inbox, skipping content-duplicates.
     ///
@@ -39,8 +74,7 @@ struct PendingImportInbox {
     /// blocks the rest.
     ///
     /// - Returns: The number of newly imported files.
-    @discardableResult
-    func drain() async -> Int {
+    private func performDrain() async -> Int {
         let fm = FileManager.default
 
         // If the inbox directory doesn't exist there is nothing to drain.

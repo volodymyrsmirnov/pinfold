@@ -9,7 +9,6 @@ import Observation
 /// (or removes the folder) and then re-scans, so the list always reflects exactly what is
 /// on disk. The scan runs off the main actor; the result is assigned back here.
 @MainActor @Observable final class Catalog {
-
     /// All entries (active and trashed), newest first.
     private(set) var entries: [CatalogEntry] = []
 
@@ -19,9 +18,19 @@ import Observation
     @ObservationIgnored private let cache: ResourceCache
     /// At most one resource-materialization pass runs at a time (see `reload`).
     @ObservationIgnored private var materializeTask: Task<Void, Never>?
+    /// Set when a `reload` arrives while a materialization pass is already running, so the pass
+    /// re-runs once on completion to pick up folders that synced in mid-pass.
+    @ObservationIgnored private var materializePending = false
+    /// Monotonically increasing token identifying the latest `reload`. A detached scan captures
+    /// the token it was started for and only publishes its result if it is still the latest, so
+    /// a slower earlier scan can never clobber a newer one (concurrent reloads settle to the
+    /// final state).
+    @ObservationIgnored private var scanGeneration = 0
 
     /// Non-trashed entries.
-    var active: [CatalogEntry] { entries.filter { !$0.isTrashed } }
+    var active: [CatalogEntry] {
+        entries.filter { !$0.isTrashed }
+    }
 
     /// Trashed entries, most recently trashed first.
     var trashed: [CatalogEntry] {
@@ -40,23 +49,39 @@ import Observation
     /// that synced in from another device — its derivable `resources/` cache is local-only,
     /// so each device builds its own from the synced original).
     func reload() async {
+        let generation = scanGeneration + 1
+        scanGeneration = generation
         let scanner = CatalogScanner(storage: storage, cache: cache)
-        entries = await Task.detached { scanner.scan() }.value
+        let scanned = await Task.detached { scanner.scan() }.value
+        // Only publish if this scan is still the most recent one. A concurrent later reload
+        // bumps `scanGeneration`, so a slower earlier scan that finishes afterwards is dropped
+        // and the newest result wins — the catalogue settles to the final state.
+        guard generation == scanGeneration else { return }
+        entries = scanned
         scheduleResourceMaterialization()
     }
 
-    /// Starts a single background materialization pass. If one is already running, this is a
-    /// no-op — that pass scans every folder, and any folders that sync in afterwards are
-    /// picked up by the next `reload` (the watcher fires again).
+    /// Starts a single background materialization pass. If one is already running, marks the
+    /// pass dirty (`materializePending`) so it re-runs once on completion — a folder that syncs
+    /// in while a pass is mid-flight would otherwise be missed until the next unrelated reload.
     private func scheduleResourceMaterialization() {
-        guard materializeTask == nil else { return }
+        guard materializeTask == nil else {
+            materializePending = true
+            return
+        }
         let storage = storage
         let cache = cache
         materializeTask = Task { [weak self] in
             _ = await Task.detached {
                 await CatalogScanner(storage: storage, cache: cache).materializeMissingResources()
             }.value
-            self?.materializeTask = nil
+            guard let self else { return }
+            materializeTask = nil
+            // If a reload arrived during the pass, run one more pass to pick up what it added.
+            if materializePending {
+                materializePending = false
+                scheduleResourceMaterialization()
+            }
         }
     }
 

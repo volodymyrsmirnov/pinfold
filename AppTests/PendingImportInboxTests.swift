@@ -172,6 +172,22 @@ import Testing
         #expect(env.failureLog.failures.first?.filename == "Rome.kml")
     }
 
+    @Test func drain_concurrentCallsImportOnce() async throws {
+        let env = try makeEnvironment()
+        try copyFixture(named: "Rome.kml", as: "Rome.kml", into: env.inboxURL)
+
+        // Two drains kicked off concurrently. Without serialization both read the inbox before
+        // either removes the file, so the same file imports twice. The inbox must guard against
+        // this so exactly one entry folder ends up on disk.
+        async let first = env.inbox.drain()
+        async let second = env.inbox.drain()
+        _ = await (first, second)
+
+        let folders = try FileManager.default.contentsOfDirectory(atPath: env.storageRoot.path)
+            .filter { !$0.hasPrefix(".") }
+        #expect(folders.count == 1, "Concurrent drains of one file must produce exactly one entry folder")
+    }
+
     @Test func drain_twoIdenticalFilesInOneBatch_importsOnlyOne() async throws {
         let env = try makeEnvironment()
         // Same bytes under two names, both present for a single drain. The catalogue is not

@@ -99,6 +99,31 @@ import Testing
         #expect(catalog.entry(withSHA256: "missing") == nil)
     }
 
+    @Test func reload_concurrentCallsSettleToFinalState() async throws {
+        let (catalog, storage) = makeCatalog()
+        // Seed several folders so a scan has real work to do.
+        for index in 0 ..< 5 {
+            try seedFolder(storage, folder: "f\(index)")
+        }
+
+        // Fire many reloads concurrently. The generation guard must ensure no crash and that a
+        // stale scan never clobbers a newer one. A final awaited reload settles the state.
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0 ..< 8 {
+                group.addTask { await catalog.reload() }
+            }
+        }
+        await catalog.reload()
+
+        let onDisk = try FileManager.default.contentsOfDirectory(atPath: storage.root.path)
+            .filter { !$0.hasPrefix(".") }
+        #expect(
+            catalog.entries.count == onDisk.count,
+            "After concurrent reloads settle, entries must match the on-disk folder count"
+        )
+        #expect(catalog.entries.count == 5)
+    }
+
     @Test func setStorage_repointsRootAndReloads() async throws {
         let (catalog, oldStorage) = makeCatalog()
         try seedFolder(oldStorage, folder: "old")
