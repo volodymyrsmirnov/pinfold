@@ -58,6 +58,29 @@ struct HomeView: View {
                 } label: {
                     Label("Import", systemImage: "plus")
                 }
+                // While an import is in flight, the button is disabled and a progress
+                // indicator (below) takes its visual place — re-tapping mid-import is a no-op
+                // anyway (the picker just enqueues more), but the spinner signals work is on.
+                .disabled(importCoordinator.isImporting)
+            }
+            // Import progress: a spinner plus the current filename, shown only while the
+            // coordinator is draining its queue (e.g. a large KMZ that takes a moment).
+            if importCoordinator.isImporting {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        if let name = importCoordinator.currentFilename {
+                            Text("Importing \(name)…")
+                                .font(.subheadline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        } else {
+                            Text("Importing…")
+                                .font(.subheadline)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(destination: SettingsView()) {
