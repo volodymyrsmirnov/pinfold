@@ -23,6 +23,8 @@ private struct RootView: View {
     @State private var mapAppService: MapAppService
     @State private var resourceCache: ResourceCache
     @State private var watcher: CatalogWatcher?
+    /// Surfaces partial-migration failures to the Settings flow as an alert.
+    @State private var migrationAlert = MigrationAlertState()
     /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
     @State private var rootIsUbiquitous = false
@@ -46,6 +48,7 @@ private struct RootView: View {
         .environment(catalog)
         .environment(settings)
         .environment(mapAppService)
+        .environment(migrationAlert)
         .environment(\.resourceCache, resourceCache)
         .environment(\.storageLocations, catalog.storage)
         .task { await bootstrap() }
@@ -86,7 +89,12 @@ private struct RootView: View {
         if migrate {
             let from = catalog.storage.root
             let wasUbiquitous = rootIsUbiquitous
-            try? await Task.detached {
+            // Run the move off-main, then surface any per-folder failures. We do NOT swallow
+            // the report: a folder that fails to move stays in the old root and would silently
+            // vanish from the catalogue otherwise. Enumeration/setup errors (the only thrown
+            // path) leave `report` nil and are best-effort ignored — the repoint below still
+            // happens so the app keeps working against the resolved root.
+            let report = try? await Task.detached {
                 try StorageLocations.migrateEntryFolders(
                     from: from,
                     to: storage.root,
@@ -94,6 +102,16 @@ private struct RootView: View {
                     toUbiquitous: ubiquitous
                 )
             }.value
+            if let report, !report.failed.isEmpty {
+                // Map failed folder names to display names via the still-current (pre-repoint)
+                // catalogue; fall back to the raw folder name when no entry is loaded for it.
+                let byFolder = Dictionary(
+                    catalog.entries.map { ($0.storageFolderName, $0.displayName) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                let names = report.failed.map { byFolder[$0.folderName] ?? $0.folderName }
+                migrationAlert.report(failedNames: names)
+            }
         }
         await catalog.setStorage(storage)
         rootIsUbiquitous = ubiquitous

@@ -283,6 +283,23 @@ struct StorageLocations {
 
     // MARK: - Root migration
 
+    /// The outcome of a root migration: which per-entry folders moved and which couldn't.
+    ///
+    /// Migration is best-effort *per folder* — a single failing folder must not strand the
+    /// rest in the old root — so the result is a report rather than a thrown error. The caller
+    /// repoints storage to `newRoot` regardless (the moved majority lives there) and surfaces
+    /// `failed` to the user, whose files remain readable in the previous location.
+    struct MigrationReport {
+        var moved: [String] = []
+        var failed: [MigrationFailure] = []
+    }
+
+    /// A single per-folder migration failure: the folder that could not be moved and why.
+    struct MigrationFailure {
+        let folderName: String
+        let error: Error
+    }
+
     /// Moves every per-entry folder from `oldRoot` into `newRoot`, so nothing disappears
     /// from the catalogue when the iCloud sync toggle changes the active root.
     ///
@@ -292,18 +309,27 @@ struct StorageLocations {
     /// - **iCloud → local** (`fromUbiquitous`): `setUbiquitous(false,…)` to evict it.
     /// - **otherwise** (local → local): `moveItem`.
     ///
+    /// Each move (`setUbiquitous`/`moveItem`) removes the source folder on success, so after a
+    /// fully successful migration no per-entry folders remain in `oldRoot`.
+    ///
     /// Creates `newRoot` if absent. Skips any folder whose name already exists at the
     /// destination (the destination is authoritative — e.g. iCloud already holds that
-    /// entry) without throwing. No-op when the roots are equal or `oldRoot` is absent.
+    /// entry) without recording a failure. **Per-folder failures are collected and the loop
+    /// continues**, so one bad folder never strands the others; the returned `MigrationReport`
+    /// lists what moved and what failed. Returns an empty report when the roots are equal or
+    /// `oldRoot` is absent. Only throws for failures *before* the per-folder loop (creating
+    /// `newRoot`, enumerating `oldRoot`).
+    @discardableResult
     static func migrateEntryFolders(
         from oldRoot: URL,
         to newRoot: URL,
         fromUbiquitous: Bool = false,
         toUbiquitous: Bool = false
-    ) throws {
-        guard oldRoot.standardizedFileURL != newRoot.standardizedFileURL else { return }
+    ) throws -> MigrationReport {
+        var report = MigrationReport()
+        guard oldRoot.standardizedFileURL != newRoot.standardizedFileURL else { return report }
         let fm = FileManager.default
-        guard fm.fileExists(atPath: oldRoot.path) else { return }
+        guard fm.fileExists(atPath: oldRoot.path) else { return report }
         try fm.createDirectory(at: newRoot, withIntermediateDirectories: true)
 
         let contents = try fm.contentsOfDirectory(
@@ -314,17 +340,27 @@ struct StorageLocations {
         for source in contents {
             let isDir = (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
             guard isDir else { continue }
-            let dest = newRoot.appendingPathComponent(source.lastPathComponent, isDirectory: true)
+            let name = source.lastPathComponent
+            let dest = newRoot.appendingPathComponent(name, isDirectory: true)
             if fm.fileExists(atPath: dest.path) { continue }
 
-            if toUbiquitous, !fromUbiquitous {
-                try fm.setUbiquitous(true, itemAt: source, destinationURL: dest)
-            } else if fromUbiquitous, !toUbiquitous {
-                try fm.setUbiquitous(false, itemAt: source, destinationURL: dest)
-            } else {
-                try fm.moveItem(at: source, to: dest)
+            do {
+                if toUbiquitous, !fromUbiquitous {
+                    try fm.setUbiquitous(true, itemAt: source, destinationURL: dest)
+                } else if fromUbiquitous, !toUbiquitous {
+                    try fm.setUbiquitous(false, itemAt: source, destinationURL: dest)
+                } else {
+                    try fm.moveItem(at: source, to: dest)
+                }
+                report.moved.append(name)
+            } catch {
+                // Collect and keep going — a single un-movable folder (e.g. a non-empty
+                // destination already present, or a transient iCloud error) must not strand
+                // the remaining entries in the old root.
+                report.failed.append(MigrationFailure(folderName: name, error: error))
             }
         }
+        return report
     }
 
     // MARK: - Directory management
