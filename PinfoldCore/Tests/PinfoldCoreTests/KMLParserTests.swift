@@ -265,6 +265,51 @@ struct KMLParserTests {
         #expect(pm?.descriptionHTML == "<p>Hello <b>Bold</b> &amp; raw</p>")
     }
 
+    @Test func parse_rawDescriptionSelfClosingChild() throws {
+        // XMLParser reports <br/> and <img/> as start+end pairs. The capture re-serializes
+        // HTML void elements without a closing tag, since the buffer is display-HTML and
+        // "</br>" / "</img>" are invalid there.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description>line one<br/>line two <img src="https://x.example/p.png"/> end</description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML
+            == #"line one<br>line two <img src="https://x.example/p.png"> end"#)
+    }
+
+    @Test func parse_doctypeAfterRootElementIgnored() throws {
+        // The DOCTYPE scan is bounded to the prolog: a literal "<!DOCTYPE" appearing inside
+        // element content (here, CDATA) after the root element opened is plain text, not a
+        // DTD, and must not cause rejection.
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <name>Test</name>
+            <Placemark>
+              <name>Spot</name>
+              <description><![CDATA[<!DOCTYPE html><p>embedded page</p>]]></description>
+              <Point><coordinates>1.0,2.0,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        let pm = doc.root.allPlacemarks.first { $0.name == "Spot" }
+        #expect(pm?.descriptionHTML == "<!DOCTYPE html><p>embedded page</p>")
+    }
+
     @Test func parse_rejectsDOCTYPE() {
         let xml = """
         <?xml version="1.0" encoding="UTF-8"?>

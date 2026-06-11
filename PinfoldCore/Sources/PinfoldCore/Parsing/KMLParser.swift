@@ -12,7 +12,7 @@ public enum KMLParseError: Error, Equatable {
 public enum KMLParser {
     public static func parse(data: Data) throws -> KMLDocument {
         // Reject DTDs before handing the bytes to XMLParser — see `dtdProhibited`.
-        if containsDoctype(data) { throw KMLParseError.dtdProhibited }
+        if prologContainsDoctype(data) { throw KMLParseError.dtdProhibited }
         let parser = XMLParser(data: data)
         // External entity resolution must stay off. False is already XMLParser's default;
         // setting it explicitly documents the intent.
@@ -25,23 +25,65 @@ public enum KMLParser {
         return delegate.makeDocument()
     }
 
-    /// True if the data contains the ASCII bytes `<!DOCTYPE` (case-insensitive).
-    private static func containsDoctype(_ data: Data) -> Bool {
-        let needle: [UInt8] = Array("<!DOCTYPE".utf8) // uppercase ASCII
-        guard data.count >= needle.count else { return false }
-        return data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+    /// True if the document prolog contains the ASCII bytes `<!DOCTYPE` (case-insensitive).
+    ///
+    /// The scan is bounded to the prolog: a DTD can only legally appear before the root
+    /// element, so the scan walks the prolog constructs (XML declaration, processing
+    /// instructions, comments, whitespace/BOM) and stops at the first `<` that opens an
+    /// element. This keeps the check O(prolog) instead of O(document) for legitimate
+    /// multi-MB files, and means a literal "<!DOCTYPE" inside element content or CDATA is
+    /// treated as plain text, not a DTD.
+    private static func prologContainsDoctype(_ data: Data) -> Bool {
+        let doctype: [UInt8] = Array("<!DOCTYPE".utf8) // uppercase ASCII
+        let comment: [UInt8] = Array("<!--".utf8)
+        return data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
             let bytes = buffer.bindMemory(to: UInt8.self)
-            for start in 0 ... (bytes.count - needle.count) {
-                var matches = true
+
+            /// Case-insensitive ASCII prefix match at `start`.
+            func matches(_ needle: [UInt8], at start: Int) -> Bool {
+                guard start + needle.count <= bytes.count else { return false }
                 for offset in 0 ..< needle.count {
                     var byte = bytes[start + offset]
                     if byte >= 0x61, byte <= 0x7A { byte -= 0x20 } // ASCII-uppercase letters
-                    if byte != needle[offset] {
-                        matches = false
-                        break
-                    }
+                    if byte != needle[offset] { return false }
                 }
-                if matches { return true }
+                return true
+            }
+
+            var i = 0
+            while i < bytes.count {
+                guard bytes[i] == UInt8(ascii: "<") else {
+                    i += 1 // whitespace, BOM bytes, or stray text before markup
+                    continue
+                }
+                guard i + 1 < bytes.count else { return false }
+                switch bytes[i + 1] {
+                case UInt8(ascii: "?"):
+                    // XML declaration / processing instruction: skip to its closing '>'.
+                    while i < bytes.count, bytes[i] != UInt8(ascii: ">") {
+                        i += 1
+                    }
+                    i += 1
+                case UInt8(ascii: "!"):
+                    if matches(doctype, at: i) { return true }
+                    guard matches(comment, at: i) else {
+                        // Some other "<!…" markup declaration in the prolog: not a DTD,
+                        // and malformed XML that XMLParser will reject on its own.
+                        return false
+                    }
+                    // Comment: skip past its closing "-->" (comments may contain '<').
+                    let dash = UInt8(ascii: "-")
+                    let gt = UInt8(ascii: ">")
+                    i += comment.count
+                    while i + 2 < bytes.count, !(bytes[i] == dash && bytes[i + 1] == dash && bytes[i + 2] == gt) {
+                        i += 1
+                    }
+                    i += 3
+                default:
+                    // First element open tag: the prolog is over and a DTD can no longer
+                    // legally appear.
+                    return false
+                }
             }
             return false
         }
@@ -133,12 +175,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// `name` attribute of the currently open <SimpleData> (SchemaData child).
     private var currentSimpleDataName: String?
 
-    // Description capture. While > 0, every SAX event between <description> and its
-    // matching </description> is re-serialized verbatim into `descriptionBuffer` so that
-    // raw (non-CDATA) descriptions keep their inline HTML instead of being truncated by
-    // the `text` reset on each child element. 0 = not capturing; 1 = directly inside
-    // <description>; each nested child element adds 1.
+    /// Description capture. While > 0, every SAX event between <description> and its
+    /// matching </description> is re-serialized verbatim into `descriptionBuffer` so that
+    /// raw (non-CDATA) descriptions keep their inline HTML instead of being truncated by
+    /// the `text` reset on each child element. 0 = not capturing; 1 = directly inside
+    /// <description>; each nested child element adds 1.
     private var descriptionDepth = 0
+    /// The captured buffer is display-HTML, not guaranteed well-formed XML (text content
+    /// is entity-decoded verbatim, and void elements like <br> carry no closing tag).
     private var descriptionBuffer = ""
     /// True once a child element was re-serialized into the buffer. Used to decide
     /// whether to trim: markup-bearing descriptions are trimmed, while plain-text/CDATA
@@ -162,14 +206,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
     // swiftlint:disable:next opening_brace
     {
-        if descriptionDepth > 0 {
-            // Re-serialize the child element's open tag into the description verbatim;
-            // do NOT reset `text` or otherwise touch normal element handling.
-            descriptionBuffer += Self.serializedOpenTag(elementName, attributes: attributeDict)
-            descriptionSawMarkup = true
-            descriptionDepth += 1
-            return
-        }
+        if startElementWhileCapturingDescription(elementName, attributes: attributeDict) { return }
         text = ""
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -235,29 +272,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
     // swiftlint:disable:next opening_brace
     {
-        if descriptionDepth > 0 {
-            descriptionDepth -= 1
-            if descriptionDepth == 0 {
-                // </description> itself: assign the captured content. Markup-bearing
-                // content is trimmed; plain-text/CDATA content is assigned untouched,
-                // byte-identical to the pre-capture behavior.
-                let html = descriptionSawMarkup
-                    ? descriptionBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
-                    : descriptionBuffer
-                if placemark != nil {
-                    placemark?.descriptionHTML = html
-                } else if let c = containerStack.last, c !== rootBuilder {
-                    c.description = html
-                }
-                descriptionBuffer = ""
-                descriptionSawMarkup = false
-                text = ""
-            } else {
-                // A child element inside the description closes: re-serialize it.
-                descriptionBuffer += "</\(elementName)>"
-            }
-            return
-        }
+        if endElementWhileCapturingDescription(elementName) { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch Self.localName(elementName) {
         case "Document", "Folder":
@@ -361,6 +376,55 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         text = ""
     }
+
+    // MARK: - Description capture
+
+    /// Handles a start-element event while description capture is active.
+    /// Returns true if the event was consumed (i.e. capture mode is on); the caller must
+    /// then skip all normal element handling, including the `text` reset.
+    private func startElementWhileCapturingDescription(
+        _ elementName: String, attributes: [String: String]
+    ) -> Bool {
+        guard descriptionDepth > 0 else { return false }
+        // Re-serialize the child element's open tag into the description verbatim.
+        descriptionBuffer += Self.serializedOpenTag(elementName, attributes: attributes)
+        descriptionSawMarkup = true
+        descriptionDepth += 1
+        return true
+    }
+
+    /// Handles an end-element event while description capture is active.
+    /// Returns true if the event was consumed (i.e. capture mode is on).
+    private func endElementWhileCapturingDescription(_ elementName: String) -> Bool {
+        guard descriptionDepth > 0 else { return false }
+        descriptionDepth -= 1
+        if descriptionDepth == 0 {
+            // </description> itself: assign the captured content. Markup-bearing
+            // content is trimmed; plain-text/CDATA content is assigned untouched,
+            // byte-identical to the pre-capture behavior.
+            let html = descriptionSawMarkup
+                ? descriptionBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                : descriptionBuffer
+            if placemark != nil {
+                placemark?.descriptionHTML = html
+            } else if let c = containerStack.last, c !== rootBuilder {
+                c.description = html
+            }
+            descriptionBuffer = ""
+            descriptionSawMarkup = false
+            text = ""
+        } else if !Self.htmlVoidElements.contains(elementName.lowercased()) {
+            // A child element inside the description closes: re-serialize it. HTML void
+            // elements get no closing tag — XMLParser reports <br/> as start+end, but
+            // "</br>" is invalid in the display-HTML this buffer holds.
+            descriptionBuffer += "</\(elementName)>"
+        }
+        return true
+    }
+
+    /// HTML void elements that may appear in captured descriptions: re-serialized as a
+    /// bare open tag (e.g. `<br>`), never with a closing tag.
+    private static let htmlVoidElements: Set<String> = ["br", "hr", "img", "wbr"]
 
     /// Re-serializes an open tag (`<name attr="value" …>`) for description capture.
     /// Attributes are sorted by name for deterministic output.
