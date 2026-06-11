@@ -188,14 +188,20 @@ struct PlacemarkOutline {
             return location.distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
         }
 
-        let sorted = flat.enumerated().sorted { lhs, rhs in
-            switch (distance(lhs.element), distance(rhs.element)) {
+        // Schwartzian transform: compute each distance once (allocating a CLLocation per
+        // placemark) up front, rather than inside the comparator where it would run
+        // O(N log N) times — costly for files with tens of thousands of placemarks.
+        let decorated = flat.enumerated().map { offset, placemark in
+            (offset: offset, placemark: placemark, distance: distance(placemark))
+        }
+        let sorted = decorated.sorted { lhs, rhs in
+            switch (lhs.distance, rhs.distance) {
             case let (l?, r?): l != r ? l < r : lhs.offset < rhs.offset
             case (_?, nil): true // placed-on-map before coordinate-less
             case (nil, _?): false
             case (nil, nil): lhs.offset < rhs.offset
             }
-        }.map(\.element)
+        }.map(\.placemark)
 
         let rows = sorted.map { Row(kind: .placemark($0), depth: 0, id: $0.stableKey) }
         let mappable = flat.filter { $0.coordinate != nil }
