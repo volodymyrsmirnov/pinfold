@@ -69,6 +69,11 @@ import Testing
         coordinator.enqueuePrepared([(content, "again.kml")], catalog: catalog, storage: storage, cache: cache)
         await coordinator.drainForTesting()
         #expect(coordinator.pendingDuplicate != nil)
+        // Stall semantics: nothing is being imported while we wait on the user's decision —
+        // `isImporting` is false and the progress filename is cleared, so the coordinator's
+        // published state is self-consistent for the UI.
+        #expect(coordinator.isImporting == false)
+        #expect(coordinator.currentFilename == nil)
 
         // Skip → still 1 entry; queue continues (drains cleanly).
         coordinator.skipDuplicate(catalog: catalog, storage: storage, cache: cache)
@@ -109,18 +114,18 @@ import Testing
 
     // MARK: - Race regression: importAnyway awaits reload before processing next
 
-    /// Regression for the fire-and-forget commit in `importAnyway`. Queue:
-    /// [duplicate-of-existing, fresh-file]. When the user taps Import Anyway on the stalled
-    /// duplicate, the coordinator must commit AND await `catalog.reload()` BEFORE pulling the
-    /// next queued item — otherwise the next item's duplicate check runs against a stale
-    /// catalogue.
+    /// Regression for the fire-and-forget commit in `importAnyway`: the coordinator must
+    /// commit AND await `catalog.reload()` BEFORE pulling the next queued item, so the next
+    /// item's duplicate check runs against the post-reload catalogue, never a stale one.
     ///
-    /// The deterministic stressor: the queue carries the SAME content as the *next* item too.
-    /// After Import Anyway commits the duplicate copy, the next item is byte-identical to it; a
-    /// correct (await-before-next) implementation sees the just-committed copy and stalls again
-    /// on a second duplicate, so exactly one copy is added per decision. The fire-and-forget
-    /// code can let the next item's dedup check miss the in-flight commit. We assert the final,
-    /// fully-settled entry count is exact.
+    /// The deterministic stressor: queue TWO items byte-identical to an already-seeded entry.
+    /// With the awaited reload, every dedup check sees all earlier commits, so each copy stalls
+    /// individually: Import Anyway on the first stall commits exactly one copy and the second
+    /// item immediately stalls again (`pendingDuplicate` non-nil, catalogue already showing
+    /// 2 entries when the drain settles). With the old fire-and-forget reload, the drain
+    /// resumes against a stale catalogue — the stall/count sequence diverges (verified red
+    /// against a temporarily-reintroduced fire-and-forget commit) — so the exact asserts below
+    /// pin the awaited behaviour.
     @Test func importAnyway_awaitsReloadBeforeNext() async {
         let (coordinator, catalog, storage, cache) = makeEnvironment()
         let content = kml(lon: 6, lat: 6)
@@ -130,20 +135,28 @@ import Testing
         await coordinator.drainForTesting()
         #expect(catalog.entries.count == 1)
 
-        // Now enqueue the SAME content again, plus a fresh distinct file. The first stalls as a
-        // duplicate; Import Anyway must await the reload before the fresh file is dedup-checked.
+        // Enqueue TWO more byte-identical copies. The first stalls as a duplicate.
         coordinator.enqueuePrepared(
-            [(content, "dup.kml"), (kml(lon: 7, lat: 7), "fresh.kml")],
+            [(content, "dup.kml"), (content, "dup2.kml")],
             catalog: catalog, storage: storage, cache: cache
         )
         await coordinator.drainForTesting()
         #expect(coordinator.pendingDuplicate != nil)
+        #expect(catalog.entries.count == 1)
 
+        // Import Anyway commits the first copy; the awaited reload means the catalogue shows
+        // 2 entries by the time the second copy's dedup check runs — which therefore stalls
+        // again rather than slipping through against a stale snapshot.
         coordinator.importAnyway(catalog: catalog, storage: storage, cache: cache)
         await coordinator.drainForTesting()
+        #expect(coordinator.pendingDuplicate != nil, "second byte-identical copy must stall too")
+        #expect(catalog.entries.count == 2, "the reload must have been awaited before the next item ran")
 
-        // original + dup-copy + fresh = exactly 3, and no error surfaced.
+        // Skip the second stall → final state: exactly original + one anyway-copy, no error.
+        coordinator.skipDuplicate(catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(coordinator.pendingDuplicate == nil)
         #expect(coordinator.importError == nil)
-        #expect(catalog.entries.count == 3)
+        #expect(catalog.entries.count == 2)
     }
 }

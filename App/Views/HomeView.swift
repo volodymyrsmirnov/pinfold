@@ -29,7 +29,9 @@ struct HomeView: View {
     // MARK: - Local state
 
     @State private var segment: Segment = .files
-    @State private var isImporting = false
+    /// Presents the `fileImporter` picker sheet. Distinct from
+    /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
+    @State private var isFileImporterPresented = false
     @State private var importCoordinator = ImportCoordinator()
 
     // MARK: - Computed partitions
@@ -54,14 +56,17 @@ struct HomeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
-                    isImporting = true
+                    isFileImporterPresented = true
                 } label: {
                     Label("Import", systemImage: "plus")
                 }
                 // While an import is in flight, the button is disabled and a progress
                 // indicator (below) takes its visual place — re-tapping mid-import is a no-op
                 // anyway (the picker just enqueues more), but the spinner signals work is on.
-                .disabled(importCoordinator.isImporting)
+                // Also disabled while a duplicate alert stalls the queue: the coordinator is
+                // waiting on the user's decision, so offering more imports would contradict
+                // the stalled state (queued URLs are kept either way).
+                .disabled(importCoordinator.isImporting || importCoordinator.pendingDuplicate != nil)
             }
             // Import progress: a spinner plus the current filename, shown only while the
             // coordinator is draining its queue (e.g. a large KMZ that takes a moment).
@@ -89,7 +94,7 @@ struct HomeView: View {
             }
         }
         .fileImporter(
-            isPresented: $isImporting,
+            isPresented: $isFileImporterPresented,
             allowedContentTypes: allowedUTTypes,
             allowsMultipleSelection: true
         ) { result in

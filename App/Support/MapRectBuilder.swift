@@ -46,6 +46,12 @@ enum MapRectBuilder {
         // sub-ulp difference would hand back a shifted rect for an ordinary non-wrapping set,
         // and `contains`/`setVisibleMapRect` would frame the wrong region. For non-wrapping
         // sets the naive rect (and its exact legacy values) win unchanged.
+        //
+        // The exact constant is non-critical: float rounding noise is on the order of ulps
+        // (a tiny fraction of a map point at world scale), while a genuine wrap tightening
+        // saves *degrees* of longitude (≥ 1/360 of a world width per degree). Any margin in
+        // the vast gap between those magnitudes behaves identically; 1e-9 of a world width
+        // sits comfortably inside it.
         let tighteningMargin = MKMapRect.world.size.width * 1e-9
         return wrapped.size.width < naive.size.width - tighteningMargin ? wrapped : naive
     }

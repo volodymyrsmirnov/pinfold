@@ -211,7 +211,10 @@ final class ImportCoordinator {
 
         if let existing = catalog.entry(withSHA256: result.contentSHA256) {
             // Stall the queue and show the duplicate alert; the drain loop exits and a fresh
-            // drain starts once the user resolves the alert.
+            // drain starts once the user resolves the alert. Clear the progress filename here
+            // so the stalled state is self-consistent: nothing is being imported while we wait
+            // on the user (`isImporting` goes false when the drain Task winds down).
+            currentFilename = nil
             pendingDuplicate = DuplicateAlert(result: result, existingEntry: existing)
         } else {
             await commitAndReload(result, catalog: catalog, storage: storage, cache: cache)
