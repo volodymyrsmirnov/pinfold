@@ -33,7 +33,10 @@ struct HomeView: View {
 
     // MARK: - Environment
 
-    @Environment(Catalog.self) private var catalog
+    // Not `private`: read from the `HomeViewRows` extension (a separate file) for the
+    // active-row context menu (Share/Trash).
+    @Environment(Catalog.self) var catalog
+    @Environment(AppSettings.self) private var settings
     @Environment(ImportFailureLog.self) private var importFailureLog
     @Environment(AppCommands.self) private var appCommands
     @Environment(\.resourceCache) private var resourceCache
@@ -48,6 +51,13 @@ struct HomeView: View {
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State private var isSettingsPresented = false
     @State private var importCoordinator = ImportCoordinator()
+
+    /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
+    /// in progress. Set from the active-row context menu's "Rename" action (in HomeViewRows).
+    @State var renameTarget: CatalogEntry?
+    /// The editable text bound to the rename alert's `TextField`, prefilled with the entry's
+    /// current name when the alert opens.
+    @State var renameText = ""
 
     /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
     @State private var searchQuery = ""
@@ -74,6 +84,13 @@ struct HomeView: View {
         catalog.active
     }
 
+    /// `active` reordered by the user's chosen sort. This is the presentation order for the
+    /// Files list and the "Files" search-results section; the catalogue's storage order
+    /// (newest-first, from the scanner) is unchanged — sorting is purely a view concern.
+    var sortedActive: [CatalogEntry] {
+        settings.entrySort.apply(to: active)
+    }
+
     private var trashed: [CatalogEntry] {
         catalog.trashed
     }
@@ -91,7 +108,7 @@ struct HomeView: View {
     /// Active entries whose display name matches the query — the "Files" results section.
     /// Same `localizedCaseInsensitiveContains` primitive as the placemark search.
     var matchingFiles: [CatalogEntry] {
-        active.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+        sortedActive.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
     }
 
     /// Place hits grouped by the entry that contains them, in catalogue order, so the results
@@ -187,6 +204,23 @@ struct HomeView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
+            // Sort menu — Files segment only (Trash keeps its trashed-date order). Sits next to
+            // the gear in the trailing group rather than `.principal`, so it never replaces the
+            // navigation title. The Picker drives `settings.entrySort`, which `sortedActive`
+            // applies at render time (presentation-level; storage order is untouched).
+            if segment == .files {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker("Sort By", selection: sortBinding) {
+                            ForEach(EntrySort.allCases) { option in
+                                Text(option.label).tag(option)
+                            }
+                        }
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isSettingsPresented = true
@@ -250,6 +284,25 @@ struct HomeView: View {
         } message: { error in
             Text(error.localizedDescription)
         }
+        // Rename alert — a single TextField prefilled with the current name. `presenting` keys
+        // the alert to the entry being renamed; Save commits the trimmed name via
+        // `catalog.rename` (which rejects an empty/whitespace name as a no-op).
+        .alert(
+            "Rename File",
+            isPresented: Binding(
+                get: { renameTarget != nil },
+                set: { if !$0 { renameTarget = nil } }
+            ),
+            presenting: renameTarget
+        ) { entry in
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                let newName = renameText
+                Task { await catalog.rename(entry, to: newName) }
+                renameTarget = nil
+            }
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+        }
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.
@@ -290,7 +343,7 @@ struct HomeView: View {
                 // detail on compact width (collapsed split view) — replacing the old explicit
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
-                    ForEach(active) { entry in
+                    ForEach(sortedActive) { entry in
                         FileRow(entry: entry)
                             .tag(entry.id)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -300,13 +353,7 @@ struct HomeView: View {
                                     Label("Trash", systemImage: "trash")
                                 }
                             }
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    Task { await catalog.moveToTrash(entry) }
-                                } label: {
-                                    Label("Trash", systemImage: "trash")
-                                }
-                            }
+                            .contextMenu { activeRowMenu(for: entry) }
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -352,6 +399,13 @@ struct HomeView: View {
                 .listStyle(.insetGrouped)
             }
         }
+    }
+
+    /// A `Binding` to the persisted sort preference for the toolbar `Picker`. Built manually
+    /// (rather than via `@Bindable`) so the `@Observable` `AppSettings` read from the
+    /// environment can be bound without re-declaring it as a bindable property.
+    private var sortBinding: Binding<EntrySort> {
+        Binding(get: { settings.entrySort }, set: { settings.entrySort = $0 })
     }
 
     // MARK: - Picker bar

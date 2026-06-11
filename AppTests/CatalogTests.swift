@@ -124,6 +124,34 @@ import Testing
         #expect(catalog.entries.count == 5)
     }
 
+    @Test func rename_updatesSidecarAndList() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.rename(entry, to: "  Renamed Trip  ")
+
+        // The renamed entry appears with the trimmed new name after the reload.
+        #expect(catalog.active.first?.displayName == "Renamed Trip")
+        // The sidecar on disk carries the new name (persisted, survives a fresh scan).
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == "Renamed Trip")
+    }
+
+    @Test func rename_rejectsEmptyOrWhitespace() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        let original = entry.displayName
+
+        await catalog.rename(entry, to: "   ")
+
+        // No-op: the name is unchanged both in memory and on disk.
+        #expect(catalog.active.first?.displayName == original)
+        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
+    }
+
     @Test func setStorage_repointsRootAndReloads() async throws {
         let (catalog, oldStorage) = makeCatalog()
         try seedFolder(oldStorage, folder: "old")

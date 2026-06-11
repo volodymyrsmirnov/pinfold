@@ -97,6 +97,19 @@ import Observation
         await reload()
     }
 
+    /// Renames an entry by writing a new `displayName` into its sidecar, then reloading.
+    ///
+    /// Trims surrounding whitespace; a name that is empty after trimming is rejected as a
+    /// no-op (nothing is written, no reload). Writes through `updateMetadata`, which preserves
+    /// every other sidecar field (favorites/visited/trash), unlike reconstructing the metadata
+    /// from the in-memory `CatalogEntry`.
+    func rename(_ entry: CatalogEntry, to newName: String) async {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.displayName = trimmed }
+        await reload()
+    }
+
     /// Permanently removes an entry's folder (and its resource cache), then reloads.
     func deleteForever(_ entry: CatalogEntry) async {
         try? storage.removeFolder(named: entry.storageFolderName)

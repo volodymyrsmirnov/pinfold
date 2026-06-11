@@ -27,6 +27,7 @@ extension HomeView {
                         ForEach(files) { entry in
                             FileRow(entry: entry)
                                 .tag(entry.id)
+                                .contextMenu { activeRowMenu(for: entry) }
                         }
                     }
                 }
