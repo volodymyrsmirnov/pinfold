@@ -32,6 +32,8 @@ private struct RootView: View {
     @State private var watcher: CatalogWatcher?
     /// Surfaces partial-migration failures to the Settings flow as an alert.
     @State private var migrationAlert = MigrationAlertState()
+    /// Surfaces import failures (parse or I/O) from every arrival path to `HomeView`.
+    @State private var importFailureLog = ImportFailureLog()
     /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
     @State private var rootIsUbiquitous = false
@@ -56,6 +58,7 @@ private struct RootView: View {
         .environment(settings)
         .environment(mapAppService)
         .environment(migrationAlert)
+        .environment(importFailureLog)
         .environment(\.resourceCache, resourceCache)
         .environment(\.storageLocations, catalog.storage)
         .task { await bootstrap() }
@@ -162,7 +165,8 @@ private struct RootView: View {
             inboxURL: inboxURL,
             catalog: catalog,
             storage: catalog.storage,
-            cache: resourceCache
+            cache: resourceCache,
+            failureLog: importFailureLog
         )
         await inbox.drain()
     }
@@ -189,19 +193,55 @@ private struct RootView: View {
         await drainInbox()
     }
 
-    /// Imports a single opened file, deduping by content hash, then deletes the sandbox copy.
+    /// Imports a single opened file, deduping by content hash, reporting failures to the log.
+    ///
+    /// Failure handling mirrors `PendingImportInbox.drain`:
+    /// - **Read / parse failure** is permanent (bad bytes), so the sandbox copy is deleted and
+    ///   the failure recorded — retrying never helps.
+    /// - **Commit (I/O) failure** is potentially transient, so the sandbox copy is KEPT. The
+    ///   opened document is a copy iOS placed in `Documents/Inbox` (open-in-place is disabled
+    ///   for our KML/KMZ types), and `handleOpenURL` always drains that inbox afterwards, so a
+    ///   kept file is retried by `drainDocumentsInbox`. If a future caller ever passes a URL
+    ///   from outside `Documents/Inbox`, the kept file simply isn't retried automatically — but
+    ///   the failure is still surfaced to the user, so nothing is lost silently.
+    /// On success the sandbox copy is deleted.
     private func importFile(at url: URL) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url),
-              let result = try? ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
-        else { return }
-        if catalog.entry(withSHA256: result.contentSHA256) == nil {
-            _ = try? ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
-            await catalog.reload()
+
+        let data: Data
+        let result: ImportResult
+        do {
+            data = try Data(contentsOf: url)
+            result = try ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
+        } catch {
+            // Read or parse failure — permanent. Record and delete the copy.
+            importFailureLog.record(
+                filename: url.lastPathComponent,
+                reason: String(
+                    localized: "Not a valid KML or KMZ file.",
+                    comment: "Import failure reason: the file could not be read or parsed."
+                )
+            )
+            try? FileManager.default.removeItem(at: url)
+            return
         }
-        // The opened document is a copy in our sandbox (open-in-place is disabled), so it is
-        // safe to delete after importing.
+
+        if catalog.entry(withSHA256: result.contentSHA256) == nil {
+            do {
+                try ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
+                await catalog.reload()
+            } catch {
+                // Commit (I/O) failure — potentially transient. Record but KEEP the copy so the
+                // Documents-inbox drain can retry it.
+                importFailureLog.record(
+                    filename: url.lastPathComponent,
+                    reason: error.localizedDescription
+                )
+                return
+            }
+        }
+        // Imported or deduped — the sandbox copy is safe to delete.
         try? FileManager.default.removeItem(at: url)
     }
 
@@ -212,7 +252,8 @@ private struct RootView: View {
             inboxURL: documentsInboxURL,
             catalog: catalog,
             storage: catalog.storage,
-            cache: resourceCache
+            cache: resourceCache,
+            failureLog: importFailureLog
         )
         await inbox.drain()
     }

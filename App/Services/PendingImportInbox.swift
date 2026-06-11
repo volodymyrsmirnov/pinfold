@@ -20,11 +20,23 @@ struct PendingImportInbox {
     /// Cache for writing embedded resources and initiating remote downloads.
     let cache: ResourceCache
 
+    /// Sink for surfacing per-file failures to the user. Optional so existing call sites and
+    /// tests that don't care about failures keep compiling; production paths thread it in.
+    var failureLog: ImportFailureLog?
+
     // MARK: - Drain
 
-    /// Imports every file in the inbox, skipping content-duplicates, then removes each
-    /// inbox file (whether imported or skipped). Per-file errors are swallowed so one bad
-    /// file never blocks the rest.
+    /// Imports every file in the inbox, skipping content-duplicates.
+    ///
+    /// Failure handling distinguishes *permanent* from *transient* errors so a one-off I/O
+    /// hiccup is never lost:
+    /// - **Parse failure** (`ImportError.parseFailure`): the bytes are not valid KML/KMZ. This
+    ///   never succeeds on retry, so the inbox file is removed and the failure recorded.
+    /// - **Any other error** (folder creation / write I/O): potentially transient. The inbox
+    ///   file is KEPT so a later drain can retry it; the failure is still recorded so the user
+    ///   sees it. (The previous behaviour removed the file regardless, losing the import.)
+    /// Successfully-imported and deduped-skipped files are always removed. One bad file never
+    /// blocks the rest.
     ///
     /// - Returns: The number of newly imported files.
     @discardableResult
@@ -80,11 +92,28 @@ struct PendingImportInbox {
                     committedHashes.insert(result.contentSHA256)
                     imported += 1
                 }
+                // Imported or deduped — either way, done with this inbox file.
+                try? fm.removeItem(at: file)
+            } catch let ImportError.parseFailure(underlying) {
+                // Permanent: the bytes are not valid KML/KMZ. Record and remove so it is not
+                // retried forever.
+                _ = underlying
+                failureLog?.record(
+                    filename: file.lastPathComponent,
+                    reason: String(
+                        localized: "Not a valid KML or KMZ file.",
+                        comment: "Import failure reason: the file could not be parsed."
+                    )
+                )
+                try? fm.removeItem(at: file)
             } catch {
-                // Per-file errors are swallowed; the inbox file is still removed below.
+                // Potentially transient (e.g. an I/O error writing to disk). Record but KEEP
+                // the file so a later drain can retry it.
+                failureLog?.record(
+                    filename: file.lastPathComponent,
+                    reason: error.localizedDescription
+                )
             }
-            // Always remove the inbox file, regardless of import outcome.
-            try? fm.removeItem(at: file)
         }
 
         // Reload so freshly-imported folders appear in the catalogue.

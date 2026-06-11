@@ -154,6 +154,7 @@ struct HomeView: View {
     // MARK: - Environment
 
     @Environment(Catalog.self) private var catalog
+    @Environment(ImportFailureLog.self) private var importFailureLog
     @Environment(\.resourceCache) private var resourceCache
 
     // MARK: - Local state
@@ -177,6 +178,7 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             pickerBar
+            importFailureBanner
             fileList
         }
         .navigationTitle("Pinfold")
@@ -347,6 +349,47 @@ struct HomeView: View {
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 12)
+    }
+
+    // MARK: - Import failure banner
+
+    /// A dismissible banner listing recent import failures (parse or I/O) from any arrival
+    /// path. Non-empty only when `ImportFailureLog` has recorded failures; "Clear" empties it.
+    @ViewBuilder
+    private var importFailureBanner: some View {
+        if !importFailureLog.failures.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label {
+                        if importFailureLog.failures.count == 1 {
+                            Text("1 file couldn't be imported")
+                        } else {
+                            Text("\(importFailureLog.failures.count) files couldn't be imported")
+                        }
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button("Clear") { importFailureLog.clear() }
+                        .font(.subheadline)
+                }
+                ForEach(importFailureLog.failures.prefix(5)) { failure in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(failure.filename)
+                            .font(.footnote.weight(.medium))
+                        Text(failure.reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+        }
     }
 
     // MARK: - Import helpers
