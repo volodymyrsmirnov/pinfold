@@ -225,26 +225,42 @@ struct StorageLocations {
     ///
     /// We union-merge every decodable conflict version into `current` (see
     /// `EntryMetadata.merging(conflicts:)`), write the merged result back, and mark the
-    /// conflicts resolved. The entire block is best-effort (`try?`-style): a failure here must
-    /// never block reading, and on local roots / in tests there are never any conflict
-    /// versions, so it is fully inert (returns `current` unchanged). Gating on a successful
-    /// decode of `current` preserves the never-overwrite-an-unreadable-sidecar invariant.
+    /// **decoded** conflicts resolved. The entire block is best-effort (`try?`-style): a
+    /// failure here must never block reading, and on local roots / in tests there are never
+    /// any conflict versions, so it is fully inert (returns `current` unchanged). Gating on a
+    /// successful decode of `current` preserves the never-overwrite-an-unreadable-sidecar
+    /// invariant.
+    ///
+    /// **Undecodable versions are preserved, never destroyed.** A conflict version that won't
+    /// decode is most likely a *newer* schema written by another device's future build;
+    /// `removeOtherVersionsOfItem` is irreversible, so deleting it would permanently destroy
+    /// that device's favorites/visited/trash state. We therefore call
+    /// `removeOtherVersionsOfItem` only when **every** conflict version decoded into the
+    /// merge; otherwise only the decoded versions are marked `.isResolved`, and the
+    /// undecodable ones stay unresolved for a future build that understands them. Leaving
+    /// conflicts pending is safe: the union merge is idempotent, so re-merging on a later
+    /// read — including two devices alternating writes — converges on the same merged set.
     private func resolvingConflicts(of current: EntryMetadata, at url: URL) -> EntryMetadata {
         let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) ?? []
         guard !conflicts.isEmpty else { return current }
 
-        let decoded = conflicts.compactMap { version -> EntryMetadata? in
-            guard let data = try? Data(contentsOf: version.url) else { return nil }
-            return try? EntryMetadata.decoded(from: data)
+        let decodedPairs = conflicts.compactMap { version -> (NSFileVersion, EntryMetadata)? in
+            guard let data = try? Data(contentsOf: version.url),
+                  let meta = try? EntryMetadata.decoded(from: data)
+            else { return nil }
+            return (version, meta)
         }
-        let merged = current.merging(conflicts: decoded)
+        let merged = current.merging(conflicts: decodedPairs.map(\.1))
 
         do {
             try coordinatedWrite(merged.encoded(), to: url)
-            for version in conflicts {
+            for (version, _) in decodedPairs {
                 version.isResolved = true
             }
-            try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+            if decodedPairs.count == conflicts.count {
+                // Every version was folded into the merge — safe to discard the copies.
+                try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+            }
             return merged
         } catch {
             // Couldn't persist the merge; return the in-memory union so the caller at least

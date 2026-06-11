@@ -138,6 +138,20 @@ struct EntryMetadataTests {
         #expect(current.merging(conflicts: [conflict]).trashedAt == later)
     }
 
+    @Test func mergeConflict_trashedAt_keepsCurrentWhenItIsLater() {
+        let earlier = Date(timeIntervalSince1970: 1000)
+        let later = Date(timeIntervalSince1970: 2000)
+        let current = EntryMetadata(
+            id: UUID(), displayName: "C", sourceFilename: "c.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "x", trashedAt: later
+        )
+        let conflict = EntryMetadata(
+            id: UUID(), displayName: "O", sourceFilename: "o.kml",
+            importDate: .now, pointCount: 0, contentSHA256: "y", trashedAt: earlier
+        )
+        #expect(current.merging(conflicts: [conflict]).trashedAt == later)
+    }
+
     @Test func encodesKeysAsSortedArraysForStableOutput() throws {
         let meta = EntryMetadata(
             id: UUID(), displayName: "T", sourceFilename: "t.kml",

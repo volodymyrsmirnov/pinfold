@@ -21,7 +21,7 @@ final class MigrationAlertState {
         let names = failedNames.joined(separator: ", ")
         message = String(
             localized: "These items couldn't be moved and remain in their previous location: \(names).",
-            comment: "Alert body after a partial iCloud storage migration; the placeholder is a comma-separated list of entry names."
+            comment: "Partial iCloud migration alert body; placeholder is a list of entry names."
         )
     }
 }

@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 @main
@@ -18,6 +19,12 @@ struct PinfoldApp: App {
 /// Support, or the iCloud container's `Documents` when sync is on). `AppSettings` (sync
 /// toggle + map prefs) is UserDefaults-backed.
 private struct RootView: View {
+    /// Diagnostics for the storage-root migration (no app-wide logging facility exists yet).
+    private static let migrationLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "migration"
+    )
+
     @State private var settings: AppSettings
     @State private var catalog: Catalog
     @State private var mapAppService: MapAppService
@@ -103,6 +110,17 @@ private struct RootView: View {
                 )
             }.value
             if let report, !report.failed.isEmpty {
+                // Log each underlying error so failed folders are diagnosable from the
+                // console; the user-facing alert below only carries the entry names.
+                for failure in report.failed {
+                    Self.migrationLogger.error(
+                        """
+                        Failed to migrate entry folder \
+                        '\(failure.folderName, privacy: .public)': \
+                        \(failure.error.localizedDescription, privacy: .public)
+                        """
+                    )
+                }
                 // Map failed folder names to display names via the still-current (pre-repoint)
                 // catalogue; fall back to the raw folder name when no entry is loaded for it.
                 let byFolder = Dictionary(
