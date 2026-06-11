@@ -1,5 +1,5 @@
-import SwiftUI
 import PinfoldCore
+import SwiftUI
 
 // MARK: - MapPickerSheet
 
@@ -11,7 +11,6 @@ import PinfoldCore
 ///
 /// Present with `.sheet(isPresented:) { MapPickerSheet(coordinate:name:) }`.
 struct MapPickerSheet: View {
-
     // MARK: - Properties
 
     /// The coordinate to open in a map app.
@@ -108,6 +107,6 @@ struct MapPickerSheet: View {
     // MARK: - Helpers
 
     private var coordinateString: String {
-        "\(coordinate.latitude), \(coordinate.longitude)"
+        CoordinateFormatter.string(for: coordinate)
     }
 }

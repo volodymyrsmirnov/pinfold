@@ -46,6 +46,9 @@ struct FileRow: View {
 
     private var secondaryLine: String {
         let dateStr = entry.importDate.formatted(date: .abbreviated, time: .omitted)
-        return "\(entry.pointCount) points · \(dateStr)"
+        // `inflect: true` picks the singular/plural form ("1 point" vs "2 points") for the
+        // current language without us hardcoding English plural rules.
+        let points = String(localized: "^[\(entry.pointCount) point](inflect: true)")
+        return "\(points) · \(dateStr)"
     }
 }

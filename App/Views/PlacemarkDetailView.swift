@@ -51,7 +51,7 @@ struct PlacemarkDetailView: View {
 
     private var coordinateString: String? {
         guard let coord = placemark.coordinate else { return nil }
-        return "\(coord.latitude), \(coord.longitude)"
+        return CoordinateFormatter.string(for: coord)
     }
 
     private var hasCoordinate: Bool {
@@ -235,7 +235,11 @@ struct PlacemarkDetailView: View {
                     if let coord = placemark.coordinate {
                         let q = (placemark.name ?? "")
                             .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        let mapsURL = "https://maps.apple.com/?ll=\(coord.latitude),\(coord.longitude)&q=\(q)"
+                        // Apple Maps' `ll` wants `lat,lon` with a `.` decimal separator; pin the
+                        // locale so a comma-decimal region doesn't corrupt the URL.
+                        let ll = String(format: "%f,%f", locale: Locale(identifier: "en_US_POSIX"),
+                                        coord.latitude, coord.longitude)
+                        let mapsURL = "https://maps.apple.com/?ll=\(ll)&q=\(q)"
                         if let url = URL(string: mapsURL) {
                             ShareLink(item: url, subject: Text(placemark.name ?? "Placemark")) {
                                 Label("Share", systemImage: "square.and.arrow.up")
