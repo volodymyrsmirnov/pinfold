@@ -62,10 +62,15 @@ struct PlacemarkMapView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationDestination(item: $placemarkToOpenKey) { key in
             if let placemark = placemarks.first(where: { $0.stableKey == key }) {
-                // No `.environment(annotations)` here: the detail column's NavigationStack root
-                // (KMLDetailView) injects it once, and a NavigationStack resolves every pushed
-                // destination's environment from that root — including this map's onward push.
+                // Deliberate exception to the single-injection rule at KMLDetailView's body
+                // root: this destination is registered from a view that is itself pushed, the
+                // one case where stack-root environment propagation has historically been
+                // unreliable (the original workaround existed for exactly this path). The
+                // annotations value is optional downstream, so a propagation miss would be a
+                // silent no-op on favorite/visited toggles — re-injecting here makes the path
+                // deterministic instead of relying on the runtime's resolution order.
                 PlacemarkDetailView(placemark: placemark, document: document, entry: entry)
+                    .environment(annotations)
             }
         }
         .task {
