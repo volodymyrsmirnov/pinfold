@@ -91,14 +91,16 @@ import Observation
     /// removed here. Restore re-indexes them.
     func moveToTrash(_ entry: CatalogEntry) async {
         writeTrashedAt(.now, to: entry)
-        SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries(for: entry))
+        let toRemove = await indexEntries(for: entry)
+        SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
         await reload()
     }
 
     /// Restores a trashed entry by clearing `trashedAt` in its sidecar, then reloading.
     func restore(_ entry: CatalogEntry) async {
         writeTrashedAt(nil, to: entry)
-        SpotlightIndexer.index(entry: entry, indexEntries: indexEntries(for: entry))
+        let toIndex = await indexEntries(for: entry)
+        SpotlightIndexer.index(entry: entry, indexEntries: toIndex)
         await reload()
     }
 
@@ -119,7 +121,8 @@ import Observation
         // over the marginal cost of re-pushing the items.
         var renamed = entry
         renamed.displayName = trimmed
-        SpotlightIndexer.index(entry: renamed, indexEntries: indexEntries(for: entry))
+        let toIndex = await indexEntries(for: entry)
+        SpotlightIndexer.index(entry: renamed, indexEntries: toIndex)
         await reload()
     }
 
@@ -155,7 +158,9 @@ import Observation
     func deleteForever(_ entry: CatalogEntry) async {
         // Read the index BEFORE removing the folder so the placemark item ids can be
         // reconstructed; otherwise the cache is gone and only the entry item would be removable.
-        let toRemove = indexEntries(for: entry)
+        // The read is `await`ed (now off-main) and completes fully before `removeFolder`, so the
+        // ordering is preserved.
+        let toRemove = await indexEntries(for: entry)
         try? storage.removeFolder(named: entry.storageFolderName)
         SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
         await reload()
@@ -175,12 +180,24 @@ import Observation
     }
 
     /// Reads an entry's `placemarks-index.json` rows (or `[]` when the index isn't present),
-    /// used to reconstruct Spotlight placemark item ids for (de)indexing.
-    private func indexEntries(for entry: CatalogEntry) -> [PlacemarkIndex.Entry] {
-        PlacemarkIndex.read(from: storage.resourcesDirectory(for: entry)) ?? []
+    /// used to reconstruct Spotlight placemark item ids for (de)indexing. The file read runs
+    /// off the main actor so a large index doesn't block UI; the directory URL is resolved on
+    /// the main actor first and passed into the detached read.
+    private func indexEntries(for entry: CatalogEntry) async -> [PlacemarkIndex.Entry] {
+        await readIndexEntries(from: storage.resourcesDirectory(for: entry))
     }
 
     private func writeTrashedAt(_ date: Date?, to entry: CatalogEntry) {
         try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.trashedAt = date }
     }
+}
+
+/// Reads an entry's placemark index off the main actor (the synchronous `PlacemarkIndex.read`
+/// does a `Data(contentsOf:)` + JSON decode that can be costly for large indexes). A
+/// `nonisolated` free function so the `Task.detached` closure is compiled here, not inside the
+/// `@MainActor` `Catalog` — see the `ClosureLifetimeFixup` note in FavoritesView.swift.
+private func readIndexEntries(from resourcesDir: URL) async -> [PlacemarkIndex.Entry] {
+    await Task.detached(priority: .userInitiated) {
+        PlacemarkIndex.read(from: resourcesDir) ?? []
+    }.value
 }

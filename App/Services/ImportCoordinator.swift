@@ -173,19 +173,31 @@ final class ImportCoordinator {
         storage: StorageLocations,
         cache: ResourceCache
     ) async {
+        // Keep the security-scoped bracket on the main actor; it spans the awaited detached
+        // hop below, so the URL stays accessible while the off-main read runs.
         let accessed = url.startAccessingSecurityScopedResource()
         defer {
             if accessed { url.stopAccessingSecurityScopedResource() }
         }
 
-        let data: Data
+        let filename = url.lastPathComponent
+        currentFilename = filename
+
+        // Read the bytes AND prepare off-main in a single detached hop: `Data(contentsOf:)`
+        // can block on a large file, and the prepare work (hashing + parsing) is heavy too —
+        // neither should run on the main actor. Compiled in a `nonisolated` free function so
+        // the `Task.detached` closure stays out of this `@MainActor` method's SIL (see the
+        // `ClosureLifetimeFixup` note in FavoritesView.swift).
+        let result: ImportResult
         do {
-            data = try Data(contentsOf: url)
+            result = try await readAndPrepare(url, filename: filename)
         } catch {
+            currentFilename = nil
             importError = error
             return
         }
-        await importData(data, filename: url.lastPathComponent, catalog: catalog, storage: storage, cache: cache)
+
+        await processPrepared(result, catalog: catalog, storage: storage, cache: cache)
     }
 
     /// The shared import core: prepares `data` off the published path, then either commits (and
@@ -209,6 +221,17 @@ final class ImportCoordinator {
             return
         }
 
+        await processPrepared(result, catalog: catalog, storage: storage, cache: cache)
+    }
+
+    /// Post-prepare handoff shared by the URL and data paths: either commits (and awaits the
+    /// reload) or stalls on a duplicate. `currentFilename` is already set by the caller.
+    private func processPrepared(
+        _ result: ImportResult,
+        catalog: Catalog,
+        storage: StorageLocations,
+        cache: ResourceCache
+    ) async {
         if let existing = catalog.entry(withSHA256: result.contentSHA256) {
             // Stall the queue and show the duplicate alert; the drain loop exits and a fresh
             // drain starts once the user resolves the alert. Clear the progress filename here
@@ -236,4 +259,16 @@ final class ImportCoordinator {
             importError = error
         }
     }
+}
+
+/// Reads `url`'s bytes and prepares the import, both off the main actor in one detached hop.
+/// A `nonisolated` free function (not a method on the `@MainActor` coordinator) so the
+/// `Task.detached` closure is compiled here, not inside the coordinator's SIL — see the
+/// `ClosureLifetimeFixup` note in FavoritesView.swift. The caller owns the security-scoped
+/// access bracket, which spans the `await` on this function.
+private func readAndPrepare(_ url: URL, filename: String) async throws -> ImportResult {
+    try await Task.detached(priority: .userInitiated) {
+        let data = try Data(contentsOf: url)
+        return try ImportService.prepare(data: data, sourceFilename: filename)
+    }.value
 }
