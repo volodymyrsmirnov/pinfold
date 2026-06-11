@@ -120,10 +120,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     private lazy var containerStack: [ContainerBuilder] = [rootBuilder]
 
     /// Current text accumulation for the open element.
-    private var text = ""
+    var text = ""
 
     /// Current placemark being assembled.
-    private struct PlacemarkBuilder {
+    struct PlacemarkBuilder {
         var name: String?
         var descriptionHTML: String?
         var styleUrl: String?
@@ -131,49 +131,76 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var extendedData: [KMLDataItem] = []
         var photoLinks: [String] = []
         var hasPoint = false
-        var hasNonPointGeometry = false
+        var geometries: [KMLGeometry] = []
+        /// True if the placemark declared a non-point geometry we do NOT capture into
+        /// `geometries` (e.g. `<Model>`, `<gx:MultiTrack>`). Such a placemark with no point
+        /// and no captured geometry is dropped, preserving the pre-Task-7 behavior; a truly
+        /// placeless placemark (description/data only, no geometry) stays kept.
+        var hasUncapturedGeometry = false
         var sourceID: String?
     }
 
-    private var placemark: PlacemarkBuilder?
+    var placemark: PlacemarkBuilder?
 
     /// Set true while the parser is inside a <Point> element so that only Point
     /// coordinates are captured, not LineString/Polygon vertices in the same placemark.
-    private var inPoint = false
+    var inPoint = false
+
+    // Non-point geometry capture. Each context buffers vertices until its end element,
+    // then flushes a KMLGeometry into the current placemark.
+    var inLineString = false
+    var lineStringCoords: [Coordinate] = []
+    /// Polygon ring buffers. A Polygon collects one outer ring and zero or more inner rings;
+    /// `inOuterBoundary`/`inInnerBoundary` route a LinearRing's coordinates to the right buffer.
+    var inPolygon = false
+    var inOuterBoundary = false
+    var inInnerBoundary = false
+    var polygonOuter: [Coordinate] = []
+    var polygonInners: [[Coordinate]] = []
+    var currentInnerRing: [Coordinate] = []
+    /// gx:Track context. Each <gx:coord> appends one space-separated "lon lat [alt]" point.
+    var inTrack = false
+    var trackCoords: [Coordinate] = []
 
     // Style assembly.
-    private var styles: [String: KMLStyle] = [:]
-    private var styleMaps: [String: String] = [:]
+    var styles: [String: KMLStyle] = [:]
+    var styleMaps: [String: String] = [:]
 
-    private struct StyleBuilder {
+    struct StyleBuilder {
         var id: String
         var iconHref: String?
         var iconColor: String?
         var iconScale: Double?
         var inIconStyle = false
+        var lineColor: String?
+        var lineWidth: Double?
+        var polyColor: String?
+        var polyFill: Bool?
+        var inLineStyle = false
+        var inPolyStyle = false
     }
 
-    private var styleBuilder: StyleBuilder?
+    var styleBuilder: StyleBuilder?
 
     // StyleMap assembly. Each <Pair> buffers its <key> ("normal"/"highlight") and style
     // reference separately because KML allows them in either order; the pair is resolved
     // when it closes. The style reference comes from either a <styleUrl> child or an
     // inline <Style> child (indexed under a synthesized id).
-    private var styleMapID: String?
-    private var styleMapNormalURL: String?
-    private var inStyleMap = false
-    private var inPair = false
-    private var pairKey: String?
-    private var pairStyleURL: String?
+    var styleMapID: String?
+    var styleMapNormalURL: String?
+    var inStyleMap = false
+    var inPair = false
+    var pairKey: String?
+    var pairStyleURL: String?
 
     /// ExtendedData assembly.
-    private var inExtendedData = false
+    var inExtendedData = false
     /// True while inside a <Data> element; <value> is only meaningful there.
-    private var inDataElement = false
-    private var currentDataName: String?
-    private var currentDataValue: String?
+    var inDataElement = false
+    var currentDataName: String?
+    var currentDataValue: String?
     /// `name` attribute of the currently open <SimpleData> (SchemaData child).
-    private var currentSimpleDataName: String?
+    var currentSimpleDataName: String?
 
     /// Description capture. While > 0, every SAX event between <description> and its
     /// matching </description> is re-serialized verbatim into `descriptionBuffer` so that
@@ -208,7 +235,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     {
         if startElementWhileCapturingDescription(elementName, attributes: attributeDict) { return }
         text = ""
-        switch Self.localName(elementName) {
+        let local = Self.localName(elementName)
+        if startGeometryElement(local) { return }
+        switch local {
         case "Document", "Folder":
             let builder = ContainerBuilder(id: nextID("c"))
             containerStack.last?.children.append(builder)
@@ -229,6 +258,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             styleBuilder = StyleBuilder(id: attributeDict["id"] ?? nextID("s"))
         case "IconStyle":
             styleBuilder?.inIconStyle = true
+        case "LineStyle":
+            styleBuilder?.inLineStyle = true
+        case "PolyStyle":
+            styleBuilder?.inPolyStyle = true
         case "StyleMap":
             // Same Phase 1 scope restriction as Style — skip inline StyleMaps inside Placemarks.
             guard placemark == nil else { break }
@@ -248,11 +281,6 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             currentDataValue = nil
         case "SimpleData":
             currentSimpleDataName = attributeDict["name"]
-        case "Point":
-            placemark?.hasPoint = true
-            inPoint = true
-        case "LineString", "Polygon", "LinearRing", "MultiGeometry", "Model", "Track", "MultiTrack":
-            if placemark != nil { placemark?.hasNonPointGeometry = true }
         default:
             break
         }
@@ -274,7 +302,14 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     {
         if endElementWhileCapturingDescription(elementName) { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        switch Self.localName(elementName) {
+        let local = Self.localName(elementName)
+        defer { text = "" }
+        // Delegate cohesive element groups to helpers to keep this dispatcher's complexity low.
+        guard !endGeometryElement(local),
+              !endStyleElement(local, trimmed: trimmed),
+              !endStyleMapElement(local, trimmed: trimmed),
+              !endExtendedDataElement(local) else { return }
+        switch local {
         case "Document", "Folder":
             containerStack.removeLast()
         case "name":
@@ -283,98 +318,48 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             } else if let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
             }
-        case "Point":
-            inPoint = false
-        case "coordinates":
-            // Only capture coordinates while inside a <Point> so that LineString/Polygon
-            // vertices in the same placemark don't clobber the Point coordinate.
-            if placemark != nil, inPoint { placemark?.coordinate = Coordinate(parsingFirstTuple: text) }
-        case "color":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconColor = trimmed }
-        case "scale":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconScale = Double(trimmed) }
-        case "href":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconHref = trimmed }
-        case "IconStyle":
-            styleBuilder?.inIconStyle = false
-        case "Style":
-            if let b = styleBuilder {
-                styles[b.id] = KMLStyle(id: b.id, iconHref: b.iconHref,
-                                        iconColor: b.iconColor, iconScale: b.iconScale)
-                // An inline <Style> inside a StyleMap <Pair> acts as that pair's style
-                // reference, equivalent to a <styleUrl> pointing at its (possibly
-                // synthesized) id.
-                if inPair { pairStyleURL = "#\(b.id)" }
-            }
-            styleBuilder = nil
-        case "key":
-            if inPair { pairKey = trimmed }
-        case "styleUrl":
-            if placemark != nil {
-                placemark?.styleUrl = trimmed
-            } else if inPair {
-                pairStyleURL = trimmed
-            }
-        case "Pair":
-            // Resolve only on close: KML allows <key> before or after the style reference.
-            if pairKey == "normal", let url = pairStyleURL {
-                styleMapNormalURL = url
-            }
-            inPair = false; pairKey = nil; pairStyleURL = nil
-        case "StyleMap":
-            if let id = styleMapID, let normal = styleMapNormalURL {
-                styleMaps[id] = normal
-            }
-            inStyleMap = false
-            styleMapID = nil; styleMapNormalURL = nil
-        case "ExtendedData":
-            inExtendedData = false
-        case "value":
-            // Only meaningful inside an open <Data>; a stray <value> elsewhere in
-            // <ExtendedData> must not leak into the next data item.
-            if inExtendedData, inDataElement { currentDataValue = text }
-        case "SimpleData":
-            if let name = currentSimpleDataName {
-                placemark?.extendedData.append(KMLDataItem(name: name, value: trimmed))
-            }
-            currentSimpleDataName = nil
-        case "Data":
-            if let name = currentDataName {
-                let value = currentDataValue ?? ""
-                if name == "gx_media_links" {
-                    let links = value
-                        .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
-                        .map(String.init)
-                    placemark?.photoLinks.append(contentsOf: links)
-                } else {
-                    placemark?.extendedData.append(
-                        KMLDataItem(name: name,
-                                    value: value.trimmingCharacters(in: .whitespacesAndNewlines))
-                    )
-                }
-            }
-            inDataElement = false
-            currentDataName = nil; currentDataValue = nil
         case "Placemark":
-            if let pm = placemark {
-                // Drop placemarks whose only geometry is non-point.
-                let keep = pm.hasPoint || !pm.hasNonPointGeometry
-                if keep {
-                    let built = KMLPlacemark(id: nextID("p"), name: pm.name,
-                                             descriptionHTML: pm.descriptionHTML,
-                                             styleUrl: pm.styleUrl,
-                                             coordinate: pm.hasPoint ? pm.coordinate : nil,
-                                             extendedData: pm.extendedData,
-                                             photoLinks: pm.photoLinks,
-                                             sourceID: pm.sourceID)
-                    containerStack.last?.placemarks.append(built)
-                }
-            }
+            if let pm = placemark { appendPlacemark(pm) }
             placemark = nil
         default:
             break
         }
-        text = ""
+    }
+
+    /// Builds and appends a placemark, applying the keep-rule: keep if it has a Point OR any
+    /// captured geometry. A point-less placemark's representative coordinate is the first
+    /// coordinate of its first geometry.
+    private func appendPlacemark(_ pm: PlacemarkBuilder) {
+        // Keep a placemark with a point, with captured geometry, or with no geometry at all
+        // (a description/data-only placeless placemark). Drop only a point-less placemark
+        // whose sole geometry is an uncaptured non-point type.
+        let keep = pm.hasPoint || !pm.geometries.isEmpty || !pm.hasUncapturedGeometry
+        guard keep else { return }
+        let coordinate = pm.hasPoint ? pm.coordinate : Self.firstCoordinate(of: pm.geometries)
+        let built = KMLPlacemark(id: nextID("p"), name: pm.name,
+                                 descriptionHTML: pm.descriptionHTML,
+                                 styleUrl: pm.styleUrl,
+                                 coordinate: coordinate,
+                                 hasPoint: pm.hasPoint,
+                                 geometries: pm.geometries,
+                                 extendedData: pm.extendedData,
+                                 photoLinks: pm.photoLinks,
+                                 sourceID: pm.sourceID)
+        containerStack.last?.placemarks.append(built)
+    }
+
+    /// First coordinate of the first geometry that has one — the representative point of a
+    /// point-less geometry placemark.
+    private static func firstCoordinate(of geometries: [KMLGeometry]) -> Coordinate? {
+        for geometry in geometries {
+            switch geometry {
+            case let .lineString(coords), let .track(coords):
+                if let first = coords.first { return first }
+            case let .polygon(outer, _):
+                if let first = outer.first { return first }
+            }
+        }
+        return nil
     }
 
     // MARK: - Description capture
@@ -424,30 +409,5 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     /// HTML void elements that may appear in captured descriptions: re-serialized as a
     /// bare open tag (e.g. `<br>`), never with a closing tag.
-    private static let htmlVoidElements: Set<String> = ["br", "hr", "img", "wbr"]
-
-    /// Re-serializes an open tag (`<name attr="value" …>`) for description capture.
-    /// Attributes are sorted by name for deterministic output.
-    static func serializedOpenTag(_ name: String, attributes: [String: String]) -> String {
-        var tag = "<\(name)"
-        for (key, value) in attributes.sorted(by: { $0.key < $1.key }) {
-            tag += " \(key)=\"\(escapedAttributeValue(value))\""
-        }
-        return tag + ">"
-    }
-
-    /// XML-escapes an attribute value (& < > ").
-    static func escapedAttributeValue(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-    }
-
-    /// Returns the local name without a namespace prefix (e.g. "gx:Track" -> "Track").
-    static func localName(_ raw: String) -> String {
-        if let colon = raw.firstIndex(of: ":") { return String(raw[raw.index(after: colon)...]) }
-        return raw
-    }
+    static let htmlVoidElements: Set<String> = ["br", "hr", "img", "wbr"]
 }

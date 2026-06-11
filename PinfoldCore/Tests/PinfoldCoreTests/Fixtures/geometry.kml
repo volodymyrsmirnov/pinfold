@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <name>Geometry Samples</name>
+    <Style id="ls">
+      <LineStyle>
+        <color>ff0000ff</color>
+        <width>3</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>7f00ff00</color>
+      </PolyStyle>
+    </Style>
+    <Placemark>
+      <name>Route</name>
+      <styleUrl>#ls</styleUrl>
+      <LineString>
+        <coordinates>
+          10.0,20.0,0
+          11.0,21.0,0
+          12.0,22.0,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Area</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              0.0,0.0,0
+              1.0,0.0,0
+              1.0,1.0,0
+              0.0,1.0,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+        <innerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              0.4,0.4,0
+              0.6,0.4,0
+              0.5,0.6,0
+            </coordinates>
+          </LinearRing>
+        </innerBoundaryIs>
+      </Polygon>
+    </Placemark>
+    <Placemark>
+      <name>Hike</name>
+      <gx:Track>
+        <gx:coord>30.0 40.0 0</gx:coord>
+        <gx:coord>31.0 41.0 0</gx:coord>
+        <gx:coord>32.0 42.0 0</gx:coord>
+      </gx:Track>
+    </Placemark>
+    <Placemark>
+      <name>Mixed</name>
+      <MultiGeometry>
+        <Point>
+          <coordinates>55.5,33.3,0</coordinates>
+        </Point>
+        <LineString>
+          <coordinates>10.0,20.0,0 11.0,21.0,0</coordinates>
+        </LineString>
+      </MultiGeometry>
+    </Placemark>
+  </Document>
+</kml>

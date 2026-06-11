@@ -6,7 +6,7 @@ struct CorpusTests {
     static let fixtures = [
         "KML_Samples.kml", "Munich Sole.kml", "Munich Sole.kmz",
         "Rome.kml", "Rome.kmz", "Iceland.kml", "Iceland.kmz",
-        "iceland-trip-2026.kml", "schemadata.kml",
+        "iceland-trip-2026.kml", "schemadata.kml", "geometry.kml",
     ]
 
     @Test(arguments: fixtures)

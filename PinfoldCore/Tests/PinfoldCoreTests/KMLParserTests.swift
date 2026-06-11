@@ -88,10 +88,19 @@ struct KMLParserTests {
         #expect(pm?.coordinate == nil)
     }
 
-    @Test func dropsNonPointGeometryPlacemarks() throws {
+    @Test func keepsNonPointGeometryPlacemarks() throws {
+        // Placemarks whose only geometry is a LineString/Polygon are now kept (Task 7) with
+        // their geometry captured and a representative coordinate.
         let doc = try parse("KML_Samples.kml")
-        #expect(doc.root.allPlacemarks.contains { $0.name == "Tessellated" } == false) // LineString
-        #expect(doc.root.allPlacemarks.contains { $0.name == "Building 40" } == false) // Polygon
+        let line = doc.root.allPlacemarks.first { $0.name == "Tessellated" } // LineString
+        #expect(line != nil)
+        #expect(line?.hasPoint == false)
+        #expect(line?.coordinate != nil)
+        #expect(line?.geometries.contains { if case .lineString = $0 { true } else { false } } == true)
+        let poly = doc.root.allPlacemarks.first { $0.name == "Building 40" } // Polygon
+        #expect(poly != nil)
+        #expect(poly?.hasPoint == false)
+        #expect(poly?.geometries.contains { if case .polygon = $0 { true } else { false } } == true)
     }
 
     @Test func inlinePlacemarkStyleDoesNotLeakIntoDocumentStyles() throws {

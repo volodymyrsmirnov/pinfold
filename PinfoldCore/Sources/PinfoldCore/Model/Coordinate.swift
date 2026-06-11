@@ -18,9 +18,25 @@ public struct Coordinate: Equatable, Sendable {
             .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
             .first
         guard let firstTuple else { return nil }
-        var parts = firstTuple.split(separator: ",", omittingEmptySubsequences: false)
+        self.init(parsingTuple: String(firstTuple), wholeStringFallback: raw)
+    }
+
+    /// Parses every whitespace-separated `lon,lat[,alt]` tuple from a KML `<coordinates>`
+    /// string, in order. Unparseable tuples are skipped.
+    public static func parseList(_ raw: String) -> [Coordinate] {
+        raw
+            .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
+            .compactMap { Coordinate(parsingTuple: String($0), wholeStringFallback: nil) }
+    }
+
+    /// Parses a single comma-separated `lon,lat[,alt]` tuple. `wholeStringFallback`, when
+    /// provided, is the original `<coordinates>` text used to recover tuples written with
+    /// whitespace after the commas ("lon, lat, alt") — only meaningful for a single-tuple
+    /// string, so `parseList` passes nil.
+    private init?(parsingTuple tuple: String, wholeStringFallback raw: String?) {
+        var parts = tuple.split(separator: ",", omittingEmptySubsequences: false)
             .map { String($0) }
-        if parts.prefix(2).compactMap(Double.init).count < 2 {
+        if parts.prefix(2).compactMap(Double.init).count < 2, let raw {
             // Fallback for tuples with whitespace after the commas ("lon, lat, alt"):
             // the whitespace split above truncated the tuple, so re-split the whole
             // string on commas, trim each component, and take the first two/three.
