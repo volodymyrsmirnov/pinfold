@@ -46,7 +46,10 @@ enum EntrySort: String, CaseIterable, Identifiable {
             // Deterministic tie-break shared by every case.
             let nameOrder = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
             if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
-            return lhs.id.uuidString < rhs.id.uuidString
+            // UUID is Comparable; its byte-order comparison is order-equivalent to comparing
+            // the uppercase-hex `uuidString`, so this avoids allocating two strings per tie-break
+            // while keeping ordering identical.
+            return lhs.id < rhs.id
         }
     }
 }
