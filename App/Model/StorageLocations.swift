@@ -1,5 +1,20 @@
 import Foundation
 
+/// The outcome of reading an entry's `metadata.json` sidecar, distinguishing an *absent*
+/// sidecar from one that *exists but cannot be decoded*.
+///
+/// This distinction is load-bearing for the scanner: a `.missing` sidecar may be safely
+/// backfilled, but an `.unreadable` one (a conflict artifact or a newer schema) must never
+/// be overwritten — doing so would destroy trash/favorite/visited state.
+enum SidecarReadResult: Equatable {
+    /// No `metadata.json` exists in the folder.
+    case missing
+    /// A `metadata.json` exists but could not be read or decoded.
+    case unreadable
+    /// A `metadata.json` was read and decoded successfully.
+    case ok(EntryMetadata)
+}
+
 /// Computes on-disk paths for imported KML/KMZ files.
 ///
 /// Storage is split across two roots so iCloud sync only carries what it must:
@@ -147,6 +162,22 @@ struct StorageLocations {
         let url = metadataFile(forFolderNamed: name)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         return try EntryMetadata.decoded(from: Data(contentsOf: url))
+    }
+
+    /// Reads the sidecar for a raw folder name, distinguishing *absent* from *undecodable*.
+    ///
+    /// The scanner relies on this distinction: a sidecar that exists but won't decode (an
+    /// iCloud conflict placeholder, a half-synced file, or a future schema version) must be
+    /// left alone, whereas an absent sidecar can be safely backfilled. The throwing
+    /// `readMetadata(forFolderNamed:)` collapses both into a thrown error / `nil` and is kept
+    /// for callers that only need the happy path (e.g. `updateMetadata`).
+    func readSidecar(forFolderNamed name: String) -> SidecarReadResult {
+        let url = metadataFile(forFolderNamed: name)
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        guard let data = try? Data(contentsOf: url),
+              let meta = try? EntryMetadata.decoded(from: data)
+        else { return .unreadable }
+        return .ok(meta)
     }
 
     /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field

@@ -1,11 +1,10 @@
-import Testing
 import Foundation
 @testable import Pinfold
+import Testing
 
 /// Tests for `CatalogScanner` — building the catalogue from the folders on disk, with
 /// the folders as the single source of truth (no parallel index, no de-duplication).
 @Suite(.serialized) @MainActor struct CatalogScannerTests {
-
     private func makeScanner() -> (CatalogScanner, StorageLocations) {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -96,6 +95,80 @@ import Foundation
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         #expect(scanner.scan().isEmpty)
+    }
+
+    // MARK: - Corrupt / unreadable sidecars
+
+    /// An existing sidecar that fails to decode (an iCloud conflict placeholder, a partial
+    /// sync, or a future-schema file) must NEVER be overwritten — doing so would destroy
+    /// trash state, favorites, and visited keys. The garbage bytes stay on disk untouched.
+    @Test func scan_corruptSidecarWithOriginal_doesNotOverwriteSidecar() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("corrupt", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let sidecarURL = dir.appendingPathComponent("metadata.json")
+        let garbage = Data("this is not valid json {{{".utf8)
+        try garbage.write(to: sidecarURL)
+
+        _ = scanner.scan()
+
+        let after = try Data(contentsOf: sidecarURL)
+        #expect(after == garbage, "unreadable sidecar must be left byte-for-byte unchanged")
+    }
+
+    /// A folder with a corrupt sidecar but a valid original still appears in the catalogue,
+    /// derived in-memory from the original (display name + point count), so the entry is not
+    /// lost while its sidecar is unreadable.
+    @Test func scan_corruptSidecarWithOriginal_entryStillListed() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("corrupt", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        try Data("not json".utf8).write(to: dir.appendingPathComponent("metadata.json"))
+
+        let entries = scanner.scan()
+
+        #expect(entries.count == 1)
+        #expect(entries.first?.storageFolderName == "corrupt")
+        #expect(entries.first?.sourceFilename == "Rome.kml")
+        #expect(entries.first?.displayName == "Rome")
+        #expect((entries.first?.pointCount ?? 0) > 0)
+    }
+
+    /// A genuinely *absent* sidecar (not just unreadable) is still backfilled — the existing
+    /// self-heal behavior for pre-sync entries is preserved.
+    @Test func scan_missingSidecarWithOriginal_backfillsSidecar() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("bare", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+
+        _ = scanner.scan()
+
+        #expect(try storage.readMetadata(forFolderNamed: "bare") != nil,
+                "a missing sidecar must be backfilled on scan")
+    }
+
+    /// A corrupt sidecar with NO original file: nothing to derive an entry from, so the folder
+    /// is skipped and left entirely untouched (no writes, no deletes).
+    @Test func scan_corruptSidecarNoOriginal_folderUntouchedAndSkipped() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("corrupt", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let sidecarURL = dir.appendingPathComponent("metadata.json")
+        let garbage = Data("garbage".utf8)
+        try garbage.write(to: sidecarURL)
+
+        let entries = scanner.scan()
+
+        #expect(entries.isEmpty)
+        // Folder contents are exactly the one garbage sidecar — nothing added or removed.
+        let contents = try FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+        )
+        #expect(contents.map(\.lastPathComponent) == ["metadata.json"])
+        #expect(try Data(contentsOf: sidecarURL) == garbage)
     }
 
     // MARK: - Per-device resource materialization

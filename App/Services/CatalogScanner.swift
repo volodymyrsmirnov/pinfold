@@ -5,6 +5,10 @@ import PinfoldCore
 /// disk as the single source of truth: one `CatalogEntry` per folder that has a readable
 /// `metadata.json`, or a parseable bare original file.
 ///
+/// Invariant: an existing sidecar, even one that fails to decode, is **never overwritten** —
+/// it may be a newer schema or an iCloud conflict artifact, and clobbering it would destroy
+/// trash/favorite/visited state. Only a genuinely *absent* sidecar is backfilled.
+///
 /// `Sendable` so it can run off the main actor: `Catalog.reload()` hands the scan to a
 /// detached task and assigns the result back on the main actor.
 struct CatalogScanner {
@@ -21,18 +25,46 @@ struct CatalogScanner {
         return entries.sorted { $0.importDate > $1.importDate }
     }
 
-    /// Builds an entry for one folder: prefer a readable sidecar; otherwise rebuild from
-    /// a bare original; otherwise `nil`.
+    /// Builds an entry for one folder, honouring the never-overwrite-a-sidecar invariant:
+    /// - `.ok`         → build the entry from the sidecar as today.
+    /// - `.missing`    → backfill from the bare original (writes a fresh sidecar + cache).
+    /// - `.unreadable` → derive the entry in memory from the original but write NOTHING; if
+    ///   there is no readable original either, skip the folder entirely (no writes/deletes).
     private func entry(forFolderNamed name: String) -> CatalogEntry? {
-        if let meta = try? storage.readMetadata(forFolderNamed: name) {
-            return CatalogEntry(metadata: meta, storageFolderName: name)
+        switch storage.readSidecar(forFolderNamed: name) {
+        case let .ok(meta):
+            CatalogEntry(metadata: meta, storageFolderName: name)
+        case .missing:
+            rebuildFromBareOriginal(folderNamed: name)
+        case .unreadable:
+            // Derive in memory only — the on-disk sidecar is untouchable (newer schema or
+            // conflict artifact). No entry if there is nothing to derive from.
+            deriveFromOriginal(folderNamed: name)?.entry
         }
-        return rebuildFromBareOriginal(folderNamed: name)
     }
 
     /// Parses the original file in `name`, writes a sidecar + caches resources, and
     /// returns the rebuilt entry. `nil` if there is no original or it fails to parse.
     private func rebuildFromBareOriginal(folderNamed name: String) -> CatalogEntry? {
+        guard let derived = deriveFromOriginal(folderNamed: name) else { return nil }
+        let meta = derived.metadata
+
+        try? storage.writeMetadata(meta, forFolderNamed: name)
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
+        try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        try? cache.writeEmbedded(derived.embeddedResources, to: resourcesDir)
+        let hrefs = derived.remoteResourceHrefs
+        let cache = cache
+        Task.detached { await cache.downloadRemote(hrefs, to: resourcesDir) }
+
+        return derived.entry
+    }
+
+    /// In-memory derivation of an entry from a folder's bare original — parses the file and
+    /// builds `EntryMetadata`/`CatalogEntry` **without writing anything to disk**. Used both
+    /// by `rebuildFromBareOriginal` (which then persists) and by the `.unreadable`-sidecar
+    /// path (which must not). `nil` if there is no original or it fails to parse.
+    private func deriveFromOriginal(folderNamed name: String) -> DerivedEntry? {
         guard let fileURL = storage.originalFileURL(inFolderNamed: name),
               let data = try? Data(contentsOf: fileURL),
               let result = try? ImportService.prepare(
@@ -52,15 +84,12 @@ struct CatalogScanner {
             trashedAt: nil
         )
 
-        try? storage.writeMetadata(meta, forFolderNamed: name)
-        let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
-        try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
-        try? cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
-        let hrefs = result.remoteResourceHrefs
-        let cache = cache
-        Task.detached { await cache.downloadRemote(hrefs, to: resourcesDir) }
-
-        return CatalogEntry(metadata: meta, storageFolderName: name)
+        return DerivedEntry(
+            metadata: meta,
+            entry: CatalogEntry(metadata: meta, storageFolderName: name),
+            embeddedResources: result.embeddedResources,
+            remoteResourceHrefs: result.remoteResourceHrefs
+        )
     }
 
     /// For each entry folder whose local resources cache is absent, parses the original and
@@ -110,4 +139,14 @@ struct CatalogScanner {
         let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
         return values?.creationDate ?? values?.contentModificationDate ?? .now
     }
+}
+
+/// The result of deriving an entry from a bare original in memory: the entry itself plus the
+/// resources that `rebuildFromBareOriginal` would persist (the `.unreadable` path discards
+/// these, keeping the derivation read-only).
+private struct DerivedEntry {
+    let metadata: EntryMetadata
+    let entry: CatalogEntry
+    let embeddedResources: [String: Data]
+    let remoteResourceHrefs: [String]
 }
