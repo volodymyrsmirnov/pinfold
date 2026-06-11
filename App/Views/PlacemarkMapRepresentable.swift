@@ -89,6 +89,19 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     /// persistence are owned entirely by this representable / its coordinator.
     static let styleDefaultsKey = "embeddedMapStyle"
 
+    /// Above this many placemarks, clustering is forced on regardless of the user's
+    /// `clusterPins` setting: MapKit collapses (drops frames, stops responding) when asked
+    /// to lay out tens of thousands of individual, non-colliding annotation views, so an
+    /// unclustered map at that scale is unusable. Clustering keeps the view count bounded.
+    static let forcedClusteringThreshold = 2000
+
+    /// The clustering actually applied: the user's `clusterPins` setting, OR forced on when
+    /// the placemark count exceeds `forcedClusteringThreshold`. Single source of truth read
+    /// by `makeUIView`, the `viewFor` delegate (live, via `parent`), and reconciliation adds.
+    var effectiveClustering: Bool {
+        clusterPins || placemarks.count > Self.forcedClusteringThreshold
+    }
+
     private static let clusteringIdentifier = "kml.placemark"
     private static let placemarkReuseID = "placemark"
     private static let clusterReuseID = "cluster"
@@ -113,7 +126,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         // Single creation path (shared with updateUIView's reconciliation): build one
         // annotation per placemark and register it in the coordinator's index.
         for placemark in placemarks {
-            guard let annotation = makeAnnotation(for: placemark) else { continue }
+            guard let annotation = makeAnnotation(for: placemark, coordinator: context.coordinator)
+            else { continue }
             mapView.addAnnotation(annotation)
             context.coordinator.annotationsByKey[annotation.stableKey] = annotation
         }
@@ -154,7 +168,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 }
             }
             for placemark in diff.toAdd {
-                guard let annotation = makeAnnotation(for: placemark) else { continue }
+                guard let annotation = makeAnnotation(for: placemark, coordinator: coordinator)
+                else { continue }
                 mapView.addAnnotation(annotation)
                 coordinator.annotationsByKey[annotation.stableKey] = annotation
             }
@@ -223,16 +238,24 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         return (toAdd, toRemove)
     }
 
-    /// Builds a `PlacemarkAnnotation` for `placemark`, loading its base pin image and
-    /// applying the current favorite/visited decoration. Returns `nil` for a placemark
-    /// without a coordinate. Single creation path shared by `makeUIView` and the
-    /// `updateUIView` reconciliation.
-    func makeAnnotation(for placemark: KMLPlacemark) -> PlacemarkAnnotation? {
+    /// Builds a `PlacemarkAnnotation` for `placemark` (returns `nil` if it has no
+    /// coordinate). Single creation path shared by `makeUIView` and `updateUIView`'s
+    /// reconciliation. The base image is resolved through `coordinator.pinImageCache`,
+    /// keyed by style identity, so the disk I/O + scaling happens once per distinct style
+    /// (O(styles)), not per placemark; decoration stays per-annotation.
+    func makeAnnotation(for placemark: KMLPlacemark, coordinator: Coordinator) -> PlacemarkAnnotation? {
         guard let coordinate = placemark.coordinate else { return nil }
-        let base = PlacemarkPinImage.image(
-            for: placemark, document: document, entry: entry,
-            resourceCache: resourceCache, storage: storage
-        )
+        let key = PlacemarkPinImage.cacheKey(for: placemark, document: document)
+        let base: UIImage
+        if let cached = coordinator.pinImageCache[key] {
+            base = cached
+        } else {
+            base = PlacemarkPinImage.image(
+                for: placemark, document: document, entry: entry,
+                resourceCache: resourceCache, storage: storage
+            )
+            coordinator.pinImageCache[key] = base
+        }
         let image = PlacemarkPinImage.decorated(
             base,
             isFavorite: favoriteKeys.contains(placemark.stableKey),
@@ -342,6 +365,12 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// walking every `mapView.annotations` (which also includes the user-location dot
         /// and any future overlays' annotations).
         var annotationsByKey: [String: PlacemarkAnnotation] = [:]
+        /// Base (un-decorated) pin images keyed by style identity. A KML file has FEW
+        /// distinct styles, so this turns the O(placemarks) disk-read + scale work in
+        /// `makeAnnotation` into O(styles): the first placemark of each style builds its
+        /// base image (one `UIImage(contentsOfFile:)` + resize, or one SF-Symbol render),
+        /// and every later placemark of that style reuses it. Decoration stays per-annotation.
+        var pinImageCache: [PlacemarkPinImage.CacheKey: UIImage] = [:]
 
         init(_ parent: PlacemarkMapRepresentable) {
             self.parent = parent
@@ -399,13 +428,14 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             )
             view.annotation = annotation
             view.image = placemark.image
-            // Cluster only when enabled. With clustering off, `.none` collision keeps
-            // every overlapping pin visible; with it on, `.circle` clusters less
-            // aggressively than the default rectangle.
-            view.clusteringIdentifier = parent.clusterPins
+            // Cluster only when enabled (or forced on above the threshold). With clustering
+            // off, `.none` collision keeps every overlapping pin visible; with it on,
+            // `.circle` clusters less aggressively than the default rectangle.
+            let clustering = parent.effectiveClustering
+            view.clusteringIdentifier = clustering
                 ? PlacemarkMapRepresentable.clusteringIdentifier
                 : nil
-            view.collisionMode = parent.clusterPins ? .circle : .none
+            view.collisionMode = clustering ? .circle : .none
             view.canShowCallout = false
             // Center-anchor: the SF Symbol fallback and typical KML point icons are
             // centered on their coordinate (no hotSpot parsing).
