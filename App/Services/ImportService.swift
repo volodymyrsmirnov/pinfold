@@ -63,7 +63,13 @@ enum ImportService {
     ///     as the stored filename on disk).
     /// - Returns: A fully-populated `ImportResult`.
     /// - Throws: `ImportError.parseFailure` if `KMLReader.read(data:)` fails.
-    static func prepare(data: Data, sourceFilename: String) throws -> ImportResult {
+    static func prepare(data: Data, sourceFilename rawSourceFilename: String) throws -> ImportResult {
+        // Sanitize the attacker-controlled filename once, here — the single choke point all
+        // three import paths flow through. A crafted name like "images/evil.kml" would
+        // otherwise create nested paths under the per-entry folder and break the top-level
+        // original-file lookup. The sanitized name is what we store and surface.
+        let sourceFilename = SafeFilename.sanitize(rawSourceFilename)
+
         let sha256 = sha256Hex(data)
 
         let parsed: ParsedKML

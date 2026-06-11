@@ -73,7 +73,12 @@ final class ShareViewController: UIViewController {
             .containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else { return }
         let inbox = container.appendingPathComponent("Inbox", isDirectory: true)
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
-        let dest = inbox.appendingPathComponent("\(UUID().uuidString)-\(url.lastPathComponent)")
+        // Sanitize the shared file's name before building the dest URL (defense in depth — the
+        // main app's `ImportService.prepare` sanitizes too). A crafted `lastPathComponent`
+        // could otherwise inject separators into the inbox path. Keep the UUID prefix so two
+        // shares of the same name don't collide.
+        let safeName = SafeFilename.sanitize(url.lastPathComponent)
+        let dest = inbox.appendingPathComponent("\(UUID().uuidString)-\(safeName)")
         // Files vended by other apps (Files, Mail, …) may be security-scoped; without
         // claiming access first, the copy can silently fail.
         let scoped = url.startAccessingSecurityScopedResource()

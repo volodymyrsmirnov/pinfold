@@ -42,6 +42,10 @@ targets:
     platform: iOS
     sources:
       - ShareExtension
+      # Shared with the app target (whose `App` glob already includes it). The extension is a
+      # separate module and can't import the app target's Swift, so the single source file is
+      # compiled into both.
+      - App/Support/SafeFilename.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: tech.inkhorn.pinfold.ShareExtension

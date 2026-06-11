@@ -132,6 +132,24 @@ import Testing
         #expect(result.sourceFilename == "Rome.kmz")
     }
 
+    // MARK: - prepare — filename sanitization
+
+    @Test func prepare_sanitizesSourceFilename() throws {
+        let minimalKML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <Placemark>
+              <Point><coordinates>12.5,41.9,0</coordinates></Point>
+            </Placemark>
+          </Document>
+        </kml>
+        """
+        let result = try ImportService.prepare(data: Data(minimalKML.utf8), sourceFilename: "a/b.kml")
+        #expect(result.sourceFilename == "b.kml",
+                "prepare must sanitize attacker-controlled filenames to a final path component")
+    }
+
     // MARK: - prepare — fallback displayName
 
     @Test func prepare_fallbackDisplayName_usesFilenameStem() throws {
