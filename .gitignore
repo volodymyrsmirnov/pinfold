@@ -1,7 +1,2 @@
 .superpowers/
 .DS_Store
-
-# XcodeGen output
-Pinfold.xcodeproj/
-*.xcodeproj/xcuserdata/
-DerivedData/
