@@ -19,6 +19,26 @@ Import the places you care about once — then browse and navigate them anywhere
 
 ---
 
+## ✨ Creating KML files for Pinfold
+
+Authoring a `.kml`/`.kmz` for Pinfold? Pinfold parses a deliberately limited subset of KML, so a file that merely "is valid KML" can still render wrong. This repo ships a ready-made **agent skill** that teaches Claude, Codex, or any compatible AI agent to generate files using only the elements Pinfold actually supports: [**`skills/authoring-kml-for-pinfold`**](skills/authoring-kml-for-pinfold/SKILL.md).
+
+Install it for your agent by copying the skill folder into your skills directory:
+
+| Agent | Skills directory |
+|---|---|
+| Claude Code | `~/.claude/skills/` |
+| Codex / Gemini CLI / Copilot CLI | `~/.agents/skills/` |
+
+```bash
+# Example (Claude Code)
+cp -R skills/authoring-kml-for-pinfold ~/.claude/skills/
+```
+
+Then ask your agent to *"create a KML for Pinfold"* and it will follow the supported feature set. You can also read the [`SKILL.md`](skills/authoring-kml-for-pinfold/SKILL.md) directly as a human authoring reference.
+
+---
+
 ## What is Pinfold?
 
 Most KML files come from somewhere else — Google Earth exports, GIS tools, a route a guide shared, a colleague's site survey. They end up buried in email attachments and downloads folders. **Pinfold gives those files a permanent, organized home on your device**, and lets you browse and navigate them completely offline.
