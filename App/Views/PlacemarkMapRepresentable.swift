@@ -30,6 +30,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     let clusterPins: Bool
     let favoriteKeys: Set<String>
     let visitedKeys: Set<String>
+    /// When non-nil and it matches a realized pin, the map opens zoomed to and with that
+    /// pin selected (its preview card shown) instead of fitting all pins — the "Show on
+    /// Embedded Map" deep link from the POI page. `nil` → fit all pins (the default).
+    var initialFocusKey: String?
     @Binding var selectedKey: String?
 
     /// UserDefaults key for the persisted basemap style. The style control and its
@@ -94,9 +98,17 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         }
 
         let coordinates = placemarks.compactMap(\.coordinate)
-        mapView.onFirstLayout = { [weak mapView] in
+        let focusKey = initialFocusKey
+        mapView.onFirstLayout = { [weak mapView, weak coordinator = context.coordinator] in
             guard let mapView else { return }
-            Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
+            // Initial-focus deep link ("Show on Embedded Map"): if the carried key resolves
+            // to a realized pin, zoom to it and select it (surfacing its preview card) rather
+            // than fitting all pins. Falls back to fit-all when nil or unmatched.
+            if let focusKey, let annotation = coordinator?.annotationsByKey[focusKey] {
+                Self.focus(on: annotation, in: mapView)
+            } else {
+                Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
+            }
         }
 
         addControls(to: mapView, coordinator: context.coordinator)
@@ -269,6 +281,20 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         } else {
             mapView.setVisibleMapRect(rect, edgePadding: edgePadding, animated: animated)
         }
+    }
+
+    /// Zooms to a fixed ~1 km region centered on `annotation` and selects it. Selecting
+    /// fires the coordinator's `didSelect`, which sets `selectedKey`, highlights the pin,
+    /// and surfaces its preview card — so the initial-focus path reuses the exact selection
+    /// behavior a tap produces. The 1 km span matches `fit`'s single-pin case.
+    static func focus(on annotation: PlacemarkAnnotation, in mapView: MKMapView) {
+        let region = MKCoordinateRegion(
+            center: annotation.coordinate,
+            latitudinalMeters: 1000,
+            longitudinalMeters: 1000
+        )
+        mapView.setRegion(region, animated: false)
+        mapView.selectAnnotation(annotation, animated: false)
     }
 
     // MARK: - Coordinator
