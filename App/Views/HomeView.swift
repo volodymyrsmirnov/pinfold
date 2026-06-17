@@ -26,10 +26,10 @@ struct HomeView: View {
     /// entry id so it survives `catalog.reload()`; see `RootView.selectedEntryID`.
     @Binding var selection: CatalogEntry.ID?
 
-    /// One-shot deep-link search string, owned by `RootView`. Set (together with `selection`)
-    /// when the user taps a catalogue-wide "Places" search hit so the opened file's outline
-    /// pre-filters to that placemark. Left nil for ordinary file taps. See `RootView`.
-    @Binding var pendingDetailSearch: String?
+    /// One-shot deep-link target, owned by `RootView`. Set (together with `selection`) when the
+    /// user taps a catalogue-wide "Places" search hit so the opened file pushes straight to that
+    /// placemark's detail page. Left nil for ordinary file taps. See `RootView`.
+    @Binding var pendingPlacemarkKey: String?
 
     // MARK: - Environment
 
@@ -341,9 +341,9 @@ struct HomeView: View {
         }
         // Consolidated Favorites as a modal sheet. It owns its own NavigationStack (title +
         // Done). Tapping a favorite dismisses the sheet and drives the same selection +
-        // `pendingDetailSearch` deep-link the catalogue "Places" search hits use.
+        // `pendingPlacemarkKey` deep-link the catalogue "Places" search hits use.
         .sheet(isPresented: $isFavoritesPresented) {
-            FavoritesView(selection: $selection, pendingDetailSearch: $pendingDetailSearch)
+            FavoritesView(selection: $selection, pendingPlacemarkKey: $pendingPlacemarkKey)
         }
         // The "Import…" menu command (⌘I) flips a counter on AppCommands; presenting the
         // fileImporter here keeps that transient UI state owned by the view, not the scene.

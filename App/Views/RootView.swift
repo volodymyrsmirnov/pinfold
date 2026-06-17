@@ -60,15 +60,16 @@ struct RootView: View {
     /// trashed (the sidebar only exposes active entries for selection).
     @State private var selectedEntryID: CatalogEntry.ID?
 
-    /// A one-shot search string handed to the detail view when a selection is triggered by a
-    /// catalogue-wide "Places" search hit (see `HomeView`). It carries the tapped placemark's
-    /// NAME so `KMLDetailView` opens with its in-file outline pre-filtered to that placemark.
+    /// A one-shot deep-link target handed to the detail view when a selection is triggered by a
+    /// catalogue-wide placemark hit (a "Places" search result, a favorite, or a Spotlight
+    /// result). It carries the placemark's durable `stableKey` so `KMLDetailView` resolves it
+    /// against the parsed document and pushes `PlacemarkDetailView` (the POI page).
     ///
-    /// Consume-once flow: `HomeView` sets this AND `selectedEntryID` together when a hit is
-    /// tapped; this view passes it into `KMLDetailView(initialSearch:)`, then clears it in the
-    /// detail's `.task(id:)` lifetime by resetting it whenever the selection changes. A normal
-    /// row tap only changes `selectedEntryID` (leaving this nil), so it does not pre-filter.
-    @State private var pendingDetailSearch: String?
+    /// Consume-once flow: the source sets this AND `selectedEntryID` together when a hit is
+    /// tapped; this view passes it into `KMLDetailView(initialPlacemarkKey:)`, which clears it
+    /// via `onConsumePlacemarkKey`. A normal row tap only changes `selectedEntryID` (leaving
+    /// this nil), so it does not push.
+    @State private var pendingPlacemarkKey: String?
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -91,7 +92,7 @@ struct RootView: View {
 
     var body: some View {
         NavigationSplitView {
-            HomeView(selection: $selectedEntryID, pendingDetailSearch: $pendingDetailSearch)
+            HomeView(selection: $selectedEntryID, pendingPlacemarkKey: $pendingPlacemarkKey)
                 // 320–380pt keeps file rows comfortable on iPad/Mac without crowding the map
                 // detail; the system still lets the user drag the divider.
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380)
@@ -105,10 +106,10 @@ struct RootView: View {
                 if let selectedEntry {
                     KMLDetailView(
                         entry: selectedEntry,
-                        initialSearch: pendingDetailSearch,
-                        // Consumed once by the detail view's load `.task`; clearing here ensures
-                        // a later normal selection of the same file doesn't re-apply the filter.
-                        onConsumeInitialSearch: { pendingDetailSearch = nil }
+                        initialPlacemarkKey: pendingPlacemarkKey,
+                        // Consumed once by the detail view; clearing here ensures a later normal
+                        // selection of the same file doesn't re-push.
+                        onConsumePlacemarkKey: { pendingPlacemarkKey = nil }
                     )
                     .id(selectedEntry.id)
                 } else {
@@ -183,13 +184,13 @@ struct RootView: View {
             )
             return
         }
-        pendingDetailSearch = nil
+        pendingPlacemarkKey = nil
         selectedEntryID = entry.id
     }
 
     /// Handles a Core Spotlight result tap. The identifier is the tapped item's `SpotlightID`:
-    /// an entry item selects its file; a placemark item selects the file AND pre-filters its
-    /// outline to the placemark's name (resolved off-main from the entry's `placemarks-index.json`).
+    /// an entry item selects its file; a placemark item selects the file AND deep-links directly
+    /// to the placemark by passing its stableKey as `pendingPlacemarkKey`.
     private func handleSpotlightActivity(_ activity: NSUserActivity) async {
         guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
               let parsed = SpotlightID.parse(raw)
@@ -202,16 +203,10 @@ struct RootView: View {
             return
         }
 
-        if let placemarkKey = parsed.placemarkKey {
-            // Resolve the placemark name off-main via the free function (kept out of the view's
-            // SIL — its `Task.detached` lives in `readPlacemarkName`, mirroring `FavoritesView`),
-            // then drive the existing consume-once outline pre-filter.
-            let resourcesDir = catalog.storage.resourcesDirectory(for: entry)
-            let name = await readPlacemarkName(forKey: placemarkKey, in: resourcesDir)
-            pendingDetailSearch = (name?.isEmpty == false) ? name : nil
-        } else {
-            pendingDetailSearch = nil
-        }
+        // A placemark item carries its stableKey directly in the Spotlight identifier — pass it
+        // straight through as the deep-link target (no name lookup needed). An entry item has no
+        // placemark key, so the file just opens.
+        pendingPlacemarkKey = parsed.placemarkKey
         selectedEntryID = entry.id
     }
 
@@ -414,18 +409,6 @@ struct RootView: View {
         )
         await inbox.drain()
     }
-}
-
-// MARK: - Off-main placemark name lookup
-
-/// Reads the name of the placemark with `key` from the `placemarks-index.json` in
-/// `resourcesDir`, off the main actor. Returns `nil` if the index is absent or the key isn't
-/// found. A top-level `nonisolated` function (not a method on the `@MainActor` view) so the
-/// `Task.detached` closure compiles outside the view's SIL — see `FavoritesView.load()`.
-private func readPlacemarkName(forKey key: String, in resourcesDir: URL) async -> String? {
-    await Task.detached(priority: .userInitiated) {
-        PlacemarkIndex.read(from: resourcesDir)?.first { $0.key == key }?.name
-    }.value
 }
 
 // MARK: - Environment bundle

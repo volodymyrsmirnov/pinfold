@@ -10,9 +10,9 @@ import SwiftUI
 /// catalogue order, active entries with non-empty `favoriteKeys` only); rows are the
 /// resolved favorite placemark names (plus a coordinate subtitle when present). Tapping a row
 /// deep-links into that file's outline using the SAME consume-once mechanism as a "Places"
-/// search hit: it sets `pendingDetailSearch` to the placemark name and selects the entry (see
-/// `HomeSearchResults.openPlaceHit`). The sheet dismisses first so the selection lands on the
-/// underlying split view.
+/// search hit: it sets `pendingPlacemarkKey` to the placemark's stableKey and selects the
+/// entry (see `HomeView.openPlaceHit`). The sheet dismisses first so the selection lands on
+/// the underlying split view, which then pushes `PlacemarkDetailView`.
 ///
 /// Data is loaded off-main on appear: for each active entry the favorite keys come from its
 /// sidecar (coordinated I/O, fine off-main) and resolve against the entry's local
@@ -25,9 +25,9 @@ struct FavoritesView: View {
     /// The catalogue selection, owned by `RootView`. Set to the favorite's entry id to open it.
     @Binding var selection: CatalogEntry.ID?
 
-    /// One-shot deep-link search string, owned by `RootView`. Set to the tapped favorite's name
-    /// so the opened file's outline pre-filters to that placemark. See `RootView`.
-    @Binding var pendingDetailSearch: String?
+    /// One-shot deep-link target, owned by `RootView`. Set to the tapped favorite's stableKey so
+    /// the opened file pushes straight to that placemark's detail page. See `RootView`.
+    @Binding var pendingPlacemarkKey: String?
 
     // MARK: - Environment
 
@@ -111,14 +111,14 @@ struct FavoritesView: View {
 
     // MARK: - Actions
 
-    /// Deep-links into the favorite's file, mirroring `HomeSearchResults.openPlaceHit`: seed the
-    /// one-shot outline filter with the placemark name, then select the entry. The sheet is
+    /// Deep-links into the favorite's file, mirroring `HomeView.openPlaceHit`: seed the one-shot
+    /// `pendingPlacemarkKey` with the hit's stableKey, then select the entry. The sheet is
     /// dismissed FIRST so the selection change reaches the underlying split view — driving the
-    /// detail column to the favorite's file (and its pre-filtered outline).
+    /// detail column to the favorite's file and pushing the placemark's detail page.
     private func open(_ hit: PlacemarkIndex.Hit) {
         guard let entry = catalog.active.first(where: { $0.storageFolderName == hit.folderName }) else { return }
         dismiss()
-        pendingDetailSearch = hit.name.isEmpty ? nil : hit.name
+        pendingPlacemarkKey = hit.key
         selection = entry.id
     }
 
