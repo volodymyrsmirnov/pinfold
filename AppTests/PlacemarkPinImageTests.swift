@@ -12,6 +12,38 @@ struct PlacemarkPinImageTests {
         #expect(image.size.height > 0)
     }
 
+    /// The fallback is a teardrop pin — taller than it is wide.
+    @Test func fallbackImage_isTallerThanWide() {
+        let image = PlacemarkPinImage.fallbackImage(tint: .systemRed)
+        #expect(image.size.height > image.size.width)
+    }
+
+    @Test func pinAnchorCenterOffset() {
+        #expect(PinAnchor.center.centerOffset(forImageOfHeight: 40) == .zero)
+        // bottomTip lifts the view up by half the image height so the bottom edge (the tip)
+        // sits on the coordinate.
+        #expect(PinAnchor.bottomTip.centerOffset(forImageOfHeight: 40) == CGPoint(x: 0, y: -20))
+    }
+
+    /// A `.bottomTip` favorite badge must grow the image upward and sideways only — never at
+    /// the bottom — so the tip stays on the image's bottom edge. A `.center` favorite grows
+    /// symmetrically, so it adds roughly twice the height for the same badge.
+    @Test func decoratedBottomTipKeepsTipAtBottomEdge() {
+        let base = PlacemarkPinImage.fallbackImage(tint: .systemBlue)
+        let tip = PlacemarkPinImage.decorated(base, isFavorite: true, isVisited: false, anchor: .bottomTip)
+        let center = PlacemarkPinImage.decorated(base, isFavorite: true, isVisited: false, anchor: .center)
+
+        // Both widen by the same symmetric horizontal padding.
+        #expect(abs(tip.size.width - center.size.width) < 0.01)
+        #expect(tip.size.width > base.size.width)
+
+        // bottomTip adds top padding only; center adds top + bottom — about twice as much.
+        let tipGrowth = tip.size.height - base.size.height
+        let centerGrowth = center.size.height - base.size.height
+        #expect(tipGrowth > 0)
+        #expect(abs(centerGrowth - 2 * tipGrowth) < 0.01)
+    }
+
     @Test func decoratedReturnsImageForEveryStateCombo() {
         let base = PlacemarkPinImage.fallbackImage(tint: .systemBlue)
         for favorite in [false, true] {

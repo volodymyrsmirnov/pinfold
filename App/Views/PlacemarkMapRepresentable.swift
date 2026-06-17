@@ -203,10 +203,18 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 let fresh = PlacemarkPinImage.decorated(
                     annotation.baseImage,
                     isFavorite: favoriteKeys.contains(annotation.stableKey),
-                    isVisited: visitedKeys.contains(annotation.stableKey)
+                    isVisited: visitedKeys.contains(annotation.stableKey),
+                    anchor: annotation.anchor
                 )
                 annotation.image = fresh
-                mapView.view(for: annotation)?.image = fresh
+                // The fresh image and its centerOffset move together: a tip-anchored pin's
+                // height changes when its favorite badge is added/removed, so re-derive the
+                // offset to keep the tip on the coordinate. Offscreen views are nil here;
+                // viewFor recomputes both from the (now-fresh) annotation.image on reuse.
+                if let view = mapView.view(for: annotation) {
+                    view.image = fresh
+                    view.centerOffset = annotation.anchor.centerOffset(forImageOfHeight: fresh.size.height)
+                }
             }
         }
     }
@@ -225,7 +233,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     func makeAnnotation(for placemark: KMLPlacemark, coordinator: Coordinator) -> PlacemarkAnnotation? {
         guard let coordinate = placemark.coordinate else { return nil }
         let key = PlacemarkPinImage.cacheKey(for: placemark, document: document)
-        let base: UIImage
+        let base: (image: UIImage, anchor: PinAnchor)
         if let cached = coordinator.pinImageCache[key] {
             base = cached
         } else {
@@ -236,9 +244,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             coordinator.pinImageCache[key] = base
         }
         let image = PlacemarkPinImage.decorated(
-            base,
+            base.image,
             isFavorite: favoriteKeys.contains(placemark.stableKey),
-            isVisited: visitedKeys.contains(placemark.stableKey)
+            isVisited: visitedKeys.contains(placemark.stableKey),
+            anchor: base.anchor
         )
         return PlacemarkAnnotation(
             stableKey: placemark.stableKey,
@@ -246,8 +255,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 latitude: coordinate.latitude, longitude: coordinate.longitude
             ),
             title: placemark.name,
-            baseImage: base,
-            image: image
+            baseImage: base.image,
+            image: image,
+            anchor: base.anchor
         )
     }
 
@@ -350,7 +360,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// `makeAnnotation` into O(styles): the first placemark of each style builds its
         /// base image (one `UIImage(contentsOfFile:)` + resize, or one SF-Symbol render),
         /// and every later placemark of that style reuses it. Decoration stays per-annotation.
-        var pinImageCache: [PlacemarkPinImage.CacheKey: UIImage] = [:]
+        /// The cached value carries the pin's `PinAnchor` alongside its base image.
+        var pinImageCache: [PlacemarkPinImage.CacheKey: (image: UIImage, anchor: PinAnchor)] = [:]
 
         init(_ parent: PlacemarkMapRepresentable) {
             self.parent = parent
@@ -417,9 +428,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 : nil
             view.collisionMode = clustering ? .circle : .none
             view.canShowCallout = false
-            // Center-anchor: the SF Symbol fallback and typical KML point icons are
-            // centered on their coordinate (no hotSpot parsing).
-            view.centerOffset = .zero
+            // Anchor per the pin's PinAnchor: the teardrop fallback is tip-anchored (points
+            // at its coordinate); custom KML icons stay centre-anchored (no hotSpot parsing).
+            view.centerOffset = placemark.anchor.centerOffset(forImageOfHeight: placemark.image.size.height)
             // Reset any highlight left over from view reuse.
             view.transform = .identity
             view.zPriority = .defaultUnselected

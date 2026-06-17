@@ -20,19 +20,25 @@ final class PlacemarkAnnotation: NSObject, MKAnnotation {
     /// The currently decorated pin image. Updated in `updateUIView` when favorite/visited
     /// state changes; the `viewFor` delegate reads this to set `view.image`.
     var image: UIImage
+    /// How this pin sits on its coordinate — constant per placemark (it follows the resolved
+    /// style: tip-anchored teardrop fallback vs centre-anchored custom icon). `viewFor` and
+    /// the re-decoration pass derive `centerOffset` from this and the current image height.
+    let anchor: PinAnchor
 
     init(
         stableKey: String,
         coordinate: CLLocationCoordinate2D,
         title: String?,
         baseImage: UIImage,
-        image: UIImage
+        image: UIImage,
+        anchor: PinAnchor
     ) {
         self.stableKey = stableKey
         self.coordinate = coordinate
         self.title = title
         self.baseImage = baseImage
         self.image = image
+        self.anchor = anchor
     }
 }
 
