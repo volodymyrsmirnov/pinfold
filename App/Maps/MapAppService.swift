@@ -19,7 +19,6 @@ import UIKit
 /// )
 /// ```
 @MainActor @Observable public final class MapAppService {
-
     // MARK: - Injected capabilities
 
     private let roster: [MapApp]
@@ -31,13 +30,14 @@ import UIKit
     /// Creates a `MapAppService`.
     ///
     /// - Parameters:
-    ///   - roster: The list of candidate map apps. Defaults to `MapApp.roster`.
+    ///   - roster: The list of candidate map apps. Defaults to `MapApp.platformRoster()`,
+    ///     which adds Google Maps in the browser only when running as an iOS app on macOS.
     ///   - canOpen: Closure that returns `true` when the given URL scheme is registered
     ///     on this device. Defaults to `UIApplication.shared.canOpenURL(_:)`.
     ///   - opener: Closure that opens the URL (launches the map app). Defaults to
     ///     `UIApplication.shared.open(_:)`.
     public init(
-        roster: [MapApp] = MapApp.roster,
+        roster: [MapApp] = MapApp.platformRoster(),
         canOpen: @escaping (URL) -> Bool = { UIApplication.shared.canOpenURL($0) },
         opener: @escaping (URL) -> Void = { UIApplication.shared.open($0) }
     ) {
@@ -51,7 +51,7 @@ import UIKit
     /// Returns all map apps that are present on this device.
     ///
     /// An app is considered "installed" when either:
-    /// - its `alwaysAvailable` flag is `true` (Apple Maps), or
+    /// - its `alwaysAvailable` flag is `true` (Apple Maps or browser-based destinations), or
     /// - its `urlScheme` can be opened according to the injected `canOpen` closure.
     ///
     /// The result preserves roster order.

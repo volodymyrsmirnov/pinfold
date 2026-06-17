@@ -20,13 +20,23 @@ struct MapPickerSheet: View {
 
     // MARK: - Environment
 
-    @Environment(MapAppService.self) private var mapService
-    @Environment(AppSettings.self) private var settings
+    @Environment(MapAppService.self) private var environmentMapService: MapAppService?
+    @Environment(AppSettings.self) private var environmentSettings: AppSettings?
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - State
 
     @State private var coordinatesCopied = false
+    @State private var fallbackMapService = MapAppService()
+    @State private var fallbackSettings = AppSettings()
+
+    private var mapService: MapAppService {
+        environmentMapService ?? fallbackMapService
+    }
+
+    private var settings: AppSettings {
+        environmentSettings ?? fallbackSettings
+    }
 
     // MARK: - Body
 

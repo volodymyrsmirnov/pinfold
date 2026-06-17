@@ -219,8 +219,8 @@ extension HomeView {
     /// Replaces the plain entry list while a query is active. Two sections:
     /// - "Files": active entries whose display name matches (selecting one opens it normally).
     /// - "Places": placemark hits from the per-entry indexes, grouped by file. Tapping a hit
-    ///   selects its file AND seeds the detail view's outline filter with the placemark name
-    ///   (via `pendingDetailSearch`), deep-linking to the placemark.
+    ///   selects its file AND sets `pendingPlacemarkKey` to the hit's stableKey, which
+    ///   `KMLDetailView` resolves to push `PlacemarkDetailView` directly.
     ///
     /// Shows a `ContentUnavailableView` only when BOTH sections are empty (e.g. an index that
     /// hasn't been materialized yet contributes no Places hits — it self-heals on a later pass).
@@ -270,21 +270,18 @@ extension HomeView {
         .contentShape(Rectangle())
     }
 
-    /// Opens the file containing a Places hit, deep-linking to the placemark: selects the
-    /// entry and hands the placemark name to the detail view as a one-shot outline filter.
+    /// Opens the file containing a Places hit, deep-linking to the placemark: seeds the one-shot
+    /// `pendingPlacemarkKey` with the hit's stableKey, then selects the entry. `KMLDetailView`
+    /// resolves the key after the file parses and pushes the placemark's detail page.
     ///
-    /// Works for both selection states:
-    /// - **Different file**: the selection change rebuilds `KMLDetailView` under a new
-    ///   identity; its `.task(id: entry.id)` reads `initialSearch` on first load.
-    /// - **Already-open file**: `selection = entry.id` is a same-value write (no identity
-    ///   change), but the `pendingDetailSearch` nil→name change alone re-evaluates the detail
-    ///   body with the new `initialSearch` param, which the detail's
-    ///   `.onChange(of: initialSearch)` consumes live.
+    /// Works for both selection states: a different file rebuilds `KMLDetailView` under a new
+    /// identity (its load `.task` does the push); an already-open file keeps its identity but the
+    /// `pendingPlacemarkKey` change re-evaluates the body, which `.onChange` consumes live.
     private func openPlaceHit(_ hit: PlacemarkIndex.Hit) {
         guard let entry = active.first(where: { $0.storageFolderName == hit.folderName }) else { return }
-        // Seed the deep-link filter BEFORE changing the selection so the detail view, rebuilt
-        // for the new selection, reads the pending search on its first load `.task`.
-        pendingDetailSearch = hit.name.isEmpty ? nil : hit.name
+        // Seed the deep-link key BEFORE changing the selection so the detail view, rebuilt for
+        // the new selection, reads it on its first load `.task`.
+        pendingPlacemarkKey = hit.key
         selection = entry.id
     }
 }

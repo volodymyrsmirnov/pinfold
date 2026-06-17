@@ -19,16 +19,17 @@ struct KMLDetailView: View {
 
     let entry: CatalogEntry
 
-    /// A one-shot initial search string, supplied when this file was opened from a
-    /// catalogue-wide "Places" search hit (see `HomeView`/`RootView`). It carries the tapped
-    /// placemark's name so the in-file outline opens pre-filtered to show it. `nil` for a
-    /// normal selection. Consumed once in the load `.task` (then `onConsumeInitialSearch`
-    /// clears the source so re-selecting the file normally doesn't re-apply it).
-    var initialSearch: String?
+    /// A one-shot deep-link target: the durable `stableKey` of the placemark to open, supplied
+    /// when this file was opened from a catalogue-wide hit (a "Places" search result, a favorite,
+    /// or a Spotlight result — see `HomeView`/`FavoritesView`/`RootView`). After the document is
+    /// parsed, the key is resolved to a `KMLPlacemark` and `PlacemarkDetailView` is pushed.
+    /// `nil` for a normal selection. Consumed once (then `onConsumePlacemarkKey` clears the
+    /// source so re-selecting the file normally doesn't re-push).
+    var initialPlacemarkKey: String?
 
-    /// Called once after `initialSearch` has been applied, so the owner can clear its
+    /// Called once after `initialPlacemarkKey` has been consumed, so the owner can clear its
     /// one-shot source. Defaults to a no-op for callers (e.g. previews) that don't plumb it.
-    var onConsumeInitialSearch: () -> Void = {}
+    var onConsumePlacemarkKey: () -> Void = {}
 
     // MARK: - Environment
 
@@ -57,6 +58,12 @@ struct KMLDetailView: View {
     /// Whether the outline sorts placemarks nearest-first (flat, folders dropped) instead of in
     /// document order. Only takes effect once a location fix is known; see `effectiveSort`.
     @State private var nearestFirst = false
+
+    /// The placemark a deep link resolved to, driving a programmatic push of
+    /// `PlacemarkDetailView` via `.navigationDestination(item:)`. `nil` when no deep link is
+    /// active. Set by the load `.task` (new file) or `.onChange(of: initialPlacemarkKey)`
+    /// (file already open).
+    @State private var deepLinkTarget: PlacemarkRoute?
 
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
     /// toggles and document loads are not debounced (they go through a separate trigger).
@@ -99,11 +106,20 @@ struct KMLDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     if let document {
+                        // Re-inject `annotations`: this map is pushed from KMLDetailView, which
+                        // is itself a pushed view, so the destination is hosted by the ancestor
+                        // NavigationStack and resolves its environment from the STACK ROOT — not
+                        // from the `.environment(annotations)` applied to this view's body below.
+                        // Without this, `annotations` is nil in the map, so favorite/visited
+                        // decoration (faded Seen pins, favorite stars) and the preview card's
+                        // Seen styling silently no-op. Same exception as PlacemarkMapView's own
+                        // onward push and the POI page's "Show on Map".
                         PlacemarkMapView(
                             placemarks: outline?.mappablePlacemarks ?? [],
                             document: document,
                             entry: entry
                         )
+                        .environment(annotations)
                     }
                 } label: {
                     Image(systemName: "map")
@@ -127,31 +143,36 @@ struct KMLDetailView: View {
             outline = nil
             collapsedFolderIDs = []
             nearestFirst = false
+            searchText = ""
+            deepLinkTarget = nil
             // Ask for a one-shot location fix so distances and the nearest sort can light up.
             locationAuth.request()
-            // Seed the in-file search from a Places-hit deep link (if any), then tell the
-            // owner it was consumed so it isn't re-applied on a later normal re-selection.
-            if let initialSearch, !initialSearch.isEmpty {
-                searchText = initialSearch
-                onConsumeInitialSearch()
-            } else {
-                searchText = ""
-            }
             await loadDocument()
+            // Deep link: if this file was opened from a placemark hit, resolve the carried
+            // stableKey against the freshly-parsed document and push its detail page. Consume
+            // the one-shot key (whether or not it resolved) so a later normal re-selection of
+            // the same file doesn't re-push, and so a stale key doesn't leak into another file.
+            if let initialPlacemarkKey, !initialPlacemarkKey.isEmpty, let document,
+               let match = document.root.firstPlacemark(withStableKey: initialPlacemarkKey)
+            {
+                deepLinkTarget = PlacemarkRoute(placemark: match)
+            }
+            if initialPlacemarkKey != nil {
+                onConsumePlacemarkKey()
+            }
         }
         // Second consume path: a deep link into the file that is ALREADY open. The view keeps
-        // its identity (`.id(entry.id)` unchanged), so the `.task(id: entry.id)` above does NOT
-        // refire — but SwiftUI still re-evaluates the body with the new `initialSearch` param
-        // (same identity, new data), and this `.onChange` observes that nil→"X" transition.
-        // Without it the deep link would silently no-op AND the un-consumed value would leak
-        // into the next normal selection's fresh `.task`, pre-filtering the wrong file.
-        // No double-apply with the `.task` path: consuming nils the source, so the param's
-        // follow-up "X"→nil change is guarded out, and `.onChange` never fires for the value
-        // a fresh identity was *created* with (only the `.task` handles that one).
-        .onChange(of: initialSearch) { _, newValue in
-            guard let newValue, !newValue.isEmpty else { return }
-            searchText = newValue
-            onConsumeInitialSearch()
+        // its identity (`.id(entry.id)` unchanged), so the load `.task` above does NOT refire —
+        // but SwiftUI re-evaluates the body with the new `initialPlacemarkKey` param, and this
+        // `.onChange` observes the nil→key transition and pushes against the already-loaded
+        // document. The guard's `let document` also covers the rare mid-load race: if the
+        // document isn't ready yet, this no-ops WITHOUT consuming, and the in-flight load `.task`
+        // (which reads `initialPlacemarkKey` after `loadDocument()`) handles it instead.
+        .onChange(of: initialPlacemarkKey) { _, newValue in
+            guard let newValue, !newValue.isEmpty, let document,
+                  let match = document.root.firstPlacemark(withStableKey: newValue) else { return }
+            deepLinkTarget = PlacemarkRoute(placemark: match)
+            onConsumePlacemarkKey()
         }
         // The outline rebuild is driven by TWO independent triggers so the debounce policy
         // derives from *which trigger fired*, never from mutable post-build state (a single
@@ -180,12 +201,28 @@ struct KMLDetailView: View {
         )) {
             await buildOutlineNow()
         }
-        // KMLDetailView is the root of the detail column's NavigationStack, so this single
-        // injection reaches both this view's in-body uses (swipe/context favorite & visited
-        // actions) AND every destination pushed from this stack — the map, the placemark
-        // detail, and the map's own onward push to placemark detail — because a NavigationStack
-        // resolves a pushed destination's environment from the stack root. This is the one
-        // consolidation point that replaced four scattered re-injections.
+        // Programmatic push for a resolved deep link. `deepLinkTarget` is only set once the
+        // document is loaded, so `if let document` always succeeds here. Lives on the detail
+        // column's NavigationStack root (this view), so the push lands in the detail column and
+        // inherits the `.environment(annotations)` injected just below — the same environment
+        // the list's own `NavigationLink`s rely on.
+        .navigationDestination(item: $deepLinkTarget) { route in
+            if let document {
+                // Re-inject `annotations` for the same reason as the list-row push below: a
+                // destination pushed onto the ancestor NavigationStack resolves its environment
+                // from the stack root, not from this view's body-level injection.
+                PlacemarkDetailView(placemark: route.placemark, document: document, entry: entry)
+                    .environment(annotations)
+            }
+        }
+        // This injection reaches this view's OWN body uses (the search/context swipe favorite &
+        // visited actions and the in-list `PlacemarkRow` strikethrough) — but NOT destinations
+        // pushed onto the stack. KMLDetailView is the stack's root *content*, not the stack
+        // itself (the NavigationStack lives in RootView); a pushed destination resolves its
+        // environment from the stack, so content-level injection here is dropped for the map and
+        // the placemark detail. Each push site therefore re-injects `annotations` explicitly
+        // (the list row, the deep-link destination, the toolbar map, and the POI page's
+        // "Show on Map") — matching how RootView injects the shared service bundle on the stack.
         .environment(annotations)
     }
 
@@ -201,6 +238,25 @@ struct KMLDetailView: View {
         let nearestFirst: Bool
         let locationLat: Double?
         let locationLon: Double?
+    }
+
+    /// Identifies a programmatic push target by the placemark's parse-`id`, which is unique
+    /// within a single loaded document (the only scope this route lives in). A wrapper exists
+    /// because `KMLPlacemark` is `Equatable`/`Identifiable` but not `Hashable`, which
+    /// `.navigationDestination(item:)` requires.
+    private struct PlacemarkRoute: Identifiable, Hashable {
+        let placemark: KMLPlacemark
+        var id: String {
+            placemark.id
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.placemark.id == rhs.placemark.id
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(placemark.id)
+        }
     }
 
     /// The sort to build the outline with: `.nearest` only when the user chose it AND a location
@@ -378,7 +434,13 @@ struct KMLDetailView: View {
             placemark: placemark,
             document: document,
             entry: entry
-        )) {
+        )
+        // Re-inject `annotations`: the pushed detail page is hosted by the ancestor
+        // NavigationStack and resolves its environment from the stack root, not from the
+        // `.environment(annotations)` this view applies to its own body. Without this the
+        // detail page's `annotations` is nil — its Favorite/Seen menu items vanish and its
+        // "Show on Map" forwards nil, so map pins lose favorite/visited decoration.
+        .environment(annotations)) {
             PlacemarkRow(
                 placemark: placemark,
                 document: document,

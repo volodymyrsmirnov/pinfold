@@ -51,6 +51,11 @@ private let name = "Colosseo, Roma"
         #expect(url.absoluteString == "comgooglemaps://?q=41.8902,12.4922&center=41.8902,12.4922")
     }
 
+    @Test func googleWebURL_exact() throws {
+        let url = try #require(MapApp.googleWeb.makeURL(lat, lng, name))
+        #expect(url.absoluteString == "https://www.google.com/maps/search/?api=1&query=41.8902,12.4922")
+    }
+
     // MARK: - URL construction: Waze (exact)
 
     @Test func wazeURL_exact() throws {
@@ -152,6 +157,25 @@ private let name = "Colosseo, Roma"
         let installedIDs = installed.map(\.id)
         #expect(installedIDs == rosterIDs,
                 "installedApps() must preserve roster order when all apps are installed")
+    }
+
+    @Test func platformRoster_whenRunningOniOSAppOnMac_addsGoogleWebAfterApple() {
+        let ids = MapApp.platformRoster(isiOSAppOnMac: true).map(\.id)
+        #expect(ids.prefix(3) == ["apple", "google-web", "google"])
+    }
+
+    @Test func platformRoster_whenNotRunningOniOSAppOnMac_matchesiOSRoster() {
+        let ids = MapApp.platformRoster(isiOSAppOnMac: false).map(\.id)
+        #expect(ids == MapApp.roster.map(\.id))
+    }
+
+    @Test func installedApps_onMacAlwaysIncludesAppleAndGoogleWeb() {
+        let service = MapAppService(
+            roster: MapApp.platformRoster(isiOSAppOnMac: true),
+            canOpen: { _ in false }
+        )
+        let installed = service.installedApps()
+        #expect(installed.map(\.id) == ["apple", "google-web"])
     }
 
     // MARK: - MapAppService.availableApps
