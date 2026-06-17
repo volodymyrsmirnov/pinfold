@@ -106,11 +106,20 @@ struct KMLDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     if let document {
+                        // Re-inject `annotations`: this map is pushed from KMLDetailView, which
+                        // is itself a pushed view, so the destination is hosted by the ancestor
+                        // NavigationStack and resolves its environment from the STACK ROOT — not
+                        // from the `.environment(annotations)` applied to this view's body below.
+                        // Without this, `annotations` is nil in the map, so favorite/visited
+                        // decoration (faded Seen pins, favorite stars) and the preview card's
+                        // Seen styling silently no-op. Same exception as PlacemarkMapView's own
+                        // onward push and the POI page's "Show on Map".
                         PlacemarkMapView(
                             placemarks: outline?.mappablePlacemarks ?? [],
                             document: document,
                             entry: entry
                         )
+                        .environment(annotations)
                     }
                 } label: {
                     Image(systemName: "map")
@@ -199,15 +208,21 @@ struct KMLDetailView: View {
         // the list's own `NavigationLink`s rely on.
         .navigationDestination(item: $deepLinkTarget) { route in
             if let document {
+                // Re-inject `annotations` for the same reason as the list-row push below: a
+                // destination pushed onto the ancestor NavigationStack resolves its environment
+                // from the stack root, not from this view's body-level injection.
                 PlacemarkDetailView(placemark: route.placemark, document: document, entry: entry)
+                    .environment(annotations)
             }
         }
-        // KMLDetailView is the root of the detail column's NavigationStack, so this single
-        // injection reaches both this view's in-body uses (swipe/context favorite & visited
-        // actions) AND every destination pushed from this stack — the map, the placemark
-        // detail, and the map's own onward push to placemark detail — because a NavigationStack
-        // resolves a pushed destination's environment from the stack root. This is the one
-        // consolidation point that replaced four scattered re-injections.
+        // This injection reaches this view's OWN body uses (the search/context swipe favorite &
+        // visited actions and the in-list `PlacemarkRow` strikethrough) — but NOT destinations
+        // pushed onto the stack. KMLDetailView is the stack's root *content*, not the stack
+        // itself (the NavigationStack lives in RootView); a pushed destination resolves its
+        // environment from the stack, so content-level injection here is dropped for the map and
+        // the placemark detail. Each push site therefore re-injects `annotations` explicitly
+        // (the list row, the deep-link destination, the toolbar map, and the POI page's
+        // "Show on Map") — matching how RootView injects the shared service bundle on the stack.
         .environment(annotations)
     }
 
@@ -419,7 +434,13 @@ struct KMLDetailView: View {
             placemark: placemark,
             document: document,
             entry: entry
-        )) {
+        )
+        // Re-inject `annotations`: the pushed detail page is hosted by the ancestor
+        // NavigationStack and resolves its environment from the stack root, not from the
+        // `.environment(annotations)` this view applies to its own body. Without this the
+        // detail page's `annotations` is nil — its Favorite/Seen menu items vanish and its
+        // "Show on Map" forwards nil, so map pins lose favorite/visited decoration.
+        .environment(annotations)) {
             PlacemarkRow(
                 placemark: placemark,
                 document: document,
