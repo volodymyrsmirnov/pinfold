@@ -58,10 +58,12 @@ final class FittingMapView: MKMapView {
 // MARK: - Native map controls
 
 extension PlacemarkMapRepresentable {
-    /// Adds the native control column (basemap-style menu + user-tracking button) to the
+    /// Adds the native control column (basemap-style menu + compass + user-tracking button) to the
     /// map. Kept here, separate from the representable's data-reconciliation core, so each
     /// file stays focused.
     func addControls(to mapView: MKMapView, coordinator: Coordinator) {
+        mapView.showsCompass = false
+
         let tracking = MKUserTrackingButton(mapView: mapView)
         tracking.translatesAutoresizingMaskIntoConstraints = false
         let trackingContainer = Self.glassContainer()
@@ -93,7 +95,19 @@ extension PlacemarkMapRepresentable {
             styleContainer.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        let stack = UIStackView(arrangedSubviews: [styleContainer, trackingContainer])
+        let compass = MKCompassButton(mapView: mapView)
+        compass.compassVisibility = .visible
+        compass.translatesAutoresizingMaskIntoConstraints = false
+        let compassContainer = Self.glassContainer()
+        compassContainer.contentView.addSubview(compass)
+        NSLayoutConstraint.activate([
+            compass.centerXAnchor.constraint(equalTo: compassContainer.contentView.centerXAnchor),
+            compass.centerYAnchor.constraint(equalTo: compassContainer.contentView.centerYAnchor),
+            compassContainer.widthAnchor.constraint(equalToConstant: 44),
+            compassContainer.heightAnchor.constraint(equalToConstant: 44),
+        ])
+
+        let stack = UIStackView(arrangedSubviews: [styleContainer, compassContainer, trackingContainer])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false

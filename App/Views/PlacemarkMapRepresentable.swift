@@ -12,7 +12,7 @@ import UIKit
 /// - Fits all pins on the map's first layout (`MapRectBuilder` + `setVisibleMapRect`),
 ///   single pin → a fixed ~1 km span.
 /// - Shows the user-location dot when `showsUserLocation` is `true`.
-/// - Adds native controls: a basemap-style menu and an `MKUserTrackingButton`.
+/// - Adds native controls: a basemap-style menu, compass, and `MKUserTrackingButton`.
 /// - Clustering follows `clusterPins`: when on, nearby pins group into numbered
 ///   clusters (tapping a cluster zooms to its members); when off, every pin renders
 ///   individually even when overlapping.
