@@ -17,6 +17,26 @@ public struct KMLContainer: Equatable, Sendable, Identifiable {
         placemarks + children.flatMap(\.allPlacemarks)
     }
 
+    /// The first placemark anywhere in this container subtree whose `stableKey` equals
+    /// `key`, in document order, or `nil` if none matches.
+    ///
+    /// Used to resolve a deep link (a Places search hit, a favorite, or a Spotlight result)
+    /// to the placemark it points at. A repeated placemark shares a `stableKey`; the first
+    /// occurrence is returned, matching how the search index and outline already collapse
+    /// duplicates. Document order means this container's own placemarks are checked before
+    /// its children's, consistent with `allPlacemarks`.
+    public func firstPlacemark(withStableKey key: String) -> KMLPlacemark? {
+        for placemark in placemarks where placemark.stableKey == key {
+            return placemark
+        }
+        for child in children {
+            if let match = child.firstPlacemark(withStableKey: key) {
+                return match
+            }
+        }
+        return nil
+    }
+
     /// Total placemarks in this container and its descendants, computed by recursive
     /// summation without materializing the `allPlacemarks` arrays.
     public var placemarkCount: Int {
