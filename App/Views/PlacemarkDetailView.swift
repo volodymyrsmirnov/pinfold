@@ -31,6 +31,8 @@ struct PlacemarkDetailView: View {
 
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
+    /// Drives the push to the embedded map focused on this placemark ("Show on Embedded Map").
+    @State private var showOnMap = false
     /// Whether to force-show the picker (long-press on Open in Maps).
     @State private var forcePicker = false
 
@@ -74,6 +76,20 @@ struct PlacemarkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { description = renderedDescription() }
         .toolbar { toolbarMenu }
+        .navigationDestination(isPresented: $showOnMap) {
+            // Open the embedded map showing every coordinate-bearing placemark in the file,
+            // zoomed to and with THIS one selected. `allPlacemarks.filter { coordinate != nil }`
+            // reproduces `PlacemarkOutline`'s "mappable" definition. Re-inject `annotations`:
+            // this map is pushed from an already-pushed view, the one case where stack-root
+            // environment propagation is unreliable (mirrors PlacemarkMapView's own exception).
+            PlacemarkMapView(
+                placemarks: document.root.allPlacemarks.filter { $0.coordinate != nil },
+                document: document,
+                entry: entry,
+                initialFocusKey: placemark.stableKey
+            )
+            .environment(annotations)
+        }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -208,6 +224,14 @@ struct PlacemarkDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                if hasCoordinate {
+                    Button {
+                        showOnMap = true
+                    } label: {
+                        Label("Show on Embedded Map", systemImage: "map")
+                    }
+                    Divider()
+                }
                 if let annotations {
                     Button {
                         annotations.toggleFavorite(placemark)

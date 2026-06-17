@@ -13,6 +13,10 @@ struct PlacemarkMapView: View {
     let placemarks: [KMLPlacemark]
     let document: KMLDocument
     let entry: CatalogEntry
+    /// Optional `stableKey` of a placemark to open zoomed-to and selected (its preview card
+    /// shown), instead of the default fit-all-pins. Set by "Show on Embedded Map" on the POI
+    /// page; `nil` for the file's Map toolbar button (which fits all pins).
+    var initialFocusKey: String?
 
     @Environment(\.resourceCache) private var resourceCache
     @Environment(\.storageLocations) private var storage
@@ -42,6 +46,7 @@ struct PlacemarkMapView: View {
                 clusterPins: settings.clusterMapPins,
                 favoriteKeys: annotations?.favoriteKeys ?? [],
                 visitedKeys: annotations?.visitedKeys ?? [],
+                initialFocusKey: initialFocusKey,
                 selectedKey: $selectedPlacemarkKey
             )
             .ignoresSafeArea()
