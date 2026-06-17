@@ -228,7 +228,7 @@ struct PlacemarkDetailView: View {
                     Button {
                         showOnMap = true
                     } label: {
-                        Label("Show on Embedded Map", systemImage: "map")
+                        Label("Show on Map", systemImage: "map")
                     }
                     Divider()
                 }
