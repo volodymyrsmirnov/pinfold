@@ -10,7 +10,9 @@ import Testing
 /// Folder identity is a **tree path of child indices** (root = `""`, its first child
 /// folder = `"0"`, that folder's second child folder = `"0/1"`, …). This is stable
 /// across rebuilds as long as the parsed tree shape is unchanged, which is what keys
-/// the collapse state. Placemark row id is the placemark's `stableKey`.
+/// the collapse state. A placemark row's id is its document position (container path +
+/// index, e.g. `"0/1/p2"`; root-level `"p2"`) — unique per occurrence, NOT the placemark's
+/// (possibly shared) `stableKey`.
 struct PlacemarkOutlineTests {
     // MARK: - Helpers
 
@@ -61,7 +63,7 @@ struct PlacemarkOutlineTests {
         // Document order: root placemark, folder A, A's placemark, folder A.1, its
         // placemark, folder B, B's placemark.
         let ids = outline.rows.map(\.id)
-        #expect(ids == ["id:r1", "0", "id:a1", "0/0", "id:a11", "1", "id:b1"])
+        #expect(ids == ["p0", "0", "0/p0", "0/0", "0/0/p0", "1", "1/p0"])
 
         let depths = outline.rows.map(\.depth)
         // r1 at root depth 0; folder A depth 0; a1 depth 1; folder A.1 depth 1;
@@ -81,7 +83,7 @@ struct PlacemarkOutlineTests {
         // Only a11 matches. Its ancestor folders A (0) and A.1 (0/0) must remain;
         // folder B and the root placemark must be gone.
         let ids = outline.rows.map(\.id)
-        #expect(ids == ["0", "0/0", "id:a11"])
+        #expect(ids == ["0", "0/0", "0/0/p0"])
         #expect(outline.rows[0].depth == 0) // folder A
         #expect(outline.rows[1].depth == 1) // folder A.1
         #expect(outline.rows[2].depth == 2) // placemark a11
@@ -115,7 +117,7 @@ struct PlacemarkOutlineTests {
         let outline = PlacemarkOutline.build(from: sampleRoot(), matching: "", collapsed: ["0"])
 
         let ids = outline.rows.map(\.id)
-        #expect(ids == ["id:r1", "0", "1", "id:b1"])
+        #expect(ids == ["p0", "0", "1", "1/p0"])
     }
 
     @Test func rows_collapsedSet_ignoredWhileSearching() {
@@ -125,7 +127,7 @@ struct PlacemarkOutlineTests {
             from: sampleRoot(), matching: "Eleven", collapsed: ["0"]
         )
         let ids = outline.rows.map(\.id)
-        #expect(ids == ["0", "0/0", "id:a11"])
+        #expect(ids == ["0", "0/0", "0/0/p0"])
     }
 
     // MARK: - Mappable derived from rows
@@ -140,7 +142,7 @@ struct PlacemarkOutlineTests {
         let outline = PlacemarkOutline.build(from: root, matching: "alpha", collapsed: [])
 
         // Both rows present (both match "alpha")...
-        #expect(outline.rows.map(\.id) == ["id:r1", "id:nc"])
+        #expect(outline.rows.map(\.id) == ["p0", "p1"])
         // ...but only the coordinate-bearing one is mappable.
         #expect(outline.mappablePlacemarks.map(\.stableKey) == ["id:r1"])
     }
@@ -182,7 +184,7 @@ struct PlacemarkOutlineTests {
         // Flat list, no folder rows, nearest→farthest.
         let allPlacemarks = outline.rows.allSatisfy(\.isPlacemark)
         #expect(allPlacemarks)
-        #expect(outline.rows.map(\.id) == ["id:near", "id:mid", "id:far"])
+        #expect(outline.rows.map(\.id) == ["p0", "p2", "p1"])
         #expect(outline.rows.map(\.depth) == [0, 0, 0])
     }
 
@@ -202,7 +204,7 @@ struct PlacemarkOutlineTests {
         )
 
         // Coordinate-bearing placemark first; the coordinate-less one sorts last.
-        #expect(outline.rows.map(\.id) == ["id:near", "id:nc"])
+        #expect(outline.rows.map(\.id) == ["p1", "p0"])
     }
 
     @Test func nearest_respectsSearchQuery() {
@@ -218,7 +220,7 @@ struct PlacemarkOutlineTests {
         )
 
         // Only the matching placemark survives, still as a flat row.
-        #expect(outline.rows.map(\.id) == ["id:b"])
+        #expect(outline.rows.map(\.id) == ["p0"])
     }
 
     @Test func mappable_includesPointLessGeometryPlacemarks() {
@@ -237,7 +239,40 @@ struct PlacemarkOutlineTests {
         let outline = PlacemarkOutline.build(from: root, matching: "", collapsed: [])
 
         // The route placemark is a row AND is mappable despite having no explicit point.
-        #expect(outline.rows.map(\.id) == ["id:route"])
+        #expect(outline.rows.map(\.id) == ["p0"])
         #expect(outline.mappablePlacemarks.map(\.stableKey) == ["id:route"])
+    }
+
+    // MARK: - Repeated POIs get unique row ids
+
+    /// The same POI repeating in a file — e.g. an itinerary hotel listed on several days —
+    /// shares a `stableKey` (it hashes `name|lat|lon`). Row ids must still be unique per
+    /// occurrence, or `List`'s `ForEach` gives "undefined results": broken diffing and a scroll
+    /// position that snaps to the top on every back-navigation. Regression test for that bug,
+    /// across both sort modes.
+    @Test func rows_repeatedPlacemark_haveUniqueRowIDs() {
+        /// No sourceID + identical name & coordinate ⇒ identical stableKey (the bug's precondition).
+        func repeatedPOI() -> KMLPlacemark {
+            KMLPlacemark(
+                id: "x", name: "Repeated POI", descriptionHTML: nil, styleUrl: nil,
+                coordinate: Coordinate(longitude: 10, latitude: 20),
+                extendedData: [], photoLinks: [], sourceID: nil
+            )
+        }
+        let dupA = repeatedPOI()
+        let dupB = repeatedPOI()
+        #expect(dupA.stableKey == dupB.stableKey, "Precondition: the two POIs share a stableKey")
+
+        let day1 = KMLContainer(id: "d1", name: "Day 1", children: [], placemarks: [dupA])
+        let day5 = KMLContainer(id: "d5", name: "Day 5", children: [], placemarks: [dupB])
+        let root = KMLContainer(id: "root", name: nil, children: [day1, day5], placemarks: [])
+
+        let here = CLLocation(latitude: 0, longitude: 0)
+        for sort in [PlacemarkOutline.Sort.document, .nearest(here)] {
+            let ids = PlacemarkOutline.build(
+                from: root, matching: "", collapsed: [], sort: sort
+            ).rows.map(\.id)
+            #expect(Set(ids).count == ids.count, "Row ids must be unique (sort: \(sort))")
+        }
     }
 }

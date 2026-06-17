@@ -37,6 +37,11 @@ struct KMLDetailView: View {
     // MARK: - State
 
     @State private var document: KMLDocument?
+    /// The entry id whose `document` is currently loaded. Guards the appearance-bound load `.task`
+    /// so it reloads only for a genuinely new entry — NOT when this view merely re-appears after a
+    /// pushed `PlacemarkDetailView` is popped. Reloading on return would nil `document`/`outline`,
+    /// swap the list for the loading view, and lose the scroll position. See the `.task(id:)`.
+    @State private var loadedEntryID: CatalogEntry.ID?
     @State private var loadError: Error?
     @State private var searchText = ""
     @State private var annotations: PlacemarkAnnotations?
@@ -108,6 +113,14 @@ struct KMLDetailView: View {
             }
         }
         .task(id: entry.id) {
+            // `.task` is appearance-bound: pushing `PlacemarkDetailView` makes this view disappear,
+            // and popping back re-runs this task even though `entry.id` is unchanged. Loading is
+            // idempotent per entry so a RETURN does not nil `document`/`outline` (which would swap
+            // the list for the loading view, destroying its scroll position and re-parsing the
+            // file). Only a genuinely new entry — or a prior load cancelled before `document`
+            // arrived (a mid-load push) — falls through to reload.
+            if loadedEntryID == entry.id, document != nil { return }
+            loadedEntryID = entry.id
             annotations = nil
             document = nil
             loadError = nil
