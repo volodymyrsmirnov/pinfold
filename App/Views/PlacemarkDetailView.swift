@@ -22,8 +22,8 @@ struct PlacemarkDetailView: View {
 
     // MARK: - Environment
 
-    @Environment(MapAppService.self) private var mapService
-    @Environment(AppSettings.self) private var settings
+    @Environment(MapAppService.self) private var environmentMapService: MapAppService?
+    @Environment(AppSettings.self) private var environmentSettings: AppSettings?
     @Environment(\.resourceCache) private var resourceCache
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
 
@@ -35,6 +35,11 @@ struct PlacemarkDetailView: View {
     @State private var showOnMap = false
     /// Whether to force-show the picker (long-press on Open in Maps).
     @State private var forcePicker = false
+    /// Fallbacks for macOS "Designed for iPad" navigation/sheet hosts that can drop typed
+    /// environment values from pushed destinations. Normal app flows still use the injected
+    /// environment instances.
+    @State private var fallbackMapService = MapAppService()
+    @State private var fallbackSettings = AppSettings()
 
     /// The rendered description: tags stripped, entities decoded, line breaks preserved, and
     /// `<a href>`/bare URLs/emails/phones turned into tappable links (scheme-allowlisted —
@@ -58,6 +63,14 @@ struct PlacemarkDetailView: View {
 
     private var hasCoordinate: Bool {
         placemark.coordinate != nil
+    }
+
+    private var mapService: MapAppService {
+        environmentMapService ?? fallbackMapService
+    }
+
+    private var settings: AppSettings {
+        environmentSettings ?? fallbackSettings
     }
 
     // MARK: - Body
@@ -96,6 +109,8 @@ struct PlacemarkDetailView: View {
                     coordinate: coord,
                     name: placemark.name ?? ""
                 )
+                .environment(mapService)
+                .environment(settings)
             }
         }
     }

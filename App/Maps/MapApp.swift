@@ -15,8 +15,8 @@ import Foundation
 ///
 /// **macOS caveat.** When running as "Designed for iPad" on Apple Silicon Macs,
 /// `canOpenURL` detection for non-Apple map apps is unreliable because third-party iOS
-/// apps are generally not installed on macOS. Apple Maps (`alwaysAvailable: true`) is
-/// always shown; detection results for the remaining 11 apps should not be trusted on
+/// apps are generally not installed on macOS. Apple Maps and browser-based map targets
+/// are always shown; detection results for the remaining apps should not be trusted on
 /// macOS.
 public struct MapApp: Identifiable, Sendable, Hashable {
     // MARK: - Properties
@@ -31,8 +31,8 @@ public struct MapApp: Identifiable, Sendable, Hashable {
     /// e.g. `"comgooglemaps"`. `nil` for Apple Maps, which is always available.
     public let urlScheme: String?
 
-    /// `true` when the app is always available regardless of `canOpenURL` result.
-    /// Only Apple Maps carries this flag.
+    /// `true` when the destination is always available regardless of `canOpenURL` result.
+    /// Apple Maps and browser-based map targets carry this flag.
     public let alwaysAvailable: Bool
 
     // MARK: - URL builder
@@ -60,7 +60,7 @@ public struct MapApp: Identifiable, Sendable, Hashable {
 // MARK: - Roster
 
 extension MapApp {
-    /// The full roster of 12 supported map apps.
+    /// The full iOS/iPadOS roster of 12 supported map apps.
     ///
     /// Ordered with Apple Maps first (always available), followed by third-party apps in
     /// alphabetical order of their `id`. When displaying installed apps, filter this list
@@ -79,6 +79,18 @@ extension MapApp {
         sygic,
         guru,
     ]
+
+    /// The roster for the current runtime platform.
+    ///
+    /// iOS and iPadOS keep the native-app roster intact. When the same iOS app runs on macOS
+    /// as "Designed for iPad", add a Google Maps browser destination after Apple Maps so Mac
+    /// users have a web option even when the Google Maps iOS URL scheme is not installed.
+    public static func platformRoster(
+        isiOSAppOnMac: Bool = ProcessInfo.processInfo.isiOSAppOnMac
+    ) -> [MapApp] {
+        guard isiOSAppOnMac else { return roster }
+        return [apple, googleWeb] + roster.dropFirst()
+    }
 
     // MARK: - Individual entries
 
@@ -108,6 +120,22 @@ extension MapApp {
         components.queryItems = [
             URLQueryItem(name: "q", value: "\(lat),\(lng)"),
             URLQueryItem(name: "center", value: "\(lat),\(lng)"),
+        ]
+        return components.url
+    }
+
+    /// Google Maps in the default browser. Only included by `platformRoster` on macOS
+    /// "Designed for iPad" runs.
+    static let googleWeb = MapApp(
+        id: "google-web",
+        displayName: "Google Maps (Web)",
+        urlScheme: nil,
+        alwaysAvailable: true
+    ) { lat, lng, _ in
+        var components = URLComponents(string: "https://www.google.com/maps/search/")!
+        components.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: "\(lat),\(lng)"),
         ]
         return components.url
     }
