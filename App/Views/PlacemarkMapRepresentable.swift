@@ -9,14 +9,11 @@ import UIKit
 /// with full control over annotation views.
 ///
 /// - Builds one `PlacemarkAnnotation` per placemark (with its `PlacemarkPinImage`).
-/// - Fits all pins on the map's first layout (`MapRectBuilder` + `setVisibleMapRect`),
-///   single pin → a fixed ~1 km span.
-/// - Shows the user-location dot when `showsUserLocation` is `true`.
-/// - Adds native controls: a basemap-style menu, compass, and `MKUserTrackingButton`.
+/// - Fits all pins on first layout; single pin → a fixed ~1 km span.
+/// - Shows the user-location dot with heading when `showsUserLocation` is `true`.
 /// - Clustering follows `clusterPins`: when on, nearby pins group into numbered
 ///   clusters (tapping a cluster zooms to its members); when off, every pin renders
 ///   individually even when overlapping.
-/// - Highlights the selected pin (scaled up, raised to front).
 /// - Bridges selection to `selectedKey`: tapping a pin writes its `stableKey`; clearing
 ///   `selectedKey` deselects on the map. Keying by `stableKey` (not the parse-order
 ///   `placemark.id`) means selection survives the document being re-parsed while open.
@@ -66,13 +63,14 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
         let mapView = FittingMapView()
         mapView.delegate = context.coordinator
-        mapView.showsUserLocation = showsUserLocation
+        Self.configureUserLocation(on: mapView, showsUserLocation: showsUserLocation, animated: false)
         let initialStyle = EmbeddedMapStyle(
             rawValue: UserDefaults.standard.string(forKey: Self.styleDefaultsKey) ?? ""
         ) ?? .standard
         mapView.preferredConfiguration = initialStyle.configuration
         context.coordinator.mapView = mapView
         context.coordinator.currentStyle = initialStyle
+        context.coordinator.lastShowsUserLocation = showsUserLocation
 
         // Single creation path (shared with updateUIView's reconciliation): build one
         // annotation per pin-bearing placemark and register it in the coordinator's index.
@@ -122,7 +120,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         let coordinator = context.coordinator
         coordinator.parent = self
 
-        mapView.showsUserLocation = showsUserLocation
+        if coordinator.lastShowsUserLocation != showsUserLocation {
+            Self.configureUserLocation(on: mapView, showsUserLocation: showsUserLocation, animated: true)
+            coordinator.lastShowsUserLocation = showsUserLocation
+        }
 
         // Reconcile placemark set: add new pins, drop removed ones. Only recompute when the
         // desired key-set actually changed (selection/favorite toggles re-enter updateUIView
@@ -308,6 +309,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         weak var mapView: MKMapView?
         weak var styleButton: UIButton?
         var currentStyle: EmbeddedMapStyle?
+        var lastShowsUserLocation = false
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
