@@ -19,8 +19,13 @@ import PinfoldCore
 /// to key the collapse state. Folder rows for the root container itself are never emitted
 /// (the root is implicit), so the smallest folder id is a single index like `"0"`.
 ///
-/// A placemark row's `id` is the placemark's `stableKey` (durable across re-parses),
-/// matching how the map keys selection and favorite/visited decoration.
+/// A placemark row's `id` is its **document position** — the container's tree path plus the
+/// placemark's index within that container (e.g. `"0/1/p2"`; root-level placemarks are `"p2"`).
+/// The nearest-first sort, being flat, ids by document order (`"p<n>"`). This is unique *per
+/// occurrence*, which `List`'s `ForEach` demands: a placemark's durable `stableKey` (what the map
+/// and favorites key off) is NOT unique when the same POI repeats in a file — e.g. an itinerary
+/// hotel listed on several days hashes to the same `name|lat|lon` — and duplicate `ForEach` ids
+/// corrupt SwiftUI's diffing and scroll position ("undefined results").
 ///
 /// ## Matching
 /// Reuses the same primitive as `placemarksMatching(_:in:)` —
@@ -107,13 +112,18 @@ struct PlacemarkOutline {
         func walk(_ container: KMLContainer, path: String, depth: Int, hidden: Bool) -> Bool {
             var contributed = false
 
-            for placemark in container.placemarks where matches(placemark) {
+            // Enumerate the FULL placemark list (not the filtered subset) so a row's id is its
+            // position in the container and stays stable as a search query narrows the rows.
+            for (index, placemark) in container.placemarks.enumerated() where matches(placemark) {
                 // `mappable` is independent of collapse/visibility: a collapsed folder
                 // still plots on the map.
                 if placemark.coordinate != nil { mappable.append(placemark) }
                 if !hidden {
+                    // Per-occurrence id (container path + placemark index), NOT `stableKey`: a
+                    // repeated POI shares a stableKey, and duplicate ForEach ids corrupt scrolling.
+                    let rowID = path.isEmpty ? "p\(index)" : "\(path)/p\(index)"
                     rows.append(Row(
-                        kind: .placemark(placemark), depth: depth, id: placemark.stableKey
+                        kind: .placemark(placemark), depth: depth, id: rowID
                     ))
                 }
                 contributed = true
@@ -201,9 +211,12 @@ struct PlacemarkOutline {
             case (nil, _?): false
             case (nil, nil): lhs.offset < rhs.offset
             }
-        }.map(\.placemark)
+        }
 
-        let rows = sorted.map { Row(kind: .placemark($0), depth: 0, id: $0.stableKey) }
+        // Id by flat document order (`offset`), NOT `stableKey`: a repeated POI shares a stableKey,
+        // and duplicate ForEach ids corrupt scroll position. Folders are dropped here, so the
+        // document-order index alone is unique.
+        let rows = sorted.map { Row(kind: .placemark($0.placemark), depth: 0, id: "p\($0.offset)") }
         let mappable = flat.filter { $0.coordinate != nil }
         return PlacemarkOutline(rows: rows, mappablePlacemarks: mappable)
     }
