@@ -168,9 +168,9 @@ struct RootView: View {
         }
         // A Core Spotlight result tap arrives as a continued user activity. Parse the tapped
         // item's identifier and route into the catalogue (entry → select; placemark → select +
-        // pre-filter the outline to the placemark name, the same flow as a "Places" search hit).
+        // deep-link to its POI page via `pendingPlacemarkKey`, the same flow as a "Places" hit).
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
-            Task { await handleSpotlightActivity(activity) }
+            handleSpotlightActivity(activity)
         }
     }
 
@@ -191,7 +191,7 @@ struct RootView: View {
     /// Handles a Core Spotlight result tap. The identifier is the tapped item's `SpotlightID`:
     /// an entry item selects its file; a placemark item selects the file AND deep-links directly
     /// to the placemark by passing its stableKey as `pendingPlacemarkKey`.
-    private func handleSpotlightActivity(_ activity: NSUserActivity) async {
+    private func handleSpotlightActivity(_ activity: NSUserActivity) {
         guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
               let parsed = SpotlightID.parse(raw)
         else { return }
