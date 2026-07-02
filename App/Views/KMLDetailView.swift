@@ -131,6 +131,8 @@ struct KMLDetailView: View {
             collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
+            pendingScrollRowID = nil
+            rowFrames.reset()
             // Ask for a one-shot location fix so distances and the nearest sort can light up.
             locationAuth.request()
             await loadDocument()
@@ -234,9 +236,46 @@ struct KMLDetailView: View {
         onConsumeRestore()
     }
 
+    /// Applies the one-shot scroll anchor with a verified retry. `ScrollViewReader
+    /// .scrollTo` right after a `List`'s data lands is flaky (the collection view may not
+    /// have realized the target yet), so the target row's live geometry is checked and the
+    /// scroll re-issued — bounded — until it took. The successful landing offset is stored
+    /// in `rowFrames.restoredTopOffset` to calibrate the save-side anchor reference.
+    ///
+    /// An anchor that doesn't resolve in the current outline is dropped — EXCEPT while a
+    /// nearest-first restore is still waiting for its location fix (the anchor was recorded
+    /// against the flat nearest outline, whose row ids only exist after the re-sort; the
+    /// outline rebuild on fix arrival re-fires this task via its `rows.count` id).
+    private func applyPendingScroll(using proxy: ScrollViewProxy) async {
+        guard let target = pendingScrollRowID, let outline else { return }
+        guard outline.rows.contains(where: { $0.id == target }) else {
+            if !(nearestFirst && locationAuth.lastLocation == nil) {
+                pendingScrollRowID = nil
+            }
+            return
+        }
+        for _ in 0 ..< 8 {
+            proxy.scrollTo(target, anchor: .top)
+            try? await Task.sleep(for: .milliseconds(120))
+            if Task.isCancelled { return }
+            guard let frame = rowFrames.frames[target],
+                  let listTop = rowFrames.listFrame?.minY else { continue }
+            let offset = frame.minY - listTop
+            // Settled with the row's top in the list's top region → done. The window
+            // tolerates the inset-grouped content-top padding; the exact landing offset is
+            // recorded so the save side anchors against the same reference line.
+            if offset >= -4, offset < 120 {
+                rowFrames.restoredTopOffset = offset
+                pendingScrollRowID = nil
+                return
+            }
+        }
+    }
+
     /// Writes the transient list state + scroll anchor to the resume slice. The scroll
-    /// anchor is computed from live row geometry (Task 7 wires `rowFrames`; until then
-    /// `anchorRowID()` returns nil and only the transient state is saved).
+    /// anchor is computed from live row geometry captured by `rowFrames` (see the geometry
+    /// instrumentation in `contentList`/`outlineRow` and `applyPendingScroll`); `anchorRowID()`
+    /// returns nil — and only the transient state is saved — until that geometry has been observed.
     private func saveResumeSlice() {
         guard let settings, settings.restoreSessionEnabled, document != nil else { return }
         settings.resumeSearchText = searchText
@@ -346,25 +385,39 @@ struct KMLDetailView: View {
         // Snapshot the user's location ONCE per list build so every row shares one fix instead
         // of re-reading `locationAuth` per row. `nil` → rows show no distance.
         let location = locationAuth.lastLocation
-        List {
-            searchSection
-            if let outline {
-                if outline.rows.isEmpty, !query.isEmpty {
-                    Section {
-                        Text("No placemarks match \u{201C}\(query)\u{201D}.")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                } else {
-                    Section {
-                        ForEach(outline.rows) { row in
-                            outlineRow(row, document: document, location: location)
+        return ScrollViewReader { proxy in
+            List {
+                searchSection
+                if let outline {
+                    if outline.rows.isEmpty, !query.isEmpty {
+                        Section {
+                            Text("No placemarks match \u{201C}\(query)\u{201D}.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                    } else {
+                        Section {
+                            ForEach(outline.rows) { row in
+                                outlineRow(row, document: document, location: location)
+                            }
                         }
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                rowFrames.listFrame = frame
+            }
+            // Appearance-bound AND change-bound: fires on appear (covers pop-back — the
+            // "one more attempt when the list becomes visible again" case) and whenever the
+            // outline is rebuilt (covers the fast-launch race where rows land before the
+            // List attaches, and the nearest-first re-sort when the location fix arrives).
+            .task(id: outline?.rows.count) {
+                await applyPendingScroll(using: proxy)
+            }
         }
-        .listStyle(.insetGrouped)
     }
 
     // MARK: - Outline row
@@ -381,9 +434,21 @@ struct KMLDetailView: View {
         case let .folder(name, id):
             folderRow(name: name, id: id)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
         case let .placemark(placemark):
             placemarkLink(placemark, document: document, location: location)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
         }
     }
 
