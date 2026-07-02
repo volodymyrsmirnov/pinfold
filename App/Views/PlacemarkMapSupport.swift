@@ -64,16 +64,19 @@ final class FittingMapView: MKMapView {
 // MARK: - Native map controls
 
 extension PlacemarkMapRepresentable {
-    /// Configures the user-location layer and heading tracking together.
+    /// Configures the user-location layer. Tracking is deliberately NOT engaged here:
+    /// follow mode starts only from the per-file remembered state (see `onFirstLayout`)
+    /// or the user tapping the tracking button (see the `didChange` upgrade in the
+    /// Coordinator). Revoking location authorization also disengages tracking.
     static func configureUserLocation(
         on mapView: MKMapView,
         showsUserLocation: Bool,
         animated: Bool
     ) {
         mapView.showsUserLocation = showsUserLocation
-
-        let trackingMode: MKUserTrackingMode = showsUserLocation ? .followWithHeading : .none
-        mapView.setUserTrackingMode(trackingMode, animated: animated)
+        if !showsUserLocation {
+            mapView.setUserTrackingMode(.none, animated: animated)
+        }
     }
 
     /// Adds the native control column (basemap-style menu + user-tracking button) to the

@@ -14,7 +14,7 @@ struct MapCameraStoreTests {
     }
 
     private let sample = MapCameraState(
-        latitude: 48.85, longitude: 2.35, distance: 1200, heading: 90, pitch: 0
+        latitude: 48.85, longitude: 2.35, distance: 1200, heading: 90, pitch: 0, isTracking: false
     )
 
     @Test func missingFolder_returnsNil() {
@@ -34,7 +34,7 @@ struct MapCameraStoreTests {
     @Test func setCamera_overwrites() {
         let store = MapCameraStore(defaults: makeDefaults())
         store.setCamera(sample, forFolderName: "folder-a")
-        let moved = MapCameraState(latitude: 1, longitude: 2, distance: 3, heading: 4, pitch: 5)
+        let moved = MapCameraState(latitude: 1, longitude: 2, distance: 3, heading: 4, pitch: 5, isTracking: false)
         store.setCamera(moved, forFolderName: "folder-a")
         #expect(store.camera(forFolderName: "folder-a") == moved)
     }
@@ -77,5 +77,23 @@ struct MapCameraStoreTests {
         #expect(store.camera(forFolderName: "folder-0") == sample)
         #expect(store.camera(forFolderName: "folder-1") == sample)
         #expect(store.camera(forFolderName: "folder-4") == nil)
+    }
+
+    @Test func isTracking_roundTrips() {
+        let defaults = makeDefaults()
+        let tracking = MapCameraState(
+            latitude: 1, longitude: 2, distance: 3, heading: 4, pitch: 5, isTracking: true
+        )
+        MapCameraStore(defaults: defaults).setCamera(tracking, forFolderName: "folder-a")
+        #expect(MapCameraStore(defaults: defaults).camera(forFolderName: "folder-a")?.isTracking == true)
+    }
+
+    @Test func legacyBlobWithoutTrackingField_decodesAsNotTracking() {
+        let defaults = makeDefaults()
+        let legacy = #"{"folder-a":{"latitude":48.85,"longitude":2.35,"distance":1200,"heading":90,"pitch":0}}"#
+        defaults.set(Data(legacy.utf8), forKey: MapCameraStore.defaultsKey)
+        let restored = MapCameraStore(defaults: defaults).camera(forFolderName: "folder-a")
+        #expect(restored?.isTracking == false)
+        #expect(restored?.latitude == 48.85)
     }
 }

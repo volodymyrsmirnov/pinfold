@@ -162,21 +162,24 @@ link — Spotlight, App Intent, "Open in Pinfold" — wins over restore).
 ### Per-file map camera (`PlacemarkMapRepresentable` + a small store)
 
 A Codable `MapCameraState` — center latitude/longitude, camera distance, heading, pitch
-(the four `MKMapCamera` properties) — in a UserDefaults-backed dictionary keyed by
-`storageFolderName`. Owned by the map layer as a small `MapCameraStore` (the same
-ownership pattern as the representable's persisted basemap-style key), NOT by
-`AppSettings`. Deliberately outside the resume snapshot and NOT gated by the restore
-toggle: it is a navigation convenience that persists across sessions, like the basemap
-style.
+(the four `MKMapCamera` properties), plus whether user-location tracking was engaged — in
+a UserDefaults-backed dictionary keyed by `storageFolderName`. Owned by the map layer as a
+small `MapCameraStore` (the same ownership pattern as the representable's persisted
+basemap-style key), NOT by `AppSettings`. Deliberately outside the resume snapshot and NOT
+gated by the restore toggle: it is a navigation convenience that persists across sessions,
+like the basemap style.
 
 - **Saving:** in the coordinator's `regionDidChangeAnimated` (fires once per settled
   gesture/animation — no debounce needed), guarded so the programmatic initial framing
   (first-layout fit/focus) does not overwrite a saved camera.
 - **Applying:** first-layout priority is **focus deep link → saved camera → fit all
-  pins**. "Show on Map" always wins; fit-all remains the first-open default.
+  pins**. "Show on Map" always wins; fit-all remains the first-open default. Tracking is
+  never auto-engaged: it resumes only from the per-file remembered state, or via the
+  tracking button (whose `.follow` is upgraded to `.followWithHeading` to keep the
+  heading coupling).
 - **Re-fit control:** a "fit all pins" button joins the map's native control column
-  (beside the compass), restoring the old framing on demand; it also updates the saved
-  camera, acting as a natural reset.
+  (beside the compass), restoring the old framing on demand; it also disengages tracking
+  and updates the saved camera, acting as a natural reset.
 - **Hygiene:** when the dictionary grows past ~100 entries it is pruned of keys absent
   from the catalogue; stale entries are otherwise harmless bytes.
 

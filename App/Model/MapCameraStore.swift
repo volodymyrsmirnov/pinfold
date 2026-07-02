@@ -3,9 +3,10 @@ import Foundation
 // MARK: - MapCameraState
 
 /// A serializable snapshot of an `MKMapCamera`'s framing — `centerCoordinate` (split into
-/// latitude/longitude), `centerCoordinateDistance`, `heading`, and `pitch`. Plain
-/// `Double`s (no MapKit types) so the store is testable without a map view;
-/// `PlacemarkMapRepresentable` owns the conversion.
+/// latitude/longitude), `centerCoordinateDistance`, `heading`, and `pitch` (the four
+/// `MKMapCamera` properties) — plus whether user-location tracking (follow-with-heading)
+/// was engaged. Plain `Double`s (no MapKit types) so the store is testable without a map
+/// view; `PlacemarkMapRepresentable` owns the conversion.
 struct MapCameraState: Codable, Equatable {
     var latitude: Double
     var longitude: Double
@@ -13,6 +14,30 @@ struct MapCameraState: Codable, Equatable {
     var distance: Double
     var heading: Double
     var pitch: Double
+    /// Whether user-location tracking (follow-with-heading) was engaged when this state
+    /// was saved — remembered per file, like the camera itself.
+    var isTracking: Bool
+
+    init(latitude: Double, longitude: Double, distance: Double, heading: Double, pitch: Double, isTracking: Bool) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.distance = distance
+        self.heading = heading
+        self.pitch = pitch
+        self.isTracking = isTracking
+    }
+
+    /// Lenient decode: `isTracking` was added after cameras began persisting, so blobs
+    /// written without it must read as `false` instead of failing the whole dictionary.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        latitude = try container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decode(Double.self, forKey: .longitude)
+        distance = try container.decode(Double.self, forKey: .distance)
+        heading = try container.decode(Double.self, forKey: .heading)
+        pitch = try container.decode(Double.self, forKey: .pitch)
+        isTracking = try container.decodeIfPresent(Bool.self, forKey: .isTracking) ?? false
+    }
 }
 
 // MARK: - MapCameraStore

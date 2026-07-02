@@ -102,16 +102,23 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         let coordinates = placemarks.compactMap(\.coordinate)
         let focusKey = initialFocusKey
         let savedCamera = cameraStore.camera(forFolderName: entry.storageFolderName)
+        let userLocationVisible = showsUserLocation
         mapView.onFirstLayout = { [weak mapView, weak coordinator = context.coordinator] in
             guard let mapView, let coordinator else { return }
             coordinator.suppressCameraSave = true
             // Initial-focus deep link ("Show on Embedded Map"): if the carried key resolves
             // to a realized pin, zoom to it and select it (surfacing its preview card).
-            // Otherwise a remembered per-file camera wins over the fit-all default.
+            // Otherwise a remembered per-file state wins over the fit-all default.
             if let focusKey, let annotation = coordinator.annotationsByKey[focusKey] {
                 Self.focus(on: annotation, in: mapView)
             } else if let savedCamera {
-                Self.apply(savedCamera, to: mapView)
+                if savedCamera.isTracking, userLocationVisible {
+                    // The user left this file's map following them — resume following.
+                    // MapKit recenters once a fix arrives; no programmatic framing needed.
+                    mapView.setUserTrackingMode(.followWithHeading, animated: false)
+                } else {
+                    Self.apply(savedCamera, to: mapView)
+                }
             } else {
                 Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
             }
@@ -330,7 +337,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         mapView.setCamera(camera, animated: false)
     }
 
-    /// Snapshots the map's current camera for persistence.
+    /// Snapshots the map's current camera + tracking mode for persistence.
     static func cameraState(of mapView: MKMapView) -> MapCameraState {
         let camera = mapView.camera
         return MapCameraState(
@@ -338,7 +345,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             longitude: camera.centerCoordinate.longitude,
             distance: camera.centerCoordinateDistance,
             heading: camera.heading,
-            pitch: Double(camera.pitch)
+            pitch: Double(camera.pitch),
+            isTracking: mapView.userTrackingMode != .none
         )
     }
 
@@ -437,8 +445,13 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// the control column's fit-all button. Deliberately does NOT suppress the settle
         /// save: the resulting framing is persisted, making this the "reset" for the
         /// remembered camera.
+        ///
+        /// A deliberate "show everything": disengage tracking first (follow mode would
+        /// immediately recenter the fit onto the user); the didChange save records the
+        /// disengage, so the fit framing is what gets remembered.
         func fitAllPins() {
             guard let mapView else { return }
+            mapView.setUserTrackingMode(.none, animated: false)
             let overlays = overlaysByKey.values.flatMap(\.self)
             PlacemarkMapRepresentable.fit(
                 coordinates: parent.placemarks.compactMap(\.coordinate),
@@ -455,6 +468,22 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             if suppressCameraSave {
                 suppressCameraSave = false
                 return
+            }
+            guard didInitialFrame else { return }
+            parent.cameraStore.setCamera(
+                PlacemarkMapRepresentable.cameraState(of: mapView),
+                forFolderName: parent.entry.storageFolderName
+            )
+        }
+
+        /// Tracking-mode changes: preserve the heading coupling for USER-engaged tracking
+        /// (the MKUserTrackingButton's first tap sets `.follow`; upgrade it to
+        /// `.followWithHeading` — tracking is never auto-engaged anywhere else), and
+        /// persist the on/off state per file so reopening the map resumes it.
+        func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+            if mode == .follow {
+                mapView.setUserTrackingMode(.followWithHeading, animated: animated)
+                return // the upgrade re-fires this callback; save from that pass
             }
             guard didInitialFrame else { return }
             parent.cameraStore.setCamera(
