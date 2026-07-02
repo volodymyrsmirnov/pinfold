@@ -54,6 +54,11 @@ struct KMLDetailView: View {
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State private var outline: PlacemarkOutline?
+    /// Monotonic count of completed outline rebuilds. The scroll-restore task keys on THIS
+    /// (not `outline?.rows.count`): a rebuild can reorder rows without changing their count
+    /// — e.g. the nearest-first re-sort arriving on a flat, folderless file — and a
+    /// count-keyed id would silently never re-fire the pending-anchor retry.
+    @State private var outlineGeneration = 0
     /// One-shot location provider for distance display and the nearest-first sort. Requests a
     /// fix when the view appears; `lastLocation` is nil until it arrives / when denied.
     @State private var locationAuth = LocationAuthorization()
@@ -245,7 +250,7 @@ struct KMLDetailView: View {
     /// An anchor that doesn't resolve in the current outline is dropped — EXCEPT while a
     /// nearest-first restore is still waiting for its location fix (the anchor was recorded
     /// against the flat nearest outline, whose row ids only exist after the re-sort; the
-    /// outline rebuild on fix arrival re-fires this task via its `rows.count` id).
+    /// outline rebuild on fix arrival re-fires this task via its `outlineGeneration` id).
     private func applyPendingScroll(using proxy: ScrollViewProxy) async {
         guard let target = pendingScrollRowID, let outline else { return }
         guard outline.rows.contains(where: { $0.id == target }) else {
@@ -353,6 +358,7 @@ struct KMLDetailView: View {
         }.value
         if Task.isCancelled { return }
         outline = built
+        outlineGeneration += 1
     }
 
     // MARK: - Load document
@@ -405,16 +411,18 @@ struct KMLDetailView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .global)
+            .onGeometryChange(for: CGRect.self) { geometry in
+                geometry.frame(in: .global)
             } action: { frame in
                 rowFrames.listFrame = frame
             }
             // Appearance-bound AND change-bound: fires on appear (covers pop-back — the
-            // "one more attempt when the list becomes visible again" case) and whenever the
-            // outline is rebuilt (covers the fast-launch race where rows land before the
-            // List attaches, and the nearest-first re-sort when the location fix arrives).
-            .task(id: outline?.rows.count) {
+            // "one more attempt when the list becomes visible again" case) and on every
+            // completed outline rebuild via the generation counter (covers the fast-launch
+            // race where rows land before the List attaches, and re-sorts that keep the
+            // row count constant, like the nearest-first re-sort when the location fix
+            // arrives on a folderless file).
+            .task(id: outlineGeneration) {
                 await applyPendingScroll(using: proxy)
             }
         }
@@ -434,8 +442,8 @@ struct KMLDetailView: View {
         case let .folder(name, id):
             folderRow(name: name, id: id)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
                 } action: { frame in
                     rowFrames.frames[row.id] = frame
                 }
@@ -443,8 +451,8 @@ struct KMLDetailView: View {
         case let .placemark(placemark):
             placemarkLink(placemark, document: document, location: location)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
-                .onGeometryChange(for: CGRect.self) { proxy in
-                    proxy.frame(in: .global)
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
                 } action: { frame in
                     rowFrames.frames[row.id] = frame
                 }
