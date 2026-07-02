@@ -84,6 +84,16 @@ struct RootView: View {
     /// top of a fresh import.
     @State private var suppressRestore = false
 
+    /// A deep-link target (Spotlight tap or App Intent) that arrived before `bootstrap()`
+    /// had loaded the catalogue, stashed for replay right after the first reload. Without
+    /// this, a cold-launch tap resolves against an empty catalogue, gets dropped, and
+    /// session restore then opens the PREVIOUS file instead of the tapped one.
+    @State private var pendingColdLaunchTarget: (folderName: String, placemarkKey: String?)?
+
+    /// Whether `bootstrap()` has completed its first catalogue load. Gates the stash above:
+    /// a post-bootstrap resolution miss is a genuinely missing entry, not a launch race.
+    @State private var didBootstrap = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     /// The active (non-trashed) entry matching the current selection, or `nil` when nothing is
@@ -202,6 +212,12 @@ struct RootView: View {
         // the session loses at most the in-file details, never the file).
         .onChange(of: selectedEntryID) { _, _ in
             router.path = []
+            // A restore bundle is only valid for the entry it was saved for: if the user
+            // out-races a slow restore parse by opening another file, drop the bundle so a
+            // later manual re-selection of the restored file doesn't replay it.
+            if let pending = pendingRestore, pending.entryFolderName != selectedEntry?.storageFolderName {
+                pendingRestore = nil
+            }
             if settings.restoreSessionEnabled {
                 settings.resumeEntryFolderName = selectedEntry?.storageFolderName
             }
@@ -227,9 +243,13 @@ struct RootView: View {
     /// Selects the active entry with `folderName`, or logs and no-ops when it's missing/trashed.
     private func openEntry(folderName: String) {
         guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
-            Self.routingLogger.info(
-                "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
-            )
+            if !didBootstrap {
+                pendingColdLaunchTarget = (folderName, nil)
+            } else {
+                Self.routingLogger.info(
+                    "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
+                )
+            }
             return
         }
         pendingPlacemarkKey = nil
@@ -246,9 +266,13 @@ struct RootView: View {
         else { return }
 
         guard let entry = catalog.active.first(where: { $0.storageFolderName == parsed.folderName }) else {
-            Self.routingLogger.info(
-                "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
-            )
+            if !didBootstrap {
+                pendingColdLaunchTarget = (parsed.folderName, parsed.placemarkKey)
+            } else {
+                Self.routingLogger.info(
+                    "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
+                )
+            }
             return
         }
 
@@ -269,6 +293,22 @@ struct RootView: View {
         await drainInbox()
         await drainDocumentsInbox()
         await catalog.reload()
+        didBootstrap = true
+        // Replay a deep link that raced bootstrap (see `pendingColdLaunchTarget`) — it must
+        // win over session restore, which `restoreSessionIfNeeded`'s selection guard then
+        // enforces automatically.
+        if let target = pendingColdLaunchTarget {
+            pendingColdLaunchTarget = nil
+            if let entry = catalog.active.first(where: { $0.storageFolderName == target.folderName }) {
+                pendingPlacemarkKey = target.placemarkKey
+                pendingRestore = nil
+                selectedEntryID = entry.id
+            } else {
+                Self.routingLogger.info(
+                    "Cold-launch deep link to missing entry '\(target.folderName, privacy: .public)' — ignored."
+                )
+            }
+        }
         restoreSessionIfNeeded()
         // Camera-store hygiene: drop cameras for files no longer anywhere in the catalogue
         // (active OR trashed — restoring from the trash keeps the camera). Only kicks in
@@ -285,6 +325,12 @@ struct RootView: View {
     private func saveResumeState() {
         guard settings.restoreSessionEnabled else { return }
         settings.resumeEntryFolderName = selectedEntry?.storageFolderName
+        // While a restore bundle is still unconsumed (the restore parse is in flight), the
+        // live path is still empty — overwriting the saved routes with it would lose the
+        // stack a kill in this window was supposed to preserve.
+        if let pending = pendingRestore, pending.entryFolderName == selectedEntry?.storageFolderName {
+            return
+        }
         settings.resumeRoutes = EntryRoute.encodeForResume(router.path)
     }
 

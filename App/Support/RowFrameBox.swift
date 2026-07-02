@@ -1,5 +1,4 @@
 import CoreGraphics
-import Foundation
 
 /// Live geometry of the placemark list's realized rows, for scroll-anchor capture/restore.
 ///

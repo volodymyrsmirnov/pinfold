@@ -141,6 +141,12 @@ struct KMLDetailView: View {
             // Ask for a one-shot location fix so distances and the nearest sort can light up.
             locationAuth.request()
             await loadDocument()
+            // The detached parse doesn't observe this task's cancellation, so a reselect
+            // mid-parse lets this continuation run to completion. Bail before touching the
+            // SHARED router path — a zombie load for one file must not set its routes on
+            // another file's stack (pre-refactor this wrote harmless view-local state; the
+            // shared router made it cross-file).
+            if Task.isCancelled { return }
             // One-shot navigation payload: seed the transient list state (session restore
             // only — a deep link must not clobber it), validate the saved routes against the
             // freshly parsed document, and set the stack. Seeding happens BEFORE the
@@ -155,8 +161,10 @@ struct KMLDetailView: View {
         // and this `.onChange` observes the nil→bundle transition and pushes against the
         // already-loaded document. Routes only — never the transient list state (this path
         // is only reachable for deep links; restore bundles arrive with a fresh identity).
-        // The `let document` guard covers the mid-load race: not ready yet → no-op WITHOUT
-        // consuming; the in-flight load task applies it instead.
+        // The `let document` guard covers the mid-load race: not ready yet → no-op
+        // WITHOUT consuming. (A bundle arriving mid-load is dropped once the load finishes —
+        // the running task captured the pre-arrival view value — matching the pre-refactor
+        // behavior; the next selection change clears the stale one-shot.)
         .onChange(of: initialRestore) { _, newValue in
             guard let newValue, !newValue.routes.isEmpty, let document else { return }
             let valid = EntryRoute.validatedForRestore(newValue.routes) {
@@ -286,7 +294,13 @@ struct KMLDetailView: View {
         settings.resumeSearchText = searchText
         settings.resumeCollapsedFolderIDs = Array(collapsedFolderIDs)
         settings.resumeNearestFirst = nearestFirst
-        settings.resumeScrollAnchorRowID = rowFrames.anchorRowID()
+        // A pushed screen empties `rowFrames` (covered rows fire onDisappear), so a nil
+        // anchor here usually means "geometry unobservable", not "scrolled to the top".
+        // Keep the previously saved anchor in that case — within the same file it is
+        // strictly better than nil, and a folder change already clears the slice.
+        if let anchor = rowFrames.anchorRowID() {
+            settings.resumeScrollAnchorRowID = anchor
+        }
     }
 
     /// Resolves a pushed route into its screen. A `.placemark` whose stableKey no longer
@@ -302,19 +316,35 @@ struct KMLDetailView: View {
                         .environment(annotations)
                 }
             case let .map(focusKey):
-                PlacemarkMapView(
-                    // "Show on Map" (focusKey != nil) plots EVERY coordinate-bearing
-                    // placemark (the POI page has no search context); the toolbar/restored
-                    // map (focusKey == nil) plots the live filtered outline — both exactly
-                    // as before the route refactor.
-                    placemarks: focusKey != nil
-                        ? document.root.allPlacemarks.filter { $0.coordinate != nil }
-                        : (outline?.mappablePlacemarks ?? []),
-                    document: document,
-                    entry: entry,
-                    initialFocusKey: focusKey
-                )
-                .environment(annotations)
+                // "Show on Map" (focusKey != nil) plots EVERY coordinate-bearing placemark
+                // (the POI page has no search context); the toolbar/restored map (focusKey
+                // == nil) plots the live filtered outline — both exactly as before the
+                // route refactor.
+                if let focusKey {
+                    PlacemarkMapView(
+                        placemarks: document.root.allPlacemarks.filter { $0.coordinate != nil },
+                        document: document,
+                        entry: entry,
+                        initialFocusKey: focusKey
+                    )
+                    .environment(annotations)
+                } else if let outline {
+                    PlacemarkMapView(
+                        placemarks: outline.mappablePlacemarks,
+                        document: document,
+                        entry: entry,
+                        initialFocusKey: nil
+                    )
+                    .environment(annotations)
+                } else {
+                    // A restored `.map` route can be pushed before the first outline build
+                    // completes. Creating the map with an empty placemark set would let the
+                    // pin-reconcile re-fit override the saved per-file camera once pins land —
+                    // hold a placeholder until the outline exists, so the map is created once,
+                    // with its real content. (`outline` never goes back to nil after the first
+                    // build, so this placeholder can't reappear later.)
+                    ProgressView()
+                }
             }
         }
     }
@@ -373,8 +403,10 @@ struct KMLDetailView: View {
                 let data = try UbiquityContainer.readDownloadingIfNeeded(fileURL)
                 return try KMLReader.read(data: data)
             }.value
+            if Task.isCancelled { return }
             document = parsedKML.document
         } catch {
+            if Task.isCancelled { return }
             loadError = error
         }
     }
