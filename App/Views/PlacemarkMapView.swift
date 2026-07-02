@@ -27,6 +27,16 @@ struct PlacemarkMapView: View {
     @State private var selectedPlacemarkKey: String?
     @State private var locationAuth = LocationAuthorization()
 
+    /// The router that owns the detail column's path: the environment value when propagation
+    /// delivers it, else the shared instance published to `AppDependencies` at bootstrap.
+    /// This view is pushed (and pushes onward), the one hosting arrangement where the Mac
+    /// "Designed for iPad" runtime has historically dropped stack-root environment values —
+    /// a dropped router would silently dead-button the preview card's tap. Both refer to the
+    /// same live instance.
+    private var activeRouter: NavigationRouter? {
+        router ?? AppDependencies.shared.router
+    }
+
     private var selectedPlacemark: KMLPlacemark? {
         placemarks.first { $0.stableKey == selectedPlacemarkKey }
     }
@@ -53,7 +63,7 @@ struct PlacemarkMapView: View {
 
             if let placemark = selectedPlacemark {
                 PlacemarkPreviewCard(placemark: placemark, document: document, entry: entry) {
-                    router?.path.append(.placemark(stableKey: placemark.stableKey))
+                    activeRouter?.path.append(.placemark(stableKey: placemark.stableKey))
                 }
                 .padding()
                 .transition(.move(edge: .bottom).combined(with: .opacity))

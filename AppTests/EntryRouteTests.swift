@@ -31,6 +31,15 @@ struct EntryRouteTests {
         #expect(EntryRoute.decodeForResume(foreign).isEmpty)
     }
 
+    /// A single malformed element must fail the WHOLE array — never a half-restored stack
+    /// (the spec's "never a hole" contract): the valid leading route is discarded too.
+    @Test func decode_malformedRouteElement_discardsWholeArray() {
+        let mixed = Data(
+            #"{"version":1,"routes":[{"placemark":{"stableKey":"good"}},{"bogus":{}}]}"#.utf8
+        )
+        #expect(EntryRoute.decodeForResume(mixed).isEmpty)
+    }
+
     @Test func validate_keepsValidPrefix_truncatesAtFirstStaleKey() {
         let routes: [EntryRoute] = [
             .placemark(stableKey: "good"),

@@ -57,6 +57,17 @@ struct MapCameraStoreTests {
         #expect(store.camera(forFolderName: "gone") == sample)
     }
 
+    @Test func prune_exactlyAtCap_keepsStaleKeys() {
+        let store = MapCameraStore(defaults: makeDefaults())
+        for index in 0 ..< 3 {
+            store.setCamera(sample, forFolderName: "folder-\(index)")
+        }
+        // Exactly at the cap the dictionary has not yet OUTGROWN it — nothing is pruned.
+        store.pruneIfNeeded(keeping: [], cap: 3)
+        #expect(store.camera(forFolderName: "folder-0") == sample)
+        #expect(store.camera(forFolderName: "folder-2") == sample)
+    }
+
     @Test func prune_aboveCap_dropsOnlyAbsentKeys() {
         let store = MapCameraStore(defaults: makeDefaults())
         for index in 0 ..< 5 {

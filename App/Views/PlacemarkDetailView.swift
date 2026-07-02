@@ -40,6 +40,17 @@ struct PlacemarkDetailView: View {
     @State private var fallbackMapService = MapAppService()
     @State private var fallbackSettings = AppSettings()
 
+    /// The router that owns the detail column's path: the environment value when propagation
+    /// delivers it, else the shared instance published to `AppDependencies` at bootstrap.
+    /// This view is a pushed destination — the one hosting arrangement where the Mac
+    /// "Designed for iPad" runtime has historically dropped stack-root environment values
+    /// (see the fallbacks above) — and a dropped router would silently dead-button
+    /// "Show on Map". The fallback makes the push deterministic; both refer to the same
+    /// live instance.
+    private var activeRouter: NavigationRouter? {
+        router ?? AppDependencies.shared.router
+    }
+
     /// The rendered description: tags stripped, entities decoded, line breaks preserved, and
     /// `<a href>`/bare URLs/emails/phones turned into tappable links (scheme-allowlisted —
     /// see `AttributedHTML`). Built once in `.task` since it is pure string work, keeping it
@@ -226,7 +237,7 @@ struct PlacemarkDetailView: View {
             Menu {
                 if hasCoordinate {
                     Button {
-                        router?.path.append(.map(focusKey: placemark.stableKey))
+                        activeRouter?.path.append(.map(focusKey: placemark.stableKey))
                     } label: {
                         Label("Show on Map", systemImage: "map")
                     }

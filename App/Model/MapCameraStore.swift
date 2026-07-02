@@ -2,9 +2,10 @@ import Foundation
 
 // MARK: - MapCameraState
 
-/// A serializable snapshot of an `MKMapCamera` — the four properties that fully describe
-/// the embedded map's framing. Plain `Double`s (no MapKit types) so the store is testable
-/// without a map view; `PlacemarkMapRepresentable` owns the conversion.
+/// A serializable snapshot of an `MKMapCamera`'s framing — `centerCoordinate` (split into
+/// latitude/longitude), `centerCoordinateDistance`, `heading`, and `pitch`. Plain
+/// `Double`s (no MapKit types) so the store is testable without a map view;
+/// `PlacemarkMapRepresentable` owns the conversion.
 struct MapCameraState: Codable, Equatable {
     var latitude: Double
     var longitude: Double

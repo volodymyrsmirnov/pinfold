@@ -291,6 +291,13 @@ struct KMLDetailView: View {
     /// returns nil — and only the transient state is saved — until that geometry has been observed.
     private func saveResumeSlice() {
         guard let settings, settings.restoreSessionEnabled, document != nil else { return }
+        // Assert the folder name before writing the slice so the two `.inactive` writers
+        // (RootView owns selection + routes) are order-independent even when the stored
+        // folder is stale — e.g. the restore toggle was enabled mid-session, leaving the
+        // folder nil: if RootView's nil→folder write ran AFTER this slice write, its
+        // clear-on-different-folder cascade would wipe the slice just saved. Same-value
+        // re-writes preserve the slice, so the steady state is untouched.
+        settings.resumeEntryFolderName = entry.storageFolderName
         settings.resumeSearchText = searchText
         settings.resumeCollapsedFolderIDs = Array(collapsedFolderIDs)
         settings.resumeNearestFirst = nearestFirst
