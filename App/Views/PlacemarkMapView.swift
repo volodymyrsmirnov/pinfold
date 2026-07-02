@@ -22,9 +22,9 @@ struct PlacemarkMapView: View {
     @Environment(\.storageLocations) private var storage
     @Environment(AppSettings.self) private var settings
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
+    @Environment(NavigationRouter.self) private var router: NavigationRouter?
 
     @State private var selectedPlacemarkKey: String?
-    @State private var placemarkToOpenKey: String?
     @State private var locationAuth = LocationAuthorization()
 
     private var selectedPlacemark: KMLPlacemark? {
@@ -53,7 +53,7 @@ struct PlacemarkMapView: View {
 
             if let placemark = selectedPlacemark {
                 PlacemarkPreviewCard(placemark: placemark, document: document, entry: entry) {
-                    placemarkToOpenKey = placemark.stableKey
+                    router?.path.append(.placemark(stableKey: placemark.stableKey))
                 }
                 .padding()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -65,19 +65,6 @@ struct PlacemarkMapView: View {
         // (matches Apple Maps' full-screen presentation).
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationDestination(item: $placemarkToOpenKey) { key in
-            if let placemark = placemarks.first(where: { $0.stableKey == key }) {
-                // Deliberate exception to the single-injection rule at KMLDetailView's body
-                // root: this destination is registered from a view that is itself pushed, the
-                // one case where stack-root environment propagation has historically been
-                // unreliable (the original workaround existed for exactly this path). The
-                // annotations value is optional downstream, so a propagation miss would be a
-                // silent no-op on favorite/visited toggles — re-injecting here makes the path
-                // deterministic instead of relying on the runtime's resolution order.
-                PlacemarkDetailView(placemark: placemark, document: document, entry: entry)
-                    .environment(annotations)
-            }
-        }
         .task {
             locationAuth.request()
         }

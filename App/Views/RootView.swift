@@ -66,10 +66,17 @@ struct RootView: View {
     /// against the parsed document and pushes `PlacemarkDetailView` (the POI page).
     ///
     /// Consume-once flow: the source sets this AND `selectedEntryID` together when a hit is
-    /// tapped; this view passes it into `KMLDetailView(initialPlacemarkKey:)`, which clears it
-    /// via `onConsumePlacemarkKey`. A normal row tap only changes `selectedEntryID` (leaving
-    /// this nil), so it does not push.
+    /// tapped; `activeRestore` wraps it into a `RestoreBundle` passed to
+    /// `KMLDetailView(initialRestore:)`, which clears it via `onConsumeRestore`. A normal row
+    /// tap only changes `selectedEntryID` (leaving this nil), so it does not push.
     @State private var pendingPlacemarkKey: String?
+
+    /// A one-shot session-restore payload built by `restoreSessionIfNeeded()` (Task 6) and
+    /// handed to `KMLDetailView` when the restored entry's view is created. `entryFolderName`
+    /// guards the hand-off: only the matching entry receives it (a user could out-race a slow
+    /// parse by selecting another file). Deep links win: `activeRestore` prefers
+    /// `pendingPlacemarkKey`, and every deep-link site clears this.
+    @State private var pendingRestore: RestoreBundle?
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -78,6 +85,20 @@ struct RootView: View {
     private var selectedEntry: CatalogEntry? {
         guard let selectedEntryID else { return nil }
         return catalog.active.first { $0.id == selectedEntryID }
+    }
+
+    /// The one-shot bundle for the CURRENT detail view, or nil. A live deep link (Spotlight,
+    /// App Intent, a Places/favorites hit — all funnelled through `pendingPlacemarkKey`)
+    /// outranks session restore; a restore bundle is only handed to the entry it was saved
+    /// for (folder-name match).
+    private var activeRestore: RestoreBundle? {
+        if let pendingPlacemarkKey {
+            return RestoreBundle(routes: [.placemark(stableKey: pendingPlacemarkKey)])
+        }
+        if let pendingRestore, pendingRestore.entryFolderName == selectedEntry?.storageFolderName {
+            return pendingRestore
+        }
+        return nil
     }
 
     init() {
@@ -102,14 +123,18 @@ struct RootView: View {
             // fresh KMLDetailView identity per selection so its `@State` (document, outline,
             // annotations) resets when switching files — belt-and-braces alongside the view's
             // own `.task(id: entry.id)`.
-            NavigationStack {
+            @Bindable var router = router
+            NavigationStack(path: $router.path) {
                 if let selectedEntry {
                     KMLDetailView(
                         entry: selectedEntry,
-                        initialPlacemarkKey: pendingPlacemarkKey,
-                        // Consumed once by the detail view; clearing here ensures a later normal
-                        // selection of the same file doesn't re-push.
-                        onConsumePlacemarkKey: { pendingPlacemarkKey = nil }
+                        initialRestore: activeRestore,
+                        // Consumed once by the detail view; clearing here ensures a later
+                        // normal selection of the same file doesn't re-push.
+                        onConsumeRestore: {
+                            pendingPlacemarkKey = nil
+                            pendingRestore = nil
+                        }
                     )
                     .id(selectedEntry.id)
                 } else {
@@ -132,14 +157,14 @@ struct RootView: View {
             .modifier(AppEnvironmentBundle(
                 catalog: catalog, settings: settings, mapAppService: mapAppService,
                 migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-                resourceCache: resourceCache
+                resourceCache: resourceCache, router: router
             ))
         }
         .navigationSplitViewStyle(.balanced)
         .modifier(AppEnvironmentBundle(
             catalog: catalog, settings: settings, mapAppService: mapAppService,
             migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-            resourceCache: resourceCache
+            resourceCache: resourceCache, router: router
         ))
         .task { await bootstrap() }
         // Pick up files synced or shared while the app was already running.
@@ -157,6 +182,11 @@ struct RootView: View {
         // and restart the watcher. No relaunch required.
         .onChange(of: settings.syncEnabled) { _, _ in
             Task { await applyStorage(migrate: true) }
+        }
+        // Routes are per-document: switching (or clearing) the selected file invalidates
+        // the stack, matching the pre-refactor behavior where the pushed screens reset.
+        .onChange(of: selectedEntryID) { _, _ in
+            router.path = []
         }
         // App Intents ("Open <file> in Pinfold") route here: the out-of-tree intent sets a
         // pending folder name on the shared router; resolve it to an active entry and select it.
@@ -185,6 +215,7 @@ struct RootView: View {
             return
         }
         pendingPlacemarkKey = nil
+        pendingRestore = nil
         selectedEntryID = entry.id
     }
 
@@ -207,6 +238,7 @@ struct RootView: View {
         // straight through as the deep-link target (no name lookup needed). An entry item has no
         // placemark key, so the file just opens.
         pendingPlacemarkKey = parsed.placemarkKey
+        pendingRestore = nil
         selectedEntryID = entry.id
     }
 
@@ -429,6 +461,7 @@ private struct AppEnvironmentBundle: ViewModifier {
     let migrationAlert: MigrationAlertState
     let importFailureLog: ImportFailureLog
     let resourceCache: ResourceCache
+    let router: NavigationRouter
 
     func body(content: Content) -> some View {
         content
@@ -437,6 +470,7 @@ private struct AppEnvironmentBundle: ViewModifier {
             .environment(mapAppService)
             .environment(migrationAlert)
             .environment(importFailureLog)
+            .environment(router)
             .environment(\.resourceCache, resourceCache)
             .environment(\.storageLocations, catalog.storage)
     }
