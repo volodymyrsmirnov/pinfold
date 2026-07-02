@@ -113,9 +113,16 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 Self.focus(on: annotation, in: mapView)
             } else if let savedCamera {
                 if savedCamera.isTracking, userLocationVisible {
-                    // The user left this file's map following them — resume following.
-                    // MapKit recenters once a fix arrives; no programmatic framing needed.
-                    mapView.setUserTrackingMode(.followWithHeading, animated: false)
+                    // The user left this file's map following them — resume following
+                    // (plain follow where heading hardware is absent, e.g. the Mac
+                    // runtime). MapKit recenters once a fix arrives; no programmatic
+                    // framing needed. `suppressCameraSave` stays armed, deliberately
+                    // dropping the first tracking-recenter settle's save — the store
+                    // already holds this exact state.
+                    mapView.setUserTrackingMode(
+                        CLLocationManager.headingAvailable() ? .followWithHeading : .follow,
+                        animated: false
+                    )
                 } else {
                     Self.apply(savedCamera, to: mapView)
                 }
@@ -365,6 +372,11 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// Set once the first-layout framing (focus / saved camera / fit-all) has been
         /// applied; region changes before that are layout noise and must not be saved.
         var didInitialFrame = false
+        /// The last tracking mode MapKit reported. Lets `didChange` distinguish the user's
+        /// engage tap (.none → .follow, which gets the heading upgrade) from MapKit's own
+        /// gesture demotion (.followWithHeading → .follow when the user rotates the map),
+        /// which must be respected, not fought.
+        var lastReportedTrackingMode: MKUserTrackingMode = .none
         /// One-shot suppression for the region-settle callback of a programmatic framing
         /// (initial framing, reconcile re-fit) so it doesn't overwrite the saved camera.
         /// The fit-all BUTTON deliberately does not set it: its settle callback saving the
@@ -447,8 +459,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         /// remembered camera.
         ///
         /// A deliberate "show everything": disengage tracking first (follow mode would
-        /// immediately recenter the fit onto the user); the didChange save records the
-        /// disengage, so the fit framing is what gets remembered.
+        /// immediately recenter the fit onto the user). The didChange save records the
+        /// disengage at the old camera; the fit's own unsuppressed settle then records
+        /// the fit framing — so tracking-off-at-fit is what gets remembered.
         func fitAllPins() {
             guard let mapView else { return }
             mapView.setUserTrackingMode(.none, animated: false)
@@ -476,12 +489,20 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             )
         }
 
-        /// Tracking-mode changes: preserve the heading coupling for USER-engaged tracking
-        /// (the MKUserTrackingButton's first tap sets `.follow`; upgrade it to
+        /// Tracking-mode changes: preserve the heading coupling for the USER's engage tap
+        /// only (the MKUserTrackingButton's `.none → .follow`; upgrade it to
         /// `.followWithHeading` — tracking is never auto-engaged anywhere else), and
         /// persist the on/off state per file so reopening the map resumes it.
         func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
-            if mode == .follow {
+            let previous = lastReportedTrackingMode
+            lastReportedTrackingMode = mode
+            // Heading coupling: upgrade ONLY the user's engage tap (.none → .follow). A
+            // .followWithHeading → .follow transition is MapKit releasing the heading lock
+            // for a manual rotate — fighting it would recreate the "map overrides the
+            // user's camera" bug this feature fixed. Heading-incapable hardware (the Mac
+            // "Designed for iPad" runtime has no magnetometer) never upgrades: a rejected
+            // .followWithHeading could clamp back to .follow and ping-pong this handler.
+            if mode == .follow, previous == .none, CLLocationManager.headingAvailable() {
                 mapView.setUserTrackingMode(.followWithHeading, animated: animated)
                 return // the upgrade re-fires this callback; save from that pass
             }

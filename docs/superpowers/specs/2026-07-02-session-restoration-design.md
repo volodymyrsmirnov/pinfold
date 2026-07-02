@@ -171,7 +171,9 @@ like the basemap style.
 
 - **Saving:** in the coordinator's `regionDidChangeAnimated` (fires once per settled
   gesture/animation — no debounce needed), guarded so the programmatic initial framing
-  (first-layout fit/focus) does not overwrite a saved camera.
+  (first-layout fit/focus) does not overwrite a saved camera. Tracking-mode transitions
+  also save via `didChange`, so the on/off state persists even when no region change
+  follows (e.g. a disengage tap that leaves the camera where it was).
 - **Applying:** first-layout priority is **focus deep link → saved camera → fit all
   pins**. "Show on Map" always wins; fit-all remains the first-open default. Tracking is
   never auto-engaged: it resumes only from the per-file remembered state, or via the
