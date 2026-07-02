@@ -430,7 +430,7 @@ struct KMLDetailView: View {
         // Snapshot the user's location ONCE per list build so every row shares one fix instead
         // of re-reading `locationAuth` per row. `nil` → rows show no distance.
         let location = locationAuth.lastLocation
-        return ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
             List {
                 searchSection
                 if let outline {
