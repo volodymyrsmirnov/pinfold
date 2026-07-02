@@ -34,6 +34,8 @@ struct KMLDetailView: View {
 
     @Environment(\.storageLocations) private var storage
     @Environment(NavigationRouter.self) private var router: NavigationRouter?
+    @Environment(AppSettings.self) private var settings: AppSettings?
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - State
 
@@ -62,6 +64,10 @@ struct KMLDetailView: View {
     /// The outline row id to scroll to once rows are built — a one-shot from session
     /// restore, consumed by the verified-retry scroll task (see `applyPendingScroll`).
     @State private var pendingScrollRowID: String?
+
+    /// Live row geometry for scroll-anchor capture/restore. A plain class (not @Observable):
+    /// per-frame writes must not invalidate the view tree. See `RowFrameBox`.
+    @State private var rowFrames = RowFrameBox()
 
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
     /// toggles and document loads are not debounced (they go through a separate trigger).
@@ -153,6 +159,13 @@ struct KMLDetailView: View {
             router?.path.append(contentsOf: valid)
             onConsumeRestore()
         }
+        // The per-file half of the resume snapshot (RootView writes selection + routes on
+        // the same transition). `.inactive` always precedes backgrounding, BEFORE iOS's
+        // snapshot passes can re-lay the list out under us.
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .inactive else { return }
+            saveResumeSlice()
+        }
         // The outline rebuild is driven by TWO independent triggers so the debounce policy
         // derives from *which trigger fired*, never from mutable post-build state (a single
         // task comparing against a "last built query" could mis-debounce a collapse toggle
@@ -219,6 +232,17 @@ struct KMLDetailView: View {
         }
         router?.path = valid
         onConsumeRestore()
+    }
+
+    /// Writes the transient list state + scroll anchor to the resume slice. The scroll
+    /// anchor is computed from live row geometry (Task 7 wires `rowFrames`; until then
+    /// `anchorRowID()` returns nil and only the transient state is saved).
+    private func saveResumeSlice() {
+        guard let settings, settings.restoreSessionEnabled, document != nil else { return }
+        settings.resumeSearchText = searchText
+        settings.resumeCollapsedFolderIDs = Array(collapsedFolderIDs)
+        settings.resumeNearestFirst = nearestFirst
+        settings.resumeScrollAnchorRowID = rowFrames.anchorRowID()
     }
 
     /// Resolves a pushed route into its screen. A `.placemark` whose stableKey no longer

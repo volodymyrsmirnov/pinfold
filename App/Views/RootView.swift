@@ -78,6 +78,12 @@ struct RootView: View {
     /// `pendingPlacemarkKey`, and every deep-link site clears this.
     @State private var pendingRestore: RestoreBundle?
 
+    /// Set when the app is (re)activated by a URL ("Open in Pinfold" / share-extension
+    /// launch). An import doesn't drive a selection, so the selection-based restore guards
+    /// can't see it — this flag keeps session restore from reopening the previous file on
+    /// top of a fresh import.
+    @State private var suppressRestore = false
+
     @Environment(\.scenePhase) private var scenePhase
 
     /// The active (non-trashed) entry matching the current selection, or `nil` when nothing is
@@ -167,10 +173,17 @@ struct RootView: View {
             resourceCache: resourceCache, router: router
         ))
         .task { await bootstrap() }
-        // Pick up files synced or shared while the app was already running.
+        // Save the resume snapshot on the way OUT (`.inactive` is always passed through
+        // before backgrounding — and before iOS's snapshot passes — and also fires on the
+        // app-switcher path, covering swipe-kill). Pick up synced/shared files on the way IN.
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
+            switch newPhase {
+            case .inactive:
+                saveResumeState()
+            case .active:
                 Task { await drainInbox(); await drainDocumentsInbox(); await catalog.reload() }
+            default:
+                break
             }
         }
         // Handle a file opened via the KML/KMZ file-type association ("Open in Pinfold"
@@ -185,8 +198,13 @@ struct RootView: View {
         }
         // Routes are per-document: switching (or clearing) the selected file invalidates
         // the stack, matching the pre-refactor behavior where the pushed screens reset.
+        // Also records the new selection immediately (crash-safety: a hard crash later in
+        // the session loses at most the in-file details, never the file).
         .onChange(of: selectedEntryID) { _, _ in
             router.path = []
+            if settings.restoreSessionEnabled {
+                settings.resumeEntryFolderName = selectedEntry?.storageFolderName
+            }
         }
         // App Intents ("Open <file> in Pinfold") route here: the out-of-tree intent sets a
         // pending folder name on the shared router; resolve it to an active entry and select it.
@@ -251,6 +269,46 @@ struct RootView: View {
         await drainInbox()
         await drainDocumentsInbox()
         await catalog.reload()
+        restoreSessionIfNeeded()
+    }
+
+    // MARK: - Session restoration
+
+    /// Writes the selection + route-stack half of the resume snapshot. `KMLDetailView`
+    /// owns the other half (transient list state + scroll anchor — only it can read live
+    /// row geometry); both fire on the same `.inactive` transition, and the same-folder
+    /// preserve rule in `AppSettings` makes their order irrelevant.
+    private func saveResumeState() {
+        guard settings.restoreSessionEnabled else { return }
+        settings.resumeEntryFolderName = selectedEntry?.storageFolderName
+        settings.resumeRoutes = EntryRoute.encodeForResume(router.path)
+    }
+
+    /// Rebuilds the last session's selection at launch. Restore only when nothing else has
+    /// routed yet — a live deep link (Spotlight tap, App Intent, "Open in Pinfold") that
+    /// already drove a selection or set a pending key wins over restore. A saved folder
+    /// that no longer resolves (deleted, trashed, storage root switched) clears the stale
+    /// state and lands on the catalogue — silent, like every deep-link miss.
+    private func restoreSessionIfNeeded() {
+        guard settings.restoreSessionEnabled,
+              !suppressRestore,
+              selectedEntryID == nil,
+              pendingPlacemarkKey == nil,
+              let folderName = settings.resumeEntryFolderName
+        else { return }
+        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
+            settings.resumeEntryFolderName = nil
+            return
+        }
+        pendingRestore = RestoreBundle(
+            entryFolderName: folderName,
+            routes: EntryRoute.decodeForResume(settings.resumeRoutes),
+            searchText: settings.resumeSearchText ?? "",
+            collapsedFolderIDs: Set(settings.resumeCollapsedFolderIDs ?? []),
+            nearestFirst: settings.resumeNearestFirst,
+            scrollAnchorRowID: settings.resumeScrollAnchorRowID
+        )
+        selectedEntryID = entry.id
     }
 
     /// Resolves the active root from the current sync preference, points the catalogue at
@@ -351,6 +409,8 @@ struct RootView: View {
     /// relying only on a directory scan could silently drop it — then both inboxes are
     /// drained for any stragglers.
     private func handleOpenURL(_ url: URL) async {
+        suppressRestore = true
+        pendingRestore = nil
         if url.isFileURL {
             await importFile(at: url)
         }
