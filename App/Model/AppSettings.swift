@@ -73,7 +73,16 @@ import Observation
         didSet {
             defaults.set(restoreSessionEnabled, forKey: Key.restoreSessionEnabled)
             guard !isBootstrapping, !restoreSessionEnabled else { return }
-            resumeEntryFolderName = nil // cascades: clears the per-file slice too
+            // Clear every field directly: routing the clear through
+            // `resumeEntryFolderName = nil` would be swallowed by that property's
+            // same-value guard when the folder is already nil, leaving orphaned
+            // slice data (e.g. routes saved while nothing was selected).
+            resumeEntryFolderName = nil
+            resumeRoutes = nil
+            resumeSearchText = nil
+            resumeCollapsedFolderIDs = nil
+            resumeNearestFirst = false
+            resumeScrollAnchorRowID = nil
         }
     }
 

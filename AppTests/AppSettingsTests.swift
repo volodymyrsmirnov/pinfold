@@ -143,6 +143,22 @@ import Testing
         #expect(AppSettings(defaults: defaults).resumeEntryFolderName == nil)
     }
 
+    /// Disabling must clear orphaned slice data even when the folder name is ALREADY nil:
+    /// the clear must not depend on the folder-name didSet cascade, whose same-value guard
+    /// suppresses it for a nil→nil write.
+    @Test func disablingToggle_withNilFolder_clearsOrphanedSlice() {
+        let defaults = makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.resumeEntryFolderName == nil)
+        settings.resumeRoutes = Data([9])
+        settings.resumeScrollAnchorRowID = "p1"
+
+        settings.restoreSessionEnabled = false
+        #expect(settings.resumeRoutes == nil)
+        #expect(settings.resumeScrollAnchorRowID == nil)
+        #expect(AppSettings(defaults: defaults).resumeRoutes == nil)
+    }
+
     /// Regression test for the `@Observable` init gotcha: observers fire inside `init`, so
     /// without the bootstrap guard the init assignment of the folder name would trip the
     /// clear-on-different-folder coupling and delete the anchor being loaded.
