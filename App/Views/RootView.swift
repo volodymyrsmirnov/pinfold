@@ -66,10 +66,33 @@ struct RootView: View {
     /// against the parsed document and pushes `PlacemarkDetailView` (the POI page).
     ///
     /// Consume-once flow: the source sets this AND `selectedEntryID` together when a hit is
-    /// tapped; this view passes it into `KMLDetailView(initialPlacemarkKey:)`, which clears it
-    /// via `onConsumePlacemarkKey`. A normal row tap only changes `selectedEntryID` (leaving
-    /// this nil), so it does not push.
+    /// tapped; `activeRestore` wraps it into a `RestoreBundle` passed to
+    /// `KMLDetailView(initialRestore:)`, which clears it via `onConsumeRestore`. A normal row
+    /// tap only changes `selectedEntryID` (leaving this nil), so it does not push.
     @State private var pendingPlacemarkKey: String?
+
+    /// A one-shot session-restore payload built by `restoreSessionIfNeeded()` (Task 6) and
+    /// handed to `KMLDetailView` when the restored entry's view is created. `entryFolderName`
+    /// guards the hand-off: only the matching entry receives it (a user could out-race a slow
+    /// parse by selecting another file). Deep links win: `activeRestore` prefers
+    /// `pendingPlacemarkKey`, and every deep-link site clears this.
+    @State private var pendingRestore: RestoreBundle?
+
+    /// Set when the app is (re)activated by a URL ("Open in Pinfold" / share-extension
+    /// launch). An import doesn't drive a selection, so the selection-based restore guards
+    /// can't see it — this flag keeps session restore from reopening the previous file on
+    /// top of a fresh import.
+    @State private var suppressRestore = false
+
+    /// A deep-link target (Spotlight tap or App Intent) that arrived before `bootstrap()`
+    /// had loaded the catalogue, stashed for replay right after the first reload. Without
+    /// this, a cold-launch tap resolves against an empty catalogue, gets dropped, and
+    /// session restore then opens the PREVIOUS file instead of the tapped one.
+    @State private var pendingColdLaunchTarget: (folderName: String, placemarkKey: String?)?
+
+    /// Whether `bootstrap()` has completed its first catalogue load. Gates the stash above:
+    /// a post-bootstrap resolution miss is a genuinely missing entry, not a launch race.
+    @State private var didBootstrap = false
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -78,6 +101,20 @@ struct RootView: View {
     private var selectedEntry: CatalogEntry? {
         guard let selectedEntryID else { return nil }
         return catalog.active.first { $0.id == selectedEntryID }
+    }
+
+    /// The one-shot bundle for the CURRENT detail view, or nil. A live deep link (Spotlight,
+    /// App Intent, a Places/favorites hit — all funnelled through `pendingPlacemarkKey`)
+    /// outranks session restore; a restore bundle is only handed to the entry it was saved
+    /// for (folder-name match).
+    private var activeRestore: RestoreBundle? {
+        if let pendingPlacemarkKey {
+            return RestoreBundle(routes: [.placemark(stableKey: pendingPlacemarkKey)])
+        }
+        if let pendingRestore, pendingRestore.entryFolderName == selectedEntry?.storageFolderName {
+            return pendingRestore
+        }
+        return nil
     }
 
     init() {
@@ -102,14 +139,18 @@ struct RootView: View {
             // fresh KMLDetailView identity per selection so its `@State` (document, outline,
             // annotations) resets when switching files — belt-and-braces alongside the view's
             // own `.task(id: entry.id)`.
-            NavigationStack {
+            @Bindable var router = router
+            NavigationStack(path: $router.path) {
                 if let selectedEntry {
                     KMLDetailView(
                         entry: selectedEntry,
-                        initialPlacemarkKey: pendingPlacemarkKey,
-                        // Consumed once by the detail view; clearing here ensures a later normal
-                        // selection of the same file doesn't re-push.
-                        onConsumePlacemarkKey: { pendingPlacemarkKey = nil }
+                        initialRestore: activeRestore,
+                        // Consumed once by the detail view; clearing here ensures a later
+                        // normal selection of the same file doesn't re-push.
+                        onConsumeRestore: {
+                            pendingPlacemarkKey = nil
+                            pendingRestore = nil
+                        }
                     )
                     .id(selectedEntry.id)
                 } else {
@@ -132,20 +173,27 @@ struct RootView: View {
             .modifier(AppEnvironmentBundle(
                 catalog: catalog, settings: settings, mapAppService: mapAppService,
                 migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-                resourceCache: resourceCache
+                resourceCache: resourceCache, router: router
             ))
         }
         .navigationSplitViewStyle(.balanced)
         .modifier(AppEnvironmentBundle(
             catalog: catalog, settings: settings, mapAppService: mapAppService,
             migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-            resourceCache: resourceCache
+            resourceCache: resourceCache, router: router
         ))
         .task { await bootstrap() }
-        // Pick up files synced or shared while the app was already running.
+        // Save the resume snapshot on the way OUT (`.inactive` is always passed through
+        // before backgrounding — and before iOS's snapshot passes — and also fires on the
+        // app-switcher path, covering swipe-kill). Pick up synced/shared files on the way IN.
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
+            switch newPhase {
+            case .inactive:
+                saveResumeState()
+            case .active:
                 Task { await drainInbox(); await drainDocumentsInbox(); await catalog.reload() }
+            default:
+                break
             }
         }
         // Handle a file opened via the KML/KMZ file-type association ("Open in Pinfold"
@@ -157,6 +205,22 @@ struct RootView: View {
         // and restart the watcher. No relaunch required.
         .onChange(of: settings.syncEnabled) { _, _ in
             Task { await applyStorage(migrate: true) }
+        }
+        // Routes are per-document: switching (or clearing) the selected file invalidates
+        // the stack, matching the pre-refactor behavior where the pushed screens reset.
+        // Also records the new selection immediately (crash-safety: a hard crash later in
+        // the session loses at most the in-file details, never the file).
+        .onChange(of: selectedEntryID) { _, _ in
+            router.path = []
+            // A restore bundle is only valid for the entry it was saved for: if the user
+            // out-races a slow restore parse by opening another file, drop the bundle so a
+            // later manual re-selection of the restored file doesn't replay it.
+            if let pending = pendingRestore, pending.entryFolderName != selectedEntry?.storageFolderName {
+                pendingRestore = nil
+            }
+            if settings.restoreSessionEnabled {
+                settings.resumeEntryFolderName = selectedEntry?.storageFolderName
+            }
         }
         // App Intents ("Open <file> in Pinfold") route here: the out-of-tree intent sets a
         // pending folder name on the shared router; resolve it to an active entry and select it.
@@ -179,12 +243,17 @@ struct RootView: View {
     /// Selects the active entry with `folderName`, or logs and no-ops when it's missing/trashed.
     private func openEntry(folderName: String) {
         guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
-            Self.routingLogger.info(
-                "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
-            )
+            if !didBootstrap {
+                pendingColdLaunchTarget = (folderName, nil)
+            } else {
+                Self.routingLogger.info(
+                    "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
+                )
+            }
             return
         }
         pendingPlacemarkKey = nil
+        pendingRestore = nil
         selectedEntryID = entry.id
     }
 
@@ -197,9 +266,13 @@ struct RootView: View {
         else { return }
 
         guard let entry = catalog.active.first(where: { $0.storageFolderName == parsed.folderName }) else {
-            Self.routingLogger.info(
-                "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
-            )
+            if !didBootstrap {
+                pendingColdLaunchTarget = (parsed.folderName, parsed.placemarkKey)
+            } else {
+                Self.routingLogger.info(
+                    "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
+                )
+            }
             return
         }
 
@@ -207,6 +280,7 @@ struct RootView: View {
         // straight through as the deep-link target (no name lookup needed). An entry item has no
         // placemark key, so the file just opens.
         pendingPlacemarkKey = parsed.placemarkKey
+        pendingRestore = nil
         selectedEntryID = entry.id
     }
 
@@ -219,6 +293,72 @@ struct RootView: View {
         await drainInbox()
         await drainDocumentsInbox()
         await catalog.reload()
+        didBootstrap = true
+        // Replay a deep link that raced bootstrap (see `pendingColdLaunchTarget`) — it must
+        // win over session restore, which `restoreSessionIfNeeded`'s selection guard then
+        // enforces automatically.
+        if let target = pendingColdLaunchTarget {
+            pendingColdLaunchTarget = nil
+            if let entry = catalog.active.first(where: { $0.storageFolderName == target.folderName }) {
+                pendingPlacemarkKey = target.placemarkKey
+                pendingRestore = nil
+                selectedEntryID = entry.id
+            } else {
+                Self.routingLogger.info(
+                    "Cold-launch deep link to missing entry '\(target.folderName, privacy: .public)' — ignored."
+                )
+            }
+        }
+        restoreSessionIfNeeded()
+        // Camera-store hygiene: drop cameras for files no longer anywhere in the catalogue
+        // (active OR trashed — restoring from the trash keeps the camera). Only kicks in
+        // past the cap; below it stale entries are harmless bytes.
+        MapCameraStore().pruneIfNeeded(keeping: Set(catalog.entries.map(\.storageFolderName)))
+    }
+
+    // MARK: - Session restoration
+
+    /// Writes the selection + route-stack half of the resume snapshot. `KMLDetailView`
+    /// owns the other half (transient list state + scroll anchor — only it can read live
+    /// row geometry); both fire on the same `.inactive` transition, and the same-folder
+    /// preserve rule in `AppSettings` makes their order irrelevant.
+    private func saveResumeState() {
+        guard settings.restoreSessionEnabled else { return }
+        settings.resumeEntryFolderName = selectedEntry?.storageFolderName
+        // While a restore bundle is still unconsumed (the restore parse is in flight), the
+        // live path is still empty — overwriting the saved routes with it would lose the
+        // stack a kill in this window was supposed to preserve.
+        if let pending = pendingRestore, pending.entryFolderName == selectedEntry?.storageFolderName {
+            return
+        }
+        settings.resumeRoutes = EntryRoute.encodeForResume(router.path)
+    }
+
+    /// Rebuilds the last session's selection at launch. Restore only when nothing else has
+    /// routed yet — a live deep link (Spotlight tap, App Intent, "Open in Pinfold") that
+    /// already drove a selection or set a pending key wins over restore. A saved folder
+    /// that no longer resolves (deleted, trashed, storage root switched) clears the stale
+    /// state and lands on the catalogue — silent, like every deep-link miss.
+    private func restoreSessionIfNeeded() {
+        guard settings.restoreSessionEnabled,
+              !suppressRestore,
+              selectedEntryID == nil,
+              pendingPlacemarkKey == nil,
+              let folderName = settings.resumeEntryFolderName
+        else { return }
+        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
+            settings.resumeEntryFolderName = nil
+            return
+        }
+        pendingRestore = RestoreBundle(
+            entryFolderName: folderName,
+            routes: EntryRoute.decodeForResume(settings.resumeRoutes),
+            searchText: settings.resumeSearchText ?? "",
+            collapsedFolderIDs: Set(settings.resumeCollapsedFolderIDs ?? []),
+            nearestFirst: settings.resumeNearestFirst,
+            scrollAnchorRowID: settings.resumeScrollAnchorRowID
+        )
+        selectedEntryID = entry.id
     }
 
     /// Resolves the active root from the current sync preference, points the catalogue at
@@ -319,6 +459,8 @@ struct RootView: View {
     /// relying only on a directory scan could silently drop it — then both inboxes are
     /// drained for any stragglers.
     private func handleOpenURL(_ url: URL) async {
+        suppressRestore = true
+        pendingRestore = nil
         if url.isFileURL {
             await importFile(at: url)
         }
@@ -429,6 +571,7 @@ private struct AppEnvironmentBundle: ViewModifier {
     let migrationAlert: MigrationAlertState
     let importFailureLog: ImportFailureLog
     let resourceCache: ResourceCache
+    let router: NavigationRouter
 
     func body(content: Content) -> some View {
         content
@@ -437,6 +580,7 @@ private struct AppEnvironmentBundle: ViewModifier {
             .environment(mapAppService)
             .environment(migrationAlert)
             .environment(importFailureLog)
+            .environment(router)
             .environment(\.resourceCache, resourceCache)
             .environment(\.storageLocations, catalog.storage)
     }

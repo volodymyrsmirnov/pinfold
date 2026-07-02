@@ -64,16 +64,19 @@ final class FittingMapView: MKMapView {
 // MARK: - Native map controls
 
 extension PlacemarkMapRepresentable {
-    /// Configures the user-location layer and heading tracking together.
+    /// Configures the user-location layer. Tracking is deliberately NOT engaged here:
+    /// follow mode starts only from the per-file remembered state (see `onFirstLayout`)
+    /// or the user tapping the tracking button (see the `didChange` upgrade in the
+    /// Coordinator). Revoking location authorization also disengages tracking.
     static func configureUserLocation(
         on mapView: MKMapView,
         showsUserLocation: Bool,
         animated: Bool
     ) {
         mapView.showsUserLocation = showsUserLocation
-
-        let trackingMode: MKUserTrackingMode = showsUserLocation ? .followWithHeading : .none
-        mapView.setUserTrackingMode(trackingMode, animated: animated)
+        if !showsUserLocation {
+            mapView.setUserTrackingMode(.none, animated: animated)
+        }
     }
 
     /// Adds the native control column (basemap-style menu + user-tracking button) to the
@@ -111,7 +114,32 @@ extension PlacemarkMapRepresentable {
             styleContainer.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        let stack = UIStackView(arrangedSubviews: [styleContainer, trackingContainer])
+        // Fit-all-pins button: restores the default framing (and, by design, overwrites
+        // the remembered per-file camera with it — see Coordinator.fitAllPins).
+        let fitButton = UIButton(configuration: .plain())
+        fitButton.translatesAutoresizingMaskIntoConstraints = false
+        fitButton.setImage(
+            UIImage(systemName: "arrow.down.backward.and.arrow.up.forward",
+                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)),
+            for: .normal
+        )
+        fitButton.accessibilityLabel = String(
+            localized: "Fit All Pins",
+            comment: "Accessibility label for the map button that zooms to show every pin."
+        )
+        fitButton.addAction(UIAction { [weak coordinator] _ in
+            coordinator?.fitAllPins()
+        }, for: .primaryActionTriggered)
+        let fitContainer = Self.glassContainer()
+        fitContainer.contentView.addSubview(fitButton)
+        NSLayoutConstraint.activate([
+            fitButton.centerXAnchor.constraint(equalTo: fitContainer.contentView.centerXAnchor),
+            fitButton.centerYAnchor.constraint(equalTo: fitContainer.contentView.centerYAnchor),
+            fitContainer.widthAnchor.constraint(equalToConstant: 44),
+            fitContainer.heightAnchor.constraint(equalToConstant: 44),
+        ])
+
+        let stack = UIStackView(arrangedSubviews: [styleContainer, fitContainer, trackingContainer])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false

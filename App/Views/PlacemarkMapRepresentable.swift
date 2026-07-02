@@ -37,6 +37,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     /// persistence are owned entirely by this representable / its coordinator.
     static let styleDefaultsKey = "embeddedMapStyle"
 
+    /// Per-file remembered camera. Stateless wrapper over UserDefaults, so constructing it
+    /// per representable value is free.
+    let cameraStore = MapCameraStore()
+
     /// Above this many placemarks, clustering is forced on regardless of the user's
     /// `clusterPins` setting: MapKit collapses (drops frames, stops responding) when asked
     /// to lay out tens of thousands of individual, non-colliding annotation views, so an
@@ -97,16 +101,35 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
         let coordinates = placemarks.compactMap(\.coordinate)
         let focusKey = initialFocusKey
+        let savedCamera = cameraStore.camera(forFolderName: entry.storageFolderName)
+        let userLocationVisible = showsUserLocation
         mapView.onFirstLayout = { [weak mapView, weak coordinator = context.coordinator] in
-            guard let mapView else { return }
+            guard let mapView, let coordinator else { return }
+            coordinator.suppressCameraSave = true
             // Initial-focus deep link ("Show on Embedded Map"): if the carried key resolves
-            // to a realized pin, zoom to it and select it (surfacing its preview card) rather
-            // than fitting all pins. Falls back to fit-all when nil or unmatched.
-            if let focusKey, let annotation = coordinator?.annotationsByKey[focusKey] {
+            // to a realized pin, zoom to it and select it (surfacing its preview card).
+            // Otherwise a remembered per-file state wins over the fit-all default.
+            if let focusKey, let annotation = coordinator.annotationsByKey[focusKey] {
                 Self.focus(on: annotation, in: mapView)
+            } else if let savedCamera {
+                if savedCamera.isTracking, userLocationVisible {
+                    // The user left this file's map following them — resume following
+                    // (plain follow where heading hardware is absent, e.g. the Mac
+                    // runtime). MapKit recenters once a fix arrives; no programmatic
+                    // framing needed. `suppressCameraSave` stays armed, deliberately
+                    // dropping the first tracking-recenter settle's save — the store
+                    // already holds this exact state.
+                    mapView.setUserTrackingMode(
+                        CLLocationManager.headingAvailable() ? .followWithHeading : .follow,
+                        animated: false
+                    )
+                } else {
+                    Self.apply(savedCamera, to: mapView)
+                }
             } else {
                 Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
             }
+            coordinator.didInitialFrame = true
         }
 
         addControls(to: mapView, coordinator: context.coordinator)
@@ -172,7 +195,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             }
             coordinator.lastDesiredKeys = desiredKeys
 
-            // Re-fit to the new pin + overlay set (mirrors the first-layout fit).
+            // Re-fit to the new pin + overlay set (mirrors the first-layout fit). It is
+            // programmatic: its settle callback must not overwrite the remembered camera.
+            coordinator.suppressCameraSave = true
             let allOverlays = coordinator.overlaysByKey.values.flatMap(\.self)
             Self.fit(
                 coordinates: placemarks.compactMap(\.coordinate),
@@ -308,6 +333,30 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         mapView.selectAnnotation(annotation, animated: false)
     }
 
+    /// Applies a persisted camera, unanimated (this is the initial framing).
+    static func apply(_ state: MapCameraState, to mapView: MKMapView) {
+        let camera = MKMapCamera(
+            lookingAtCenter: CLLocationCoordinate2D(latitude: state.latitude, longitude: state.longitude),
+            fromDistance: state.distance,
+            pitch: CGFloat(state.pitch),
+            heading: state.heading
+        )
+        mapView.setCamera(camera, animated: false)
+    }
+
+    /// Snapshots the map's current camera + tracking mode for persistence.
+    static func cameraState(of mapView: MKMapView) -> MapCameraState {
+        let camera = mapView.camera
+        return MapCameraState(
+            latitude: camera.centerCoordinate.latitude,
+            longitude: camera.centerCoordinate.longitude,
+            distance: camera.centerCoordinateDistance,
+            heading: camera.heading,
+            pitch: Double(camera.pitch),
+            isTracking: mapView.userTrackingMode != .none
+        )
+    }
+
     // MARK: - Coordinator
 
     final class Coordinator: NSObject, MKMapViewDelegate {
@@ -320,6 +369,19 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         weak var styleButton: UIButton?
         var currentStyle: EmbeddedMapStyle?
         var lastShowsUserLocation = false
+        /// Set once the first-layout framing (focus / saved camera / fit-all) has been
+        /// applied; region changes before that are layout noise and must not be saved.
+        var didInitialFrame = false
+        /// The last tracking mode MapKit reported. Lets `didChange` distinguish the user's
+        /// engage tap (.none → .follow, which gets the heading upgrade) from MapKit's own
+        /// gesture demotion (.followWithHeading → .follow when the user rotates the map),
+        /// which must be respected, not fought.
+        var lastReportedTrackingMode: MKUserTrackingMode = .none
+        /// One-shot suppression for the region-settle callback of a programmatic framing
+        /// (initial framing, reconcile re-fit) so it doesn't overwrite the saved camera.
+        /// The fit-all BUTTON deliberately does not set it: its settle callback saving the
+        /// fit-all framing is what makes the button a natural "reset".
+        var suppressCameraSave = false
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
@@ -389,6 +451,66 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             UserDefaults.standard.set(style.rawValue, forKey: PlacemarkMapRepresentable.styleDefaultsKey)
             // Rebuild so the checkmark moves to the new selection.
             styleButton?.menu = makeStyleMenu()
+        }
+
+        /// Fits all pins + overlays (the pre-camera-persistence default framing). Wired to
+        /// the control column's fit-all button. Deliberately does NOT suppress the settle
+        /// save: the resulting framing is persisted, making this the "reset" for the
+        /// remembered camera.
+        ///
+        /// A deliberate "show everything": disengage tracking first (follow mode would
+        /// immediately recenter the fit onto the user). The didChange save records the
+        /// disengage at the old camera; the fit's own unsuppressed settle then records
+        /// the fit framing — so tracking-off-at-fit is what gets remembered.
+        func fitAllPins() {
+            guard let mapView else { return }
+            mapView.setUserTrackingMode(.none, animated: false)
+            let overlays = overlaysByKey.values.flatMap(\.self)
+            PlacemarkMapRepresentable.fit(
+                coordinates: parent.placemarks.compactMap(\.coordinate),
+                overlays: overlays, in: mapView, animated: true
+            )
+        }
+
+        // MARK: Camera persistence
+
+        /// Fires once per settled gesture or animation — the per-file camera save point.
+        /// User-tracking pans settle through here too and are saved deliberately: "where
+        /// the map was following me" IS where the user was.
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated _: Bool) {
+            if suppressCameraSave {
+                suppressCameraSave = false
+                return
+            }
+            guard didInitialFrame else { return }
+            parent.cameraStore.setCamera(
+                PlacemarkMapRepresentable.cameraState(of: mapView),
+                forFolderName: parent.entry.storageFolderName
+            )
+        }
+
+        /// Tracking-mode changes: preserve the heading coupling for the USER's engage tap
+        /// only (the MKUserTrackingButton's `.none → .follow`; upgrade it to
+        /// `.followWithHeading` — tracking is never auto-engaged anywhere else), and
+        /// persist the on/off state per file so reopening the map resumes it.
+        func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+            let previous = lastReportedTrackingMode
+            lastReportedTrackingMode = mode
+            // Heading coupling: upgrade ONLY the user's engage tap (.none → .follow). A
+            // .followWithHeading → .follow transition is MapKit releasing the heading lock
+            // for a manual rotate — fighting it would recreate the "map overrides the
+            // user's camera" bug this feature fixed. Heading-incapable hardware (the Mac
+            // "Designed for iPad" runtime has no magnetometer) never upgrades: a rejected
+            // .followWithHeading could clamp back to .follow and ping-pong this handler.
+            if mode == .follow, previous == .none, CLLocationManager.headingAvailable() {
+                mapView.setUserTrackingMode(.followWithHeading, animated: animated)
+                return // the upgrade re-fires this callback; save from that pass
+            }
+            guard didInitialFrame else { return }
+            parent.cameraStore.setCamera(
+                PlacemarkMapRepresentable.cameraState(of: mapView),
+                forFolderName: parent.entry.storageFolderName
+            )
         }
 
         // MARK: Annotation views

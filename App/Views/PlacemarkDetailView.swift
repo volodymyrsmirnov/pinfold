@@ -26,13 +26,12 @@ struct PlacemarkDetailView: View {
     @Environment(AppSettings.self) private var environmentSettings: AppSettings?
     @Environment(\.resourceCache) private var resourceCache
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
+    @Environment(NavigationRouter.self) private var router: NavigationRouter?
 
     // MARK: - State
 
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
-    /// Drives the push to the embedded map focused on this placemark ("Show on Embedded Map").
-    @State private var showOnMap = false
     /// Whether to force-show the picker (long-press on Open in Maps).
     @State private var forcePicker = false
     /// Fallbacks for macOS "Designed for iPad" navigation/sheet hosts that can drop typed
@@ -40,6 +39,17 @@ struct PlacemarkDetailView: View {
     /// environment instances.
     @State private var fallbackMapService = MapAppService()
     @State private var fallbackSettings = AppSettings()
+
+    /// The router that owns the detail column's path: the environment value when propagation
+    /// delivers it, else the shared instance published to `AppDependencies` at bootstrap.
+    /// This view is a pushed destination — the one hosting arrangement where the Mac
+    /// "Designed for iPad" runtime has historically dropped stack-root environment values
+    /// (see the fallbacks above) — and a dropped router would silently dead-button
+    /// "Show on Map". The fallback makes the push deterministic; both refer to the same
+    /// live instance.
+    private var activeRouter: NavigationRouter? {
+        router ?? AppDependencies.shared.router
+    }
 
     /// The rendered description: tags stripped, entities decoded, line breaks preserved, and
     /// `<a href>`/bare URLs/emails/phones turned into tappable links (scheme-allowlisted —
@@ -89,20 +99,6 @@ struct PlacemarkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { description = renderedDescription() }
         .toolbar { toolbarMenu }
-        .navigationDestination(isPresented: $showOnMap) {
-            // Open the embedded map showing every coordinate-bearing placemark in the file,
-            // zoomed to and with THIS one selected. `allPlacemarks.filter { coordinate != nil }`
-            // reproduces `PlacemarkOutline`'s "mappable" definition. Re-inject `annotations`:
-            // this map is pushed from an already-pushed view, the one case where stack-root
-            // environment propagation is unreliable (mirrors PlacemarkMapView's own exception).
-            PlacemarkMapView(
-                placemarks: document.root.allPlacemarks.filter { $0.coordinate != nil },
-                document: document,
-                entry: entry,
-                initialFocusKey: placemark.stableKey
-            )
-            .environment(annotations)
-        }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -241,7 +237,7 @@ struct PlacemarkDetailView: View {
             Menu {
                 if hasCoordinate {
                     Button {
-                        showOnMap = true
+                        activeRouter?.path.append(.map(focusKey: placemark.stableKey))
                     } label: {
                         Label("Show on Map", systemImage: "map")
                     }

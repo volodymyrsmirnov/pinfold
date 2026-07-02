@@ -7,16 +7,17 @@ import Testing
 /// The suite is `@MainActor` because it constructs MapKit views directly.
 @MainActor
 struct MapUserLocationTests {
-    @Test func userLocationEnabled_followsWithHeading() {
+    @Test func userLocationEnabled_doesNotEngageTracking() {
         let mapView = RecordingMapView()
 
         PlacemarkMapRepresentable.configureUserLocation(
             on: mapView, showsUserLocation: true, animated: false
         )
 
+        // Tracking is never auto-engaged: it resumes only from the per-file remembered
+        // state, or when the user taps the tracking button.
         #expect(mapView.showsUserLocation)
-        #expect(mapView.requestedTrackingMode == .followWithHeading)
-        #expect(mapView.requestedAnimated == false)
+        #expect(mapView.requestedTrackingMode == nil)
     }
 
     @Test func userLocationDisabled_clearsHeadingTracking() {

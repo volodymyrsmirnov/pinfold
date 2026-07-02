@@ -19,21 +19,23 @@ struct KMLDetailView: View {
 
     let entry: CatalogEntry
 
-    /// A one-shot deep-link target: the durable `stableKey` of the placemark to open, supplied
-    /// when this file was opened from a catalogue-wide hit (a "Places" search result, a favorite,
-    /// or a Spotlight result — see `HomeView`/`FavoritesView`/`RootView`). After the document is
-    /// parsed, the key is resolved to a `KMLPlacemark` and `PlacemarkDetailView` is pushed.
-    /// `nil` for a normal selection. Consumed once (then `onConsumePlacemarkKey` clears the
-    /// source so re-selecting the file normally doesn't re-push).
-    var initialPlacemarkKey: String?
+    /// A one-shot navigation payload: routes to push (and, for session restore, the
+    /// transient list state to seed) once the document is parsed. Supplied by `RootView` for
+    /// deep links (a single `.placemark` route) and session restore (the saved stack).
+    /// `nil` for a normal selection. Consumed once via `onConsumeRestore` (then the owner
+    /// clears its one-shot source so re-selecting the file normally doesn't re-push).
+    var initialRestore: RestoreBundle?
 
-    /// Called once after `initialPlacemarkKey` has been consumed, so the owner can clear its
-    /// one-shot source. Defaults to a no-op for callers (e.g. previews) that don't plumb it.
-    var onConsumePlacemarkKey: () -> Void = {}
+    /// Called once after `initialRestore` has been consumed, so the owner can clear its
+    /// one-shot source. Defaults to a no-op for callers that don't plumb it.
+    var onConsumeRestore: () -> Void = {}
 
     // MARK: - Environment
 
     @Environment(\.storageLocations) private var storage
+    @Environment(NavigationRouter.self) private var router: NavigationRouter?
+    @Environment(AppSettings.self) private var settings: AppSettings?
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - State
 
@@ -52,6 +54,11 @@ struct KMLDetailView: View {
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State private var outline: PlacemarkOutline?
+    /// Monotonic count of completed outline rebuilds. The scroll-restore task keys on THIS
+    /// (not `outline?.rows.count`): a rebuild can reorder rows without changing their count
+    /// — e.g. the nearest-first re-sort arriving on a flat, folderless file — and a
+    /// count-keyed id would silently never re-fire the pending-anchor retry.
+    @State private var outlineGeneration = 0
     /// One-shot location provider for distance display and the nearest-first sort. Requests a
     /// fix when the view appears; `lastLocation` is nil until it arrives / when denied.
     @State private var locationAuth = LocationAuthorization()
@@ -59,11 +66,13 @@ struct KMLDetailView: View {
     /// document order. Only takes effect once a location fix is known; see `effectiveSort`.
     @State private var nearestFirst = false
 
-    /// The placemark a deep link resolved to, driving a programmatic push of
-    /// `PlacemarkDetailView` via `.navigationDestination(item:)`. `nil` when no deep link is
-    /// active. Set by the load `.task` (new file) or `.onChange(of: initialPlacemarkKey)`
-    /// (file already open).
-    @State private var deepLinkTarget: PlacemarkRoute?
+    /// The outline row id to scroll to once rows are built — a one-shot from session
+    /// restore, consumed by the verified-retry scroll task (see `applyPendingScroll`).
+    @State private var pendingScrollRowID: String?
+
+    /// Live row geometry for scroll-anchor capture/restore. A plain class (not @Observable):
+    /// per-frame writes must not invalidate the view tree. See `RowFrameBox`.
+    @State private var rowFrames = RowFrameBox()
 
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
     /// toggles and document loads are not debounced (they go through a separate trigger).
@@ -104,24 +113,7 @@ struct KMLDetailView: View {
                 .accessibilityLabel("Sort")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    if let document {
-                        // Re-inject `annotations`: this map is pushed from KMLDetailView, which
-                        // is itself a pushed view, so the destination is hosted by the ancestor
-                        // NavigationStack and resolves its environment from the STACK ROOT — not
-                        // from the `.environment(annotations)` applied to this view's body below.
-                        // Without this, `annotations` is nil in the map, so favorite/visited
-                        // decoration (faded Seen pins, favorite stars) and the preview card's
-                        // Seen styling silently no-op. Same exception as PlacemarkMapView's own
-                        // onward push and the POI page's "Show on Map".
-                        PlacemarkMapView(
-                            placemarks: outline?.mappablePlacemarks ?? [],
-                            document: document,
-                            entry: entry
-                        )
-                        .environment(annotations)
-                    }
-                } label: {
+                NavigationLink(value: EntryRoute.map(focusKey: nil)) {
                     Image(systemName: "map")
                 }
                 .accessibilityLabel("Map")
@@ -144,35 +136,50 @@ struct KMLDetailView: View {
             collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
-            deepLinkTarget = nil
+            pendingScrollRowID = nil
+            rowFrames.reset()
             // Ask for a one-shot location fix so distances and the nearest sort can light up.
             locationAuth.request()
             await loadDocument()
-            // Deep link: if this file was opened from a placemark hit, resolve the carried
-            // stableKey against the freshly-parsed document and push its detail page. Consume
-            // the one-shot key (whether or not it resolved) so a later normal re-selection of
-            // the same file doesn't re-push, and so a stale key doesn't leak into another file.
-            if let initialPlacemarkKey, !initialPlacemarkKey.isEmpty, let document,
-               let match = document.root.firstPlacemark(withStableKey: initialPlacemarkKey)
-            {
-                deepLinkTarget = PlacemarkRoute(placemark: match)
-            }
-            if initialPlacemarkKey != nil {
-                onConsumePlacemarkKey()
-            }
+            // The detached parse doesn't observe this task's cancellation, so a reselect
+            // mid-parse lets this continuation run to completion. Bail before touching the
+            // SHARED router path — a zombie load for one file must not set its routes on
+            // another file's stack (pre-refactor this wrote harmless view-local state; the
+            // shared router made it cross-file).
+            if Task.isCancelled { return }
+            // One-shot navigation payload: seed the transient list state (session restore
+            // only — a deep link must not clobber it), validate the saved routes against the
+            // freshly parsed document, and set the stack. Seeding happens BEFORE the
+            // immediate outline trigger fires, so the first outline is built once, in the
+            // right shape. Consume whether or not routes resolved, so a stale payload
+            // doesn't leak into another file.
+            applyInitialRestore()
         }
-        // Second consume path: a deep link into the file that is ALREADY open. The view keeps
-        // its identity (`.id(entry.id)` unchanged), so the load `.task` above does NOT refire —
-        // but SwiftUI re-evaluates the body with the new `initialPlacemarkKey` param, and this
-        // `.onChange` observes the nil→key transition and pushes against the already-loaded
-        // document. The guard's `let document` also covers the rare mid-load race: if the
-        // document isn't ready yet, this no-ops WITHOUT consuming, and the in-flight load `.task`
-        // (which reads `initialPlacemarkKey` after `loadDocument()`) handles it instead.
-        .onChange(of: initialPlacemarkKey) { _, newValue in
-            guard let newValue, !newValue.isEmpty, let document,
-                  let match = document.root.firstPlacemark(withStableKey: newValue) else { return }
-            deepLinkTarget = PlacemarkRoute(placemark: match)
-            onConsumePlacemarkKey()
+        // Second consume path: a deep link into the file that is ALREADY open. The view
+        // keeps its identity (`.id(entry.id)` unchanged) so the load `.task` does NOT
+        // refire — but SwiftUI re-evaluates the body with the new `initialRestore` param,
+        // and this `.onChange` observes the nil→bundle transition and pushes against the
+        // already-loaded document. Routes only — never the transient list state (this path
+        // is only reachable for deep links; restore bundles arrive with a fresh identity).
+        // The `let document` guard covers the mid-load race: not ready yet → no-op
+        // WITHOUT consuming. (A bundle arriving mid-load is dropped once the load finishes —
+        // the running task captured the pre-arrival view value — matching the pre-refactor
+        // behavior; the next selection change clears the stale one-shot.)
+        .onChange(of: initialRestore) { _, newValue in
+            guard let newValue, !newValue.routes.isEmpty, let document else { return }
+            let valid = EntryRoute.validatedForRestore(newValue.routes) {
+                document.root.firstPlacemark(withStableKey: $0) != nil
+            }
+            guard !valid.isEmpty else { return }
+            router?.path.append(contentsOf: valid)
+            onConsumeRestore()
+        }
+        // The per-file half of the resume snapshot (RootView writes selection + routes on
+        // the same transition). `.inactive` always precedes backgrounding, BEFORE iOS's
+        // snapshot passes can re-lay the list out under us.
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .inactive else { return }
+            saveResumeSlice()
         }
         // The outline rebuild is driven by TWO independent triggers so the debounce policy
         // derives from *which trigger fired*, never from mutable post-build state (a single
@@ -201,29 +208,152 @@ struct KMLDetailView: View {
         )) {
             await buildOutlineNow()
         }
-        // Programmatic push for a resolved deep link. `deepLinkTarget` is only set once the
-        // document is loaded, so `if let document` always succeeds here. Lives on the detail
-        // column's NavigationStack root (this view), so the push lands in the detail column and
-        // inherits the `.environment(annotations)` injected just below — the same environment
-        // the list's own `NavigationLink`s rely on.
-        .navigationDestination(item: $deepLinkTarget) { route in
-            if let document {
-                // Re-inject `annotations` for the same reason as the list-row push below: a
-                // destination pushed onto the ancestor NavigationStack resolves its environment
-                // from the stack root, not from this view's body-level injection.
-                PlacemarkDetailView(placemark: route.placemark, document: document, entry: entry)
-                    .environment(annotations)
-            }
+        // THE destination table: every EntryRoute pushed anywhere in this file's stack —
+        // list rows, the toolbar map, the POI page's "Show on Map", the map's preview card,
+        // deep links, session restore — resolves here, the one place that has the parsed
+        // `document`, `outline`, and `annotations`. Registered on the stack root's content,
+        // so pushed views need no registration of their own. Re-injecting `annotations` is
+        // needed ONCE here (a pushed destination resolves its environment from the stack
+        // root, not from this view's body-level injection below).
+        .navigationDestination(for: EntryRoute.self) { route in
+            destinationView(for: route)
         }
         // This injection reaches this view's OWN body uses (the search/context swipe favorite &
         // visited actions and the in-list `PlacemarkRow` strikethrough) — but NOT destinations
         // pushed onto the stack. KMLDetailView is the stack's root *content*, not the stack
         // itself (the NavigationStack lives in RootView); a pushed destination resolves its
         // environment from the stack, so content-level injection here is dropped for the map and
-        // the placemark detail. Each push site therefore re-injects `annotations` explicitly
-        // (the list row, the deep-link destination, the toolbar map, and the POI page's
-        // "Show on Map") — matching how RootView injects the shared service bundle on the stack.
+        // the placemark detail. The destination table re-injects `annotations` once instead.
         .environment(annotations)
+    }
+
+    /// Applies the one-shot `initialRestore` payload against the freshly loaded document.
+    /// See the load `.task` for sequencing; kept out of the closure to keep its SIL small.
+    private func applyInitialRestore() {
+        guard let initialRestore, let document else {
+            if initialRestore != nil { onConsumeRestore() }
+            return
+        }
+        if initialRestore.entryFolderName != nil {
+            // Session restore: seed the saved transient state. (Deep-link bundles have a
+            // nil folder name and leave the fresh defaults alone.)
+            searchText = initialRestore.searchText
+            collapsedFolderIDs = initialRestore.collapsedFolderIDs
+            nearestFirst = initialRestore.nearestFirst
+            pendingScrollRowID = initialRestore.scrollAnchorRowID
+        }
+        let valid = EntryRoute.validatedForRestore(initialRestore.routes) {
+            document.root.firstPlacemark(withStableKey: $0) != nil
+        }
+        router?.path = valid
+        onConsumeRestore()
+    }
+
+    /// Applies the one-shot scroll anchor with a verified retry. `ScrollViewReader
+    /// .scrollTo` right after a `List`'s data lands is flaky (the collection view may not
+    /// have realized the target yet), so the target row's live geometry is checked and the
+    /// scroll re-issued — bounded — until it took. The successful landing offset is stored
+    /// in `rowFrames.restoredTopOffset` to calibrate the save-side anchor reference.
+    ///
+    /// An anchor that doesn't resolve in the current outline is dropped — EXCEPT while a
+    /// nearest-first restore is still waiting for its location fix (the anchor was recorded
+    /// against the flat nearest outline, whose row ids only exist after the re-sort; the
+    /// outline rebuild on fix arrival re-fires this task via its `outlineGeneration` id).
+    private func applyPendingScroll(using proxy: ScrollViewProxy) async {
+        guard let target = pendingScrollRowID, let outline else { return }
+        guard outline.rows.contains(where: { $0.id == target }) else {
+            if !(nearestFirst && locationAuth.lastLocation == nil) {
+                pendingScrollRowID = nil
+            }
+            return
+        }
+        for _ in 0 ..< 8 {
+            proxy.scrollTo(target, anchor: .top)
+            try? await Task.sleep(for: .milliseconds(120))
+            if Task.isCancelled { return }
+            guard let frame = rowFrames.frames[target],
+                  let listTop = rowFrames.listFrame?.minY else { continue }
+            let offset = frame.minY - listTop
+            // Settled with the row's top in the list's top region → done. The window
+            // tolerates the inset-grouped content-top padding; the exact landing offset is
+            // recorded so the save side anchors against the same reference line.
+            if offset >= -4, offset < 120 {
+                rowFrames.restoredTopOffset = offset
+                pendingScrollRowID = nil
+                return
+            }
+        }
+    }
+
+    /// Writes the transient list state + scroll anchor to the resume slice. The scroll
+    /// anchor is computed from live row geometry captured by `rowFrames` (see the geometry
+    /// instrumentation in `contentList`/`outlineRow` and `applyPendingScroll`); `anchorRowID()`
+    /// returns nil — and only the transient state is saved — until that geometry has been observed.
+    private func saveResumeSlice() {
+        guard let settings, settings.restoreSessionEnabled, document != nil else { return }
+        // Assert the folder name before writing the slice so the two `.inactive` writers
+        // (RootView owns selection + routes) are order-independent even when the stored
+        // folder is stale — e.g. the restore toggle was enabled mid-session, leaving the
+        // folder nil: if RootView's nil→folder write ran AFTER this slice write, its
+        // clear-on-different-folder cascade would wipe the slice just saved. Same-value
+        // re-writes preserve the slice, so the steady state is untouched.
+        settings.resumeEntryFolderName = entry.storageFolderName
+        settings.resumeSearchText = searchText
+        settings.resumeCollapsedFolderIDs = Array(collapsedFolderIDs)
+        settings.resumeNearestFirst = nearestFirst
+        // A pushed screen empties `rowFrames` (covered rows fire onDisappear), so a nil
+        // anchor here usually means "geometry unobservable", not "scrolled to the top".
+        // Keep the previously saved anchor in that case — within the same file it is
+        // strictly better than nil, and a folder change already clears the slice.
+        if let anchor = rowFrames.anchorRowID() {
+            settings.resumeScrollAnchorRowID = anchor
+        }
+    }
+
+    /// Resolves a pushed route into its screen. A `.placemark` whose stableKey no longer
+    /// resolves renders empty — unreachable in practice (routes are validated before
+    /// pushing) but a safe no-op if the document changes under an open stack.
+    @ViewBuilder
+    private func destinationView(for route: EntryRoute) -> some View {
+        if let document {
+            switch route {
+            case let .placemark(stableKey):
+                if let match = document.root.firstPlacemark(withStableKey: stableKey) {
+                    PlacemarkDetailView(placemark: match, document: document, entry: entry)
+                        .environment(annotations)
+                }
+            case let .map(focusKey):
+                // "Show on Map" (focusKey != nil) plots EVERY coordinate-bearing placemark
+                // (the POI page has no search context); the toolbar/restored map (focusKey
+                // == nil) plots the live filtered outline — both exactly as before the
+                // route refactor.
+                if let focusKey {
+                    PlacemarkMapView(
+                        placemarks: document.root.allPlacemarks.filter { $0.coordinate != nil },
+                        document: document,
+                        entry: entry,
+                        initialFocusKey: focusKey
+                    )
+                    .environment(annotations)
+                } else if let outline {
+                    PlacemarkMapView(
+                        placemarks: outline.mappablePlacemarks,
+                        document: document,
+                        entry: entry,
+                        initialFocusKey: nil
+                    )
+                    .environment(annotations)
+                } else {
+                    // A restored `.map` route can be pushed before the first outline build
+                    // completes. Creating the map with an empty placemark set would let the
+                    // pin-reconcile re-fit override the saved per-file camera once pins land —
+                    // hold a placeholder until the outline exists, so the map is created once,
+                    // with its real content. (`outline` never goes back to nil after the first
+                    // build, so this placeholder can't reappear later.)
+                    ProgressView()
+                }
+            }
+        }
     }
 
     // MARK: - Outline rebuild
@@ -238,25 +368,6 @@ struct KMLDetailView: View {
         let nearestFirst: Bool
         let locationLat: Double?
         let locationLon: Double?
-    }
-
-    /// Identifies a programmatic push target by the placemark's parse-`id`, which is unique
-    /// within a single loaded document (the only scope this route lives in). A wrapper exists
-    /// because `KMLPlacemark` is `Equatable`/`Identifiable` but not `Hashable`, which
-    /// `.navigationDestination(item:)` requires.
-    private struct PlacemarkRoute: Identifiable, Hashable {
-        let placemark: KMLPlacemark
-        var id: String {
-            placemark.id
-        }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.placemark.id == rhs.placemark.id
-        }
-
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(placemark.id)
-        }
     }
 
     /// The sort to build the outline with: `.nearest` only when the user chose it AND a location
@@ -284,6 +395,7 @@ struct KMLDetailView: View {
         }.value
         if Task.isCancelled { return }
         outline = built
+        outlineGeneration += 1
     }
 
     // MARK: - Load document
@@ -298,8 +410,10 @@ struct KMLDetailView: View {
                 let data = try UbiquityContainer.readDownloadingIfNeeded(fileURL)
                 return try KMLReader.read(data: data)
             }.value
+            if Task.isCancelled { return }
             document = parsedKML.document
         } catch {
+            if Task.isCancelled { return }
             loadError = error
         }
     }
@@ -316,25 +430,41 @@ struct KMLDetailView: View {
         // Snapshot the user's location ONCE per list build so every row shares one fix instead
         // of re-reading `locationAuth` per row. `nil` → rows show no distance.
         let location = locationAuth.lastLocation
-        List {
-            searchSection
-            if let outline {
-                if outline.rows.isEmpty, !query.isEmpty {
-                    Section {
-                        Text("No placemarks match \u{201C}\(query)\u{201D}.")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                } else {
-                    Section {
-                        ForEach(outline.rows) { row in
-                            outlineRow(row, document: document, location: location)
+        ScrollViewReader { proxy in
+            List {
+                searchSection
+                if let outline {
+                    if outline.rows.isEmpty, !query.isEmpty {
+                        Section {
+                            Text("No placemarks match \u{201C}\(query)\u{201D}.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                    } else {
+                        Section {
+                            ForEach(outline.rows) { row in
+                                outlineRow(row, document: document, location: location)
+                            }
                         }
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .onGeometryChange(for: CGRect.self) { geometry in
+                geometry.frame(in: .global)
+            } action: { frame in
+                rowFrames.listFrame = frame
+            }
+            // Appearance-bound AND change-bound: fires on appear (covers pop-back — the
+            // "one more attempt when the list becomes visible again" case) and on every
+            // completed outline rebuild via the generation counter (covers the fast-launch
+            // race where rows land before the List attaches, and re-sorts that keep the
+            // row count constant, like the nearest-first re-sort when the location fix
+            // arrives on a folderless file).
+            .task(id: outlineGeneration) {
+                await applyPendingScroll(using: proxy)
+            }
         }
-        .listStyle(.insetGrouped)
     }
 
     // MARK: - Outline row
@@ -351,9 +481,21 @@ struct KMLDetailView: View {
         case let .folder(name, id):
             folderRow(name: name, id: id)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
         case let .placemark(placemark):
             placemarkLink(placemark, document: document, location: location)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
         }
     }
 
@@ -427,20 +569,13 @@ struct KMLDetailView: View {
 
     // MARK: - Placemark navigation link
 
+    /// Known accepted edge: two occurrences of the same POI share a `stableKey` (it hashes
+    /// `name|lat|lon`), so both rows now push the FIRST occurrence's page — the same
+    /// first-match semantics every existing deep link (Spotlight, favorites) already has.
     private func placemarkLink(
         _ placemark: KMLPlacemark, document: KMLDocument, location: CLLocation?
     ) -> some View {
-        NavigationLink(destination: PlacemarkDetailView(
-            placemark: placemark,
-            document: document,
-            entry: entry
-        )
-        // Re-inject `annotations`: the pushed detail page is hosted by the ancestor
-        // NavigationStack and resolves its environment from the stack root, not from the
-        // `.environment(annotations)` this view applies to its own body. Without this the
-        // detail page's `annotations` is nil — its Favorite/Seen menu items vanish and its
-        // "Show on Map" forwards nil, so map pins lose favorite/visited decoration.
-        .environment(annotations)) {
+        NavigationLink(value: EntryRoute.placemark(stableKey: placemark.stableKey)) {
             PlacemarkRow(
                 placemark: placemark,
                 document: document,
