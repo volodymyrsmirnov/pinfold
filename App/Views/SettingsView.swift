@@ -23,6 +23,7 @@ struct SettingsView: View {
             defaultMapAppSection
             mapAppsSection
             mapViewSection
+            sessionSection
             iCloudSection(settings: $settings)
         }
         .navigationTitle("Settings")
@@ -69,6 +70,20 @@ struct SettingsView: View {
         } footer: {
             Text("Groups nearby pins into numbered clusters when zoomed out. "
                 + "Turn off to always show every pin individually.")
+        }
+    }
+
+    // MARK: - Session section
+
+    @ViewBuilder
+    private var sessionSection: some View {
+        @Bindable var settings = settings
+        Section {
+            Toggle("Restore Session on Launch", isOn: $settings.restoreSessionEnabled)
+        } header: {
+            Text("Session")
+        } footer: {
+            Text("Reopens the file, screen, and position you were viewing when the app restarts.")
         }
     }
 
