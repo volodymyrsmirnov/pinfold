@@ -111,7 +111,32 @@ extension PlacemarkMapRepresentable {
             styleContainer.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        let stack = UIStackView(arrangedSubviews: [styleContainer, trackingContainer])
+        // Fit-all-pins button: restores the default framing (and, by design, overwrites
+        // the remembered per-file camera with it — see Coordinator.fitAllPins).
+        let fitButton = UIButton(configuration: .plain())
+        fitButton.translatesAutoresizingMaskIntoConstraints = false
+        fitButton.setImage(
+            UIImage(systemName: "arrow.down.backward.and.arrow.up.forward",
+                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)),
+            for: .normal
+        )
+        fitButton.accessibilityLabel = String(
+            localized: "Fit All Pins",
+            comment: "Accessibility label for the map button that zooms to show every pin."
+        )
+        fitButton.addAction(UIAction { [weak coordinator] _ in
+            coordinator?.fitAllPins()
+        }, for: .primaryActionTriggered)
+        let fitContainer = Self.glassContainer()
+        fitContainer.contentView.addSubview(fitButton)
+        NSLayoutConstraint.activate([
+            fitButton.centerXAnchor.constraint(equalTo: fitContainer.contentView.centerXAnchor),
+            fitButton.centerYAnchor.constraint(equalTo: fitContainer.contentView.centerYAnchor),
+            fitContainer.widthAnchor.constraint(equalToConstant: 44),
+            fitContainer.heightAnchor.constraint(equalToConstant: 44),
+        ])
+
+        let stack = UIStackView(arrangedSubviews: [styleContainer, fitContainer, trackingContainer])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false

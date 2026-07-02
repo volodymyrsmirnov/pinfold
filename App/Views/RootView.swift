@@ -270,6 +270,10 @@ struct RootView: View {
         await drainDocumentsInbox()
         await catalog.reload()
         restoreSessionIfNeeded()
+        // Camera-store hygiene: drop cameras for files no longer anywhere in the catalogue
+        // (active OR trashed — restoring from the trash keeps the camera). Only kicks in
+        // past the cap; below it stale entries are harmless bytes.
+        MapCameraStore().pruneIfNeeded(keeping: Set(catalog.entries.map(\.storageFolderName)))
     }
 
     // MARK: - Session restoration

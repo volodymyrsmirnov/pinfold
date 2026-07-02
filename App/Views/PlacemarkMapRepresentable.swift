@@ -37,6 +37,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     /// persistence are owned entirely by this representable / its coordinator.
     static let styleDefaultsKey = "embeddedMapStyle"
 
+    /// Per-file remembered camera. Stateless wrapper over UserDefaults, so constructing it
+    /// per representable value is free.
+    let cameraStore = MapCameraStore()
+
     /// Above this many placemarks, clustering is forced on regardless of the user's
     /// `clusterPins` setting: MapKit collapses (drops frames, stops responding) when asked
     /// to lay out tens of thousands of individual, non-colliding annotation views, so an
@@ -97,16 +101,21 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
         let coordinates = placemarks.compactMap(\.coordinate)
         let focusKey = initialFocusKey
+        let savedCamera = cameraStore.camera(forFolderName: entry.storageFolderName)
         mapView.onFirstLayout = { [weak mapView, weak coordinator = context.coordinator] in
-            guard let mapView else { return }
+            guard let mapView, let coordinator else { return }
+            coordinator.suppressCameraSave = true
             // Initial-focus deep link ("Show on Embedded Map"): if the carried key resolves
-            // to a realized pin, zoom to it and select it (surfacing its preview card) rather
-            // than fitting all pins. Falls back to fit-all when nil or unmatched.
-            if let focusKey, let annotation = coordinator?.annotationsByKey[focusKey] {
+            // to a realized pin, zoom to it and select it (surfacing its preview card).
+            // Otherwise a remembered per-file camera wins over the fit-all default.
+            if let focusKey, let annotation = coordinator.annotationsByKey[focusKey] {
                 Self.focus(on: annotation, in: mapView)
+            } else if let savedCamera {
+                Self.apply(savedCamera, to: mapView)
             } else {
                 Self.fit(coordinates: coordinates, overlays: overlays, in: mapView, animated: false)
             }
+            coordinator.didInitialFrame = true
         }
 
         addControls(to: mapView, coordinator: context.coordinator)
@@ -172,7 +181,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             }
             coordinator.lastDesiredKeys = desiredKeys
 
-            // Re-fit to the new pin + overlay set (mirrors the first-layout fit).
+            // Re-fit to the new pin + overlay set (mirrors the first-layout fit). It is
+            // programmatic: its settle callback must not overwrite the remembered camera.
+            coordinator.suppressCameraSave = true
             let allOverlays = coordinator.overlaysByKey.values.flatMap(\.self)
             Self.fit(
                 coordinates: placemarks.compactMap(\.coordinate),
@@ -308,6 +319,29 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         mapView.selectAnnotation(annotation, animated: false)
     }
 
+    /// Applies a persisted camera, unanimated (this is the initial framing).
+    static func apply(_ state: MapCameraState, to mapView: MKMapView) {
+        let camera = MKMapCamera(
+            lookingAtCenter: CLLocationCoordinate2D(latitude: state.latitude, longitude: state.longitude),
+            fromDistance: state.distance,
+            pitch: CGFloat(state.pitch),
+            heading: state.heading
+        )
+        mapView.setCamera(camera, animated: false)
+    }
+
+    /// Snapshots the map's current camera for persistence.
+    static func cameraState(of mapView: MKMapView) -> MapCameraState {
+        let camera = mapView.camera
+        return MapCameraState(
+            latitude: camera.centerCoordinate.latitude,
+            longitude: camera.centerCoordinate.longitude,
+            distance: camera.centerCoordinateDistance,
+            heading: camera.heading,
+            pitch: Double(camera.pitch)
+        )
+    }
+
     // MARK: - Coordinator
 
     final class Coordinator: NSObject, MKMapViewDelegate {
@@ -320,6 +354,14 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         weak var styleButton: UIButton?
         var currentStyle: EmbeddedMapStyle?
         var lastShowsUserLocation = false
+        /// Set once the first-layout framing (focus / saved camera / fit-all) has been
+        /// applied; region changes before that are layout noise and must not be saved.
+        var didInitialFrame = false
+        /// One-shot suppression for the region-settle callback of a programmatic framing
+        /// (initial framing, reconcile re-fit) so it doesn't overwrite the saved camera.
+        /// The fit-all BUTTON deliberately does not set it: its settle callback saving the
+        /// fit-all framing is what makes the button a natural "reset".
+        var suppressCameraSave = false
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
@@ -389,6 +431,36 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             UserDefaults.standard.set(style.rawValue, forKey: PlacemarkMapRepresentable.styleDefaultsKey)
             // Rebuild so the checkmark moves to the new selection.
             styleButton?.menu = makeStyleMenu()
+        }
+
+        /// Fits all pins + overlays (the pre-camera-persistence default framing). Wired to
+        /// the control column's fit-all button. Deliberately does NOT suppress the settle
+        /// save: the resulting framing is persisted, making this the "reset" for the
+        /// remembered camera.
+        func fitAllPins() {
+            guard let mapView else { return }
+            let overlays = overlaysByKey.values.flatMap(\.self)
+            PlacemarkMapRepresentable.fit(
+                coordinates: parent.placemarks.compactMap(\.coordinate),
+                overlays: overlays, in: mapView, animated: true
+            )
+        }
+
+        // MARK: Camera persistence
+
+        /// Fires once per settled gesture or animation — the per-file camera save point.
+        /// User-tracking pans settle through here too and are saved deliberately: "where
+        /// the map was following me" IS where the user was.
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated _: Bool) {
+            if suppressCameraSave {
+                suppressCameraSave = false
+                return
+            }
+            guard didInitialFrame else { return }
+            parent.cameraStore.setCamera(
+                PlacemarkMapRepresentable.cameraState(of: mapView),
+                forFolderName: parent.entry.storageFolderName
+            )
         }
 
         // MARK: Annotation views
