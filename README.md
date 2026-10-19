@@ -4,6 +4,8 @@
 
 # Pinfold
 
+> 📝 Blog post: [Pinfold – my opinionated iOS and OSX KML viewer](https://volodymyr.smirnov.im/writing/pinfold/)
+
 **An offline catalogue for your KML & KMZ files.**
 
 Import the places you care about once — then browse and navigate them anywhere, no signal required.
