@@ -15,7 +15,6 @@ extension RootView {
         await drainDocumentsInbox()
         await catalog.reload()
         didBootstrap = true
-        await reconcileDerivedState()
         // Replay a deep link that raced bootstrap (see `pendingColdLaunchTarget`) — it must
         // win over session restore, which `restoreSessionIfNeeded`'s selection guard then
         // enforces automatically.
@@ -36,6 +35,9 @@ extension RootView {
         // (active OR trashed — restoring from the trash keeps the camera). Only kicks in
         // past the cap; below it stale entries are harmless bytes.
         MapCameraStore().pruneIfNeeded(keeping: Set(catalog.entries.map(\.storageFolderName)))
+        // Last, so the first 2.0 launch (which decodes every index) never delays the replay of a
+        // deep link or the session restore. Serialised with any storage application.
+        await storageQueue.run { await reconcileDerivedState() }
     }
 
     /// Resolves the active root from the current sync preference, points the catalogue at
@@ -46,7 +48,21 @@ extension RootView {
     ///   already where the resolved root expects them).
     func applyStorage(migrate: Bool) async {
         // Serialised with every other application (launch, toggle, re-resolve).
-        await storageQueue.run { await applyStorageNow(migrate: migrate) }
+        await storageQueue.run {
+            await withImportsHeld { await applyStorageNow(migrate: migrate) }
+        }
+    }
+
+    /// Runs `body` with the import queue held and idle: an in-flight commit finishes before the
+    /// storage application starts, nothing commits into a root that is being left, and queued
+    /// items resume (into the new root) once `body` has repointed the catalogue.
+    private func withImportsHeld(_ body: () async -> Void) async {
+        await importCoordinator.holdAndWaitUntilIdle()
+        await catalog.suspendBackgroundWork()
+        await body()
+        catalog.resumeBackgroundWork()
+        importCoordinator.storageDidChange()
+        importCoordinator.release(catalog: catalog, cache: resourceCache)
     }
 
     /// The body of `applyStorage`; only ever runs inside `storageQueue`.
@@ -82,11 +98,13 @@ extension RootView {
         // Queued behind any in-flight application; state is re-checked once it is our turn
         // (a toggle may have run and already repointed the root meanwhile).
         await storageQueue.run {
-            guard settings.syncEnabled else { return }
-            let resolution = await resolveStorage()
-            guard resolution.status != syncStatus.state
-                || resolution.identityToken != syncStatus.identityToken else { return }
-            await applyStorageNow(migrate: false)
+            await withImportsHeld {
+                guard settings.syncEnabled else { return }
+                let resolution = await resolveStorage()
+                guard resolution.status != syncStatus.state
+                    || resolution.identityToken != syncStatus.identityToken else { return }
+                await applyStorageNow(migrate: false)
+            }
         }
     }
 

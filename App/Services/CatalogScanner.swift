@@ -163,6 +163,10 @@ struct CatalogScanner {
         let folderNames = (try? storage.entryFolderNames()) ?? []
         var didWork = false
         for name in folderNames {
+            // A migration cancels this pass; stop between folders (never mid-folder).
+            if Task.isCancelled {
+                break
+            }
             let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
             if FileManager.default.fileExists(atPath: resourcesDir.path) {
                 // Already materialized once. Retry any remote downloads that failed earlier

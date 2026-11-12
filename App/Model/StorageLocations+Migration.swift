@@ -40,8 +40,9 @@ extension StorageLocations {
     /// `resources` cache root, so the local cache root (which sits inside the local root in synced
     /// mode) is never moved as if it were an entry.
     ///
-    /// Creates the new root if absent. Skips any folder whose name already exists at the
-    /// destination (the destination is authoritative) without recording a failure. Per-folder
+    /// Creates the new root if absent. A destination that holds only a derivable `resources`
+    /// cache is replaced by the moving entry; any other pre-existing destination is left alone
+    /// (never overwritten) and recorded as a failure so the user is told. Per-folder
     /// failures are collected and the loop continues. Returns an empty report when the roots are
     /// equal or the old root is absent. Only throws for failures *before* the per-folder loop.
     @discardableResult
@@ -60,7 +61,11 @@ extension StorageLocations {
         for name in try entryFolderNames(in: old.root) {
             let source = old.root.appendingPathComponent(name, isDirectory: true)
             let dest = new.root.appendingPathComponent(name, isDirectory: true)
-            if fm.fileExists(atPath: dest.path) {
+            if fm.fileExists(atPath: dest.path), !clearReplaceableDestination(dest) {
+                // A real entry already lives there: never overwrite it, never skip silently.
+                report.failed.append(MigrationFailure(
+                    folderName: name, error: CocoaError(.fileWriteFileExists)
+                ))
                 continue
             }
             let plan = CacheMovePlan(old: old, new: new, name: name)
@@ -79,6 +84,29 @@ extension StorageLocations {
             }
         }
         return report
+    }
+
+    /// A destination folder that holds nothing but a derivable `resources` cache (typically
+    /// re-created by a background refresh after the entry moved away) is replaceable: the cache
+    /// is deleted and the empty folder removed so the real entry can move in. Returns `false`,
+    /// touching nothing, when the destination holds anything else.
+    private static func clearReplaceableDestination(_ dest: URL) -> Bool {
+        let fm = FileManager.default
+        guard isRealDirectory(dest),
+              let children = try? fm.contentsOfDirectory(at: dest, includingPropertiesForKeys: nil)
+        else { return false }
+        let cache = dest.appendingPathComponent(reservedCacheFolderName, isDirectory: true)
+        let onlyCache = children.allSatisfy { $0.lastPathComponent == reservedCacheFolderName && isRealDirectory($0) }
+        guard onlyCache else { return false }
+        do {
+            if !children.isEmpty {
+                try fm.removeItem(at: cache)
+            }
+            try coordinatedRemove(at: dest)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private static func moveFolder(

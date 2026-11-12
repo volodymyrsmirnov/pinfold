@@ -134,7 +134,13 @@ final class ImportCoordinator {
     /// While `true` nothing is drained: items queue up. Held from launch until the first storage
     /// resolution (iCloud vs local) finishes, so no import commits into or checks against the
     /// wrong root.
-    private(set) var isHeld = false
+    var isHeld: Bool {
+        holdCount > 0
+    }
+
+    /// Nested holds: launch, and every storage application (toggle, recovery, re-resolve), each
+    /// hold once and release once; draining resumes only when all have released.
+    private var holdCount = 0
 
     init(failureLog: ImportFailureLog? = nil) {
         self.failureLog = failureLog
@@ -144,12 +150,27 @@ final class ImportCoordinator {
 
     /// Stops draining until `release` is called; enqueued items wait in the queue.
     func hold() {
-        isHeld = true
+        holdCount += 1
+    }
+
+    /// Holds and then waits for the item currently being read, committed and reloaded to
+    /// finish, so nothing is mid-commit when the storage root is about to change. Items still
+    /// queued stay queued (an item stalled on a duplicate prompt counts as idle).
+    func holdAndWaitUntilIdle() async {
+        hold()
+        await processingTask?.value
+    }
+
+    /// The active root changed: hashes remembered as "committed, not yet visible" referred to
+    /// the previous root, so a manual re-import of the same file must not be dropped for them.
+    func storageDidChange() {
+        recentlyCommittedHashes.removeAll()
     }
 
     /// Resumes draining and starts on anything queued while held.
     func release(catalog: Catalog, cache: ResourceCache) {
-        isHeld = false
+        holdCount = max(0, holdCount - 1)
+        guard !isHeld else { return }
         if !queue.isEmpty {
             startProcessingIfNeeded(catalog: catalog, cache: cache)
         }
@@ -282,7 +303,7 @@ final class ImportCoordinator {
 
     /// Processes queued items one at a time until the queue empties or a duplicate stalls it.
     private func drainQueue(catalog: Catalog, cache: ResourceCache) async {
-        while pendingDuplicate == nil, !queue.isEmpty {
+        while !isHeld, pendingDuplicate == nil, !queue.isEmpty {
             let item = queue.removeFirst()
             await importItem(item, catalog: catalog, cache: cache)
         }
