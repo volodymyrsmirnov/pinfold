@@ -10,10 +10,7 @@ extension StorageLocations {
     func originalFileURL(inFolderNamed name: String) -> URL? {
         let folder = root.appendingPathComponent(name, isDirectory: true)
         let fm = FileManager.default
-        if let named = sidecarSourceFilename(inFolderNamed: name),
-           named == (named as NSString).lastPathComponent,
-           !ImportFormats.reservedNames.contains(named)
-        {
+        if let named = sidecarSourceFilename(inFolderNamed: name), isPlainOriginalName(named) {
             let url = folder.appendingPathComponent(named)
             if fm.fileExists(atPath: url.path) {
                 return url
@@ -32,6 +29,11 @@ extension StorageLocations {
                 return lhs == rhs ? $0.lastPathComponent < $1.lastPathComponent : lhs < rhs
             }
             .first
+    }
+
+    /// A bare file name (no path components) that is not the sidecar itself.
+    private func isPlainOriginalName(_ named: String) -> Bool {
+        named == (named as NSString).lastPathComponent && !ImportFormats.reservedNames.contains(named)
     }
 
     private static func rank(_ url: URL) -> Int {

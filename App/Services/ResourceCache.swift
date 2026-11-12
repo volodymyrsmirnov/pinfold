@@ -175,9 +175,7 @@ final class ResourceCache: Sendable {
     ///   - resourcesDir: Destination `resources/` directory.
     func downloadRemote(_ hrefs: [String], to resourcesDir: URL) async {
         var remote = hrefs.filter(Self.isRemoteHref)
-        // Count cap (DoS bound): a crafted file can list thousands of hrefs. Keep the first N
-        // in input order so the cap is deterministic, and drop the rest before recording or
-        // downloading anything.
+        // Count cap (DoS bound): keep the first N in input order (deterministic), drop the rest.
         if remote.count > maxRemoteResourcesPerEntry {
             let dropped = remote.count - maxRemoteResourcesPerEntry
             let cap = maxRemoteResourcesPerEntry
@@ -211,18 +209,31 @@ final class ResourceCache: Sendable {
         await withTaskGroup(of: Void.self) { group in
             var iterator = due.makeIterator()
             for _ in 0 ..< maxConcurrentDownloads {
-                guard let href = iterator.next() else { break }
+                guard mayFetch(in: resourcesDir), let href = iterator.next() else { break }
                 group.addTask { await self.fetchOne(href, to: resourcesDir) }
             }
             while await group.next() != nil {
-                guard let href = iterator.next() else { continue }
+                guard mayFetch(in: resourcesDir), let href = iterator.next() else { continue }
                 group.addTask { await self.fetchOne(href, to: resourcesDir) }
             }
         }
     }
 
+    /// Whether a request may start now (re-read before every request): not cancelled, not
+    /// deferred, and the current policy and consent allow it.
+    private func mayFetch(in resourcesDir: URL) -> Bool {
+        guard !Task.isCancelled else { return false }
+        let state = store.state(in: resourcesDir)
+        guard !state.deferredUntilOpened else { return false }
+        switch policy() {
+        case .never: return false
+        case .ask: return state.consent
+        case .always: return true
+        }
+    }
+
     private func fetchOne(_ href: String, to resourcesDir: URL) async {
-        guard let url = URL(string: href) else { return }
+        guard let url = URL(string: href), mayFetch(in: resourcesDir) else { return }
         // App Transport Security blocks plain http loads, so fetch over https. Many KML
         // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
         // hosts also serve https. The manifest is still keyed by the original `href`
@@ -273,7 +284,9 @@ final class ResourceCache: Sendable {
         store.updateState(in: resourcesDir) { state in
             var entry = state.hrefs[href] ?? DownloadState.HrefState(attempts: 0, nextAttemptAt: nil)
             entry.attempts += 1
-            if isNonImage, entry.attempts >= maxNonImageAttempts {
+            // Only 2xx non-image responses count toward giving up (not HTTP/transport failures).
+            if isNonImage { entry.nonImageResponses += 1 }
+            if isNonImage, entry.nonImageResponses >= maxNonImageAttempts {
                 giveUp = true
                 state.hrefs[href] = nil
             } else {
@@ -431,11 +444,11 @@ final class ResourceCache: Sendable {
     /// search index and permanent-skip markers (empty filename) stay.
     func clearDownloaded(in resourcesDir: URL) {
         let manifest = store.manifest(in: resourcesDir)
-        let remoteKeys = manifest.keys.filter {
-            Self.isRemoteHref($0) && manifest[$0]?.isEmpty == false
-        }
+        // Skip markers (empty filename) go too: Clear is the user's reset.
+        let remoteKeys = manifest.keys.filter { Self.isRemoteHref($0) }
         for key in remoteKeys {
-            try? FileManager.default.removeItem(at: resourcesDir.appendingPathComponent(manifest[key] ?? ""))
+            guard let file = manifest[key], !file.isEmpty else { continue }
+            try? FileManager.default.removeItem(at: resourcesDir.appendingPathComponent(file))
         }
         try? store.updateManifest(in: resourcesDir) { current in remoteKeys.forEach { current[$0] = nil } }
         if !store.recordedHrefs(in: resourcesDir).isEmpty {
