@@ -68,7 +68,11 @@ struct NetworkLinkSnapshotService {
 
     /// The live downloader: `BoundedDownloader` with the cap.
     static func liveDownloader(maxBytes: Int = defaultMaxBytes) -> Downloader {
-        { url in try await BoundedDownloader.fetch(url, maxBytes: maxBytes, timeout: timeout) }
+        { url in
+            try await BoundedDownloader.fetch(
+                url, maxBytes: maxBytes, timeout: timeout, followCrossHostRedirects: false
+            )
+        }
     }
 
     init(maxBytes: Int = defaultMaxBytes, downloader: Downloader? = nil) {
@@ -124,6 +128,7 @@ struct NetworkLinkSnapshotService {
         switch error {
         case let .httpStatus(status): .http(status)
         case .tooLarge: .tooLarge
+        case .redirectedToOtherHost: .network("the server redirected to a different host")
         case let .transport(underlying): .network(underlying.localizedDescription)
         }
     }
@@ -221,34 +226,96 @@ private nonisolated func applySnapshot(
     }.value
 }
 
-/// The synchronous file work behind `applySnapshot`. The new original is written first, then
-/// the sidecar; if the sidecar update fails a differently named new file is removed again.
+/// The synchronous file work behind `applySnapshot`. Ordered so a failure at any step leaves
+/// the old original and old sidecar intact:
+/// 1. require a readable sidecar (a missing or not-yet-downloaded one aborts before any write);
+/// 2. write the new bytes under a temporary, non-original name in the entry folder;
+/// 3. update the sidecar (throws if absent);
+/// 4. move the temporary file into place, rolling the sidecar back if that fails;
+/// 5. only then remove a differently named old original (never when both names are the same
+///    file, as with a case-only rename on a case-insensitive volume).
 nonisolated func writeSnapshot(
     _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations
 ) throws -> CatalogEntry {
+    guard case .ok = storage.readSidecar(forFolderNamed: entry.storageFolderName) else {
+        throw CocoaError(.fileNoSuchFile)
+    }
     var updated = entry
     updated.sourceFilename = result.sourceFilename
     updated.pointCount = result.pointCount
     updated.contentSHA256 = result.contentSHA256
-    let renamed = updated.sourceFilename != entry.sourceFilename
 
-    try storage.writeOriginal(result.originalData, for: updated)
+    let fm = FileManager.default
+    let oldURL = storage.originalFile(for: entry)
+    let newURL = storage.originalFile(for: updated)
+    let tempURL = storage.folder(for: entry).appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
+
+    try storage.coordinatedWrite(result.originalData, to: tempURL)
+    let previous: EntryMetadata
     do {
-        try storage.updateMetadata(forFolderNamed: entry.storageFolderName) { metadata in
+        previous = try storage.updateExistingMetadata(forFolderNamed: entry.storageFolderName) { metadata in
             metadata.sourceFilename = updated.sourceFilename
             metadata.pointCount = updated.pointCount
             metadata.contentSHA256 = updated.contentSHA256
         }
     } catch {
-        if renamed {
-            try? FileManager.default.removeItem(at: storage.originalFile(for: updated))
-        }
+        try? fm.removeItem(at: tempURL)
         throw error
     }
-    if renamed {
-        try? FileManager.default.removeItem(at: storage.originalFile(for: entry))
+    do {
+        try placeSnapshot(tempURL, over: oldURL, as: newURL)
+    } catch {
+        try? fm.removeItem(at: tempURL)
+        try? storage.writeMetadata(previous, forFolderNamed: entry.storageFolderName)
+        throw error
     }
     // Everything under `resources/` derives from the original; it rebuilds on the next reload.
-    try? FileManager.default.removeItem(at: storage.resourcesDirectory(for: entry))
+    try? fm.removeItem(at: storage.resourcesDirectory(for: entry))
     return updated
+}
+
+/// Moves the downloaded `temp` file into place as `new` with an atomic `rename(2)`, then removes
+/// the superseded `old` original, unless `old` and `new` are the same file (as with a case-only
+/// rename on a case-insensitive volume), which must never be deleted.
+private nonisolated func placeSnapshot(_ temp: URL, over old: URL, as new: URL) throws {
+    let fm = FileManager.default
+    var isDirectory: ObjCBool = false
+    if fm.fileExists(atPath: new.path, isDirectory: &isDirectory), isDirectory.boolValue {
+        // Never replace a folder squatting on the name.
+        throw CocoaError(.fileWriteFileExists)
+    }
+    if isSameFile(old, new) {
+        // Same name, or a case-only rename: replace in place, then adopt the new casing
+        // (best effort). `old` is never deleted: it is the file just written.
+        try rename(temp, to: old)
+        if old.lastPathComponent != new.lastPathComponent {
+            try? rename(old, to: new)
+        }
+        return
+    }
+    try rename(temp, to: new)
+    try? fm.removeItem(at: old)
+}
+
+/// Atomic `rename(2)` (replaces an existing destination file).
+private nonisolated func rename(_ source: URL, to destination: URL) throws {
+    guard Darwin.rename(source.path, destination.path) == 0 else {
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    }
+}
+
+/// Whether `lhs` and `rhs` are the same file slot: the same path, or names that differ only in
+/// letter case. On a case-insensitive volume those are one file (`stat` can even disagree about
+/// whether the other casing exists, so the directory listing is the arbiter); on a
+/// case-sensitive one a file already existing under *both* exact names means two real files.
+private nonisolated func isSameFile(_ lhs: URL, _ rhs: URL) -> Bool {
+    if lhs.path == rhs.path {
+        return true
+    }
+    guard
+        lhs.deletingLastPathComponent().path == rhs.deletingLastPathComponent().path,
+        lhs.lastPathComponent.caseInsensitiveCompare(rhs.lastPathComponent) == .orderedSame
+    else { return false }
+    let listing = (try? FileManager.default.contentsOfDirectory(atPath: lhs.deletingLastPathComponent().path)) ?? []
+    return !(listing.contains(lhs.lastPathComponent) && listing.contains(rhs.lastPathComponent))
 }

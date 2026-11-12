@@ -156,11 +156,22 @@ extension KMLDetailView {
 
     /// One plain-text line of a folder description (only the head is converted, so a huge
     /// description costs nothing per row render), or `nil` when there is nothing to show.
+    ///
+    /// Memoised by the converted head: rows re-render on every scroll/search/collapse change and
+    /// the HTML-to-text conversion is far costlier than the lookup.
     static func folderPreview(_ html: String?) -> String? {
         guard let html, !html.isEmpty else { return nil }
-        let preview = AttributedHTML.plainText(String(html.prefix(2000)))
+        let head = String(html.prefix(2000)) as NSString
+        if let cached = folderPreviewCache.object(forKey: head) {
+            return cached.length == 0 ? nil : cached as String
+        }
+        let preview = AttributedHTML.plainText(head as String)
+        folderPreviewCache.setObject(preview as NSString, forKey: head)
         return preview.isEmpty ? nil : preview
     }
+
+    /// Folder-description heads mapped to their plain-text preview (empty string = none).
+    private static let folderPreviewCache = NSCache<NSString, NSString>()
 
     // MARK: - Search field row
 

@@ -62,7 +62,16 @@ import Observation
         // and the newest result wins — the catalogue settles to the final state.
         guard generation == scanGeneration else { return }
         entries = scanned
+        pruneIndexStore()
         scheduleResourceMaterialization()
+    }
+
+    /// Drops cached search indexes and note snapshots of entries that are no longer in the
+    /// catalogue (cheap: only touches the store's in-memory dictionaries).
+    private func pruneIndexStore() {
+        let resourceDirs = Set(entries.map { storage.resourcesDirectory(for: $0) })
+        let sidecars = Set(entries.map { storage.metadataFile(for: $0) })
+        PlacemarkIndexStore.shared.prune(keeping: resourceDirs, sidecars: sidecars)
     }
 
     /// Starts a single background materialization pass. If one is already running, marks the

@@ -140,7 +140,10 @@ struct CatalogScanner {
         if result.format == .kmz {
             try? cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
         }
-        try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        if (try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)) != nil {
+            PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+        }
+        PlacemarkIndex.clearParseFailureMarker(in: resourcesDir)
     }
 
     /// For each entry folder whose local resources cache is absent, parses the original and
@@ -164,10 +167,11 @@ struct CatalogScanner {
                 // (e.g. the device was offline at import); no re-parse is needed, the expected
                 // href list was recorded to disk at download time.
                 await cache.retryPending(in: resourcesDir)
-                // A folder without the current index predates it (a pre-2.0 import): refresh
-                // everything derived from the original in this one re-parse. Once the index
-                // exists the original is never read here again.
-                if !PlacemarkIndex.exists(in: resourcesDir) {
+                // A folder without the current index predates it (a pre-2.0 import), or its
+                // index was built from an older original (a network-link snapshot replaced it,
+                // here or on another device): refresh everything derived from the original in
+                // this one re-parse. Otherwise the original is never read here again.
+                if needsRefresh(forFolderNamed: name, resourcesDir: resourcesDir) {
                     _ = await refreshDerivedData(forFolderNamed: name, resourcesDir: resourcesDir)
                 }
                 continue
@@ -179,19 +183,52 @@ struct CatalogScanner {
         return didWork
     }
 
+    /// Whether the derived data in `resourcesDir` must be rebuilt: the index is missing, or it
+    /// was stamped with a different source SHA than the sidecar's `contentSHA256`.
+    ///
+    /// An index with no stamp counts as current (existing installs are not re-parsed twice);
+    /// `writeLocalCache` stamps every index it writes, and an unstamped one is stamped here with
+    /// the sidecar's SHA on first sight, which is what protects it from then on. The residual
+    /// window (an update landing before that first stamping pass) is small and accepted.
+    private func needsRefresh(forFolderNamed name: String, resourcesDir: URL) -> Bool {
+        guard PlacemarkIndex.exists(in: resourcesDir) else { return true }
+        guard case let .ok(meta) = storage.readSidecar(forFolderNamed: name), !meta.contentSHA256.isEmpty
+        else { return false }
+        let sidecarSHA = meta.contentSHA256
+        guard let stamp = PlacemarkIndex.sourceStamp(in: resourcesDir) else {
+            PlacemarkIndex.writeSourceStamp(sidecarSHA, to: resourcesDir)
+            return false
+        }
+        return stamp != sidecarSHA
+    }
+
+    /// Whether the original's content (by the sidecar's SHA) is recorded as having failed to parse.
+    private func isKnownUnparseable(folderNamed name: String, resourcesDir: URL) -> Bool {
+        guard let failed = PlacemarkIndex.parseFailureMarker(in: resourcesDir),
+              case let .ok(meta) = storage.readSidecar(forFolderNamed: name)
+        else { return false }
+        return meta.contentSHA256 == failed
+    }
+
     /// Re-parses the original in `name` once and rebuilds everything derived from it: the
     /// resources directory (embedded KMZ media streamed out, manifest recorded), the search
     /// index, the recorded remote hrefs and their downloads (through `ResourceCache`, so the
     /// download policy and retry backoff still apply), and the Spotlight items. `false`,
     /// writing nothing, when the original cannot be read or parsed yet (retried on a later scan).
     private func refreshDerivedData(forFolderNamed name: String, resourcesDir: URL) async -> Bool {
+        // A marker for the sidecar's SHA means this content already failed to parse: skip
+        // without even reading it, until the content (and so the SHA) changes.
+        if isKnownUnparseable(folderNamed: name, resourcesDir: resourcesDir) {
+            return false
+        }
         guard let fileURL = storage.originalFileURL(inFolderNamed: name),
-              let data = try? readOriginal(fileURL),
-              let result = try? ImportService.prepare(
-                  data: data,
-                  sourceFilename: fileURL.lastPathComponent
-              )
-        else { return false }
+              let data = try? readOriginal(fileURL)
+        else { return false } // not downloaded yet: retried on a later pass
+        guard let result = try? ImportService.prepare(data: data, sourceFilename: fileURL.lastPathComponent) else {
+            // Read fine but can never parse: remember the content so it is not retried.
+            PlacemarkIndex.writeParseFailureMarker(ImportService.sha256Hex(data), to: resourcesDir)
+            return false
+        }
         writeLocalCache(for: result, to: resourcesDir)
         await cache.downloadRemote(result.remoteResourceHrefs, to: resourcesDir)
         // Index from the sidecar (so the display name and trash state are right); a trashed

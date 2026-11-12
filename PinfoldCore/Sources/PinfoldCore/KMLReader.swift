@@ -117,7 +117,9 @@ public enum KMLReader {
     }
 
     /// Size-capped, content-dispatched parse of non-zip input.
-    private static func parsePlain(_ data: Data, maxBytes: Int) throws -> (document: KMLDocument, format: SourceFormat) {
+    private static func parsePlain(
+        _ data: Data, maxBytes: Int
+    ) throws -> (document: KMLDocument, format: SourceFormat) {
         guard data.count <= maxBytes else { throw KMLReadError.fileTooLarge }
         let format = try FormatSniffer.sniff(data)
         switch format {

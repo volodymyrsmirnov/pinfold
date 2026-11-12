@@ -189,6 +189,11 @@ struct KMLDetailView: View {
             // right shape. Consume whether or not routes resolved, so a stale payload
             // doesn't leak into another file.
             applyInitialRestore()
+            // After the restore, so the immediate outline is built from the seeded state; the
+            // hashing it does runs off-main.
+            if let document {
+                await refreshNotices(for: document)
+            }
         }
         // Second consume path: a deep link into the file that is ALREADY open. The view
         // keeps its identity (`.id(entry.id)` unchanged) so the load `.task` does NOT
