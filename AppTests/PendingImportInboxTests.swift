@@ -168,6 +168,7 @@ import Testing
         #expect(env.failureLog.failures.count == 1, "The parse failure must be recorded")
         #expect(env.failureLog.failures.first?.filename == "bad.kml")
         #expect(env.failureLog.failures.first?.reason.isEmpty == false, "A reason must be recorded")
+        #expect(env.failureLog.failures.first?.reason.contains("NSXMLParserErrorDomain") == false)
     }
 
     @Test func drain_ioFailure_keepsFileForRetry() async throws {

@@ -82,10 +82,10 @@ import Testing
         }
     }
 
-    @Test func prepare_romeKml_embeddedResourcesEmpty() throws {
+    @Test func prepare_romeKml_formatIsKML() throws {
         let data = try AppFixture.data("Rome.kml")
         let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
-        #expect(result.embeddedResources.isEmpty, "Plain KML has no embedded resources")
+        #expect(result.format == .kml)
     }
 
     @Test func prepare_romeKml_storageFolderNameIsUUID() throws {
@@ -110,13 +110,10 @@ import Testing
         #expect(result.pointCount == parsed.document.pointCount)
     }
 
-    @Test func prepare_romeKmz_embeddedResourcesContainIcons() throws {
+    @Test func prepare_romeKmz_formatIsKMZ() throws {
         let data = try AppFixture.data("Rome.kmz")
         let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kmz")
-        #expect(!result.embeddedResources.isEmpty, "Rome.kmz should have embedded resources")
-        // Rome.kmz is confirmed to contain "images/icon-1.png"
-        #expect(result.embeddedResources["images/icon-1.png"] != nil,
-                "Rome.kmz embedded resources should include images/icon-1.png")
+        #expect(result.format == .kmz)
     }
 
     @Test func prepare_romeKmz_noRemoteHrefs() throws {
@@ -192,7 +189,6 @@ import Testing
         let cache = stubCache()
         let data = try AppFixture.data("Rome.kmz")
         let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kmz")
-        #expect(!result.embeddedResources.isEmpty)
 
         let entry = try ImportService.commit(result, storage: storage, cache: cache)
 
@@ -300,7 +296,10 @@ import Testing
         let resources = storage.root
             .appendingPathComponent(result.storageFolderName, isDirectory: true)
             .appendingPathComponent("resources", isDirectory: true)
-        try blockPath(resources.appendingPathComponent("placemarks-index.json"))
+        // Block both the v1 and v2 index names so this works whichever the writer uses.
+        for name in ["placemarks-index.json", "placemarks-index.v2.json"] {
+            try blockPath(resources.appendingPathComponent(name))
+        }
 
         let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
 
@@ -369,5 +368,54 @@ import Testing
         #expect(result.sourceFilename == "shared-file.kml")
         let sidecarNamed = try ImportService.prepare(data: data, sourceFilename: "metadata.json")
         #expect(sidecarNamed.sourceFilename == "metadata.kml")
+    }
+
+    // MARK: - Streamed extraction (A10b)
+
+    /// The manifest must map each archive key to `cachedFilename(for:)`, the scheme
+    /// `localURL(forHref:in:)` and existing entries rely on, with the bytes of the archive entry.
+    @Test func commit_romeKmz_manifestUsesCachedFilenameScheme() throws {
+        let storage = makeStorage()
+        let cache = stubCache()
+        let data = try AppFixture.data("Rome.kmz")
+        let expected = try KMLReader.read(data: data).embeddedResources
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kmz")
+
+        let entry = try ImportService.commit(result, storage: storage, cache: cache)
+
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        let manifest = ResourceManifestStore.shared.manifest(in: resourcesDir)
+        #expect(Set(manifest.keys) == Set(expected.keys))
+        for (key, bytes) in expected {
+            #expect(manifest[key] == cache.cachedFilename(for: key))
+            let written = try Data(contentsOf: resourcesDir.appendingPathComponent(cache.cachedFilename(for: key)))
+            #expect(written == bytes)
+        }
+        #expect(cache.localURL(forHref: "images/icon-1.png", in: resourcesDir) != nil)
+    }
+
+    // MARK: - Readable errors (A8c)
+
+    @Test func importError_passesUnderlyingDescriptionThrough() {
+        let underlying = KMLReadError.fileTooLarge
+        let error = ImportError.parseFailure(underlying: underlying)
+        #expect(error.localizedDescription == underlying.localizedDescription)
+    }
+
+    @Test func importError_withoutReadableUnderlyingFallsBackToGenericReason() {
+        let raw = NSError(domain: "NSXMLParserErrorDomain", code: 4)
+        let error = ImportError.parseFailure(underlying: raw)
+        #expect(error.localizedDescription == ImportFormats.invalidFileReason)
+        #expect(!error.localizedDescription.contains("NSXMLParserErrorDomain"))
+    }
+
+    @Test func prepare_garbage_throwsReadableError() {
+        do {
+            _ = try ImportService.prepare(data: Data("garbage not kml".utf8), sourceFilename: "bad.kml")
+            Issue.record("expected a parse failure")
+        } catch {
+            #expect(!error.localizedDescription.isEmpty)
+            #expect(!error.localizedDescription.contains("NSXMLParserErrorDomain"))
+        }
     }
 }

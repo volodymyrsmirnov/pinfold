@@ -75,18 +75,16 @@ struct CatalogScanner {
 
         try? storage.writeMetadata(meta, forFolderNamed: name)
         let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
-        try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
-        try? cache.writeEmbedded(derived.embeddedResources, to: resourcesDir)
-        // We parsed the original anyway — write the local search index in the same pass.
-        try? PlacemarkIndex.write(derived.indexEntries, to: resourcesDir)
-        let hrefs = derived.remoteResourceHrefs
+        // We parsed the original anyway: extract the resources and write the index in one pass.
+        writeLocalCache(for: derived.parsed, to: resourcesDir)
+        let hrefs = derived.parsed.remoteResourceHrefs
         let cache = cache
         Task.detached { await cache.downloadRemote(hrefs, to: resourcesDir) }
 
         // A bare original we just rebuilt is searchable too (e.g. an entry that synced in as a
         // sidecar-less original). Don't index a trashed entry (the sidecar's the source of trash
         // state; a freshly-rebuilt one is always active here).
-        SpotlightIndexer.index(entry: derived.entry, indexEntries: derived.indexEntries)
+        SpotlightIndexer.index(entry: derived.entry, indexEntries: derived.parsed.indexEntries)
 
         return derived.entry
     }
@@ -97,7 +95,7 @@ struct CatalogScanner {
     /// path (which must not). `nil` if there is no original or it fails to parse.
     private func deriveFromOriginal(folderNamed name: String) -> DerivedEntry? {
         guard let fileURL = storage.originalFileURL(inFolderNamed: name),
-              let data = try? Data(contentsOf: fileURL),
+              let data = try? readOriginal(fileURL),
               let result = try? ImportService.prepare(
                   data: data,
                   sourceFilename: fileURL.lastPathComponent
@@ -121,10 +119,28 @@ struct CatalogScanner {
         return DerivedEntry(
             metadata: meta,
             entry: CatalogEntry(metadata: meta, storageFolderName: name),
-            embeddedResources: result.embeddedResources,
-            remoteResourceHrefs: result.remoteResourceHrefs,
-            indexEntries: result.indexEntries
+            parsed: result
         )
+    }
+
+    /// Reads an original. A local file is memory-mapped when safe; an iCloud file goes through
+    /// the coordinated, download-waiting read.
+    private func readOriginal(_ url: URL) throws -> Data {
+        if storage.isUbiquitous || !FileManager.default.fileExists(atPath: url.path) {
+            return try UbiquityContainer.readDownloadingIfNeeded(url)
+        }
+        return try Data(contentsOf: url, options: .mappedIfSafe)
+    }
+
+    /// Creates `resourcesDir` (its existence is the "materialized" marker, so it is made even
+    /// when there is nothing to put in it), streams a KMZ's resources out of the original and
+    /// writes the search index. Both writes are derivable, so failures are not fatal.
+    private func writeLocalCache(for result: ImportResult, to resourcesDir: URL) {
+        try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        if result.format == .kmz {
+            try? cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+        }
+        try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
     }
 
     /// For each entry folder whose local resources cache is absent, parses the original and
@@ -145,58 +161,43 @@ struct CatalogScanner {
             let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
             if FileManager.default.fileExists(atPath: resourcesDir.path) {
                 // Already materialized once. Retry any remote downloads that failed earlier
-                // (e.g. the device was offline at import). Cheap no-op when the manifest
-                // already covers them, and no re-parse is needed — the expected href list
-                // was recorded to disk at download time.
+                // (e.g. the device was offline at import); no re-parse is needed, the expected
+                // href list was recorded to disk at download time.
                 await cache.retryPending(in: resourcesDir)
-                // Self-heal: a folder materialized before the search feature shipped has a
-                // resource cache but no `placemarks-index.json`. Backfill it once by parsing
-                // the original (the only re-parse here, gated on the index being absent).
+                // A folder without the current index predates it (a pre-2.0 import): refresh
+                // everything derived from the original in this one re-parse. Once the index
+                // exists the original is never read here again.
                 if !PlacemarkIndex.exists(in: resourcesDir) {
-                    backfillIndex(forFolderNamed: name, to: resourcesDir)
+                    _ = await refreshDerivedData(forFolderNamed: name, resourcesDir: resourcesDir)
                 }
                 continue
             }
-
-            guard let fileURL = storage.originalFileURL(inFolderNamed: name),
-                  let data = try? UbiquityContainer.readDownloadingIfNeeded(fileURL),
-                  let result = try? ImportService.prepare(
-                      data: data,
-                      sourceFilename: fileURL.lastPathComponent
-                  )
-            else { continue }
-
-            // Create the directory first so it acts as the done-marker even when the file
-            // has no resources (a plain KML with no icons/photos won't be re-parsed next scan).
-            try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
-            try? cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
-            // Build the local search index in the same pass (we parsed the original anyway).
-            try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
-            await cache.downloadRemote(result.remoteResourceHrefs, to: resourcesDir)
-            // A folder freshly materialized on THIS device (synced in from another) becomes
-            // searchable here. Index from the sidecar (so the entry's display name + trash state
-            // are correct); skip trashed entries.
-            indexMaterializedEntry(forFolderNamed: name, indexEntries: result.indexEntries)
-            didWork = true
+            if await refreshDerivedData(forFolderNamed: name, resourcesDir: resourcesDir) {
+                didWork = true
+            }
         }
         return didWork
     }
 
-    /// Parses the original in `name` and writes its `placemarks-index.json` into an
-    /// already-materialized `resourcesDir`. Used to backfill the index for entries imported
-    /// before catalogue-wide search existed. Silent no-op if the original can't be read or
-    /// parsed (retried on a later pass).
-    private func backfillIndex(forFolderNamed name: String, to resourcesDir: URL) {
+    /// Re-parses the original in `name` once and rebuilds everything derived from it: the
+    /// resources directory (embedded KMZ media streamed out, manifest recorded), the search
+    /// index, the recorded remote hrefs and their downloads (through `ResourceCache`, so the
+    /// download policy and retry backoff still apply), and the Spotlight items. `false`,
+    /// writing nothing, when the original cannot be read or parsed yet (retried on a later scan).
+    private func refreshDerivedData(forFolderNamed name: String, resourcesDir: URL) async -> Bool {
         guard let fileURL = storage.originalFileURL(inFolderNamed: name),
-              let data = try? UbiquityContainer.readDownloadingIfNeeded(fileURL),
+              let data = try? readOriginal(fileURL),
               let result = try? ImportService.prepare(
                   data: data,
                   sourceFilename: fileURL.lastPathComponent
               )
-        else { return }
-        try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
-        // Backfilled the index for an already-materialized folder — make it searchable too.
+        else { return false }
+        writeLocalCache(for: result, to: resourcesDir)
+        await cache.downloadRemote(result.remoteResourceHrefs, to: resourcesDir)
+        // Index from the sidecar (so the display name and trash state are right); a trashed
+        // entry is skipped.
         indexMaterializedEntry(forFolderNamed: name, indexEntries: result.indexEntries)
+        return true
     }
 
     /// Adds the entry in `name` (plus its placemarks) to Core Spotlight, sourcing the entry's
@@ -221,7 +222,5 @@ struct CatalogScanner {
 private struct DerivedEntry {
     let metadata: EntryMetadata
     let entry: CatalogEntry
-    let embeddedResources: [String: Data]
-    let remoteResourceHrefs: [String]
-    let indexEntries: [PlacemarkIndex.Entry]
+    let parsed: ImportResult
 }

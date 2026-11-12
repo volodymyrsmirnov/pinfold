@@ -23,8 +23,9 @@ struct ImportResult {
     let storageFolderName: String
     /// The original file bytes to be written to disk.
     let originalData: Data
-    /// KMZ-embedded resources keyed by archive-relative path (empty for plain KML).
-    let embeddedResources: [String: Data]
+    /// The detected source format; a KMZ has its embedded resources streamed out of
+    /// `originalData` at commit time.
+    let format: SourceFormat
     /// Remote http(s) resource URLs gathered from icon styles and placemark photo links.
     let remoteResourceHrefs: [String]
     /// Flattened placemark search-index entries (stableKey + name + coordinate), built from
@@ -37,8 +38,22 @@ struct ImportResult {
 
 /// Errors thrown by `ImportService`.
 enum ImportError: Error {
-    /// The file bytes could not be parsed as valid KML or KMZ.
+    /// The file bytes could not be parsed as a supported file.
     case parseFailure(underlying: Error)
+}
+
+extension ImportError: LocalizedError {
+    /// The underlying description when it is readable, else the generic invalid-file reason
+    /// (never a raw `NSXMLParserErrorDomain` string).
+    var errorDescription: String? {
+        switch self {
+        case let .parseFailure(underlying):
+            if let described = (underlying as? any LocalizedError)?.errorDescription, !described.isEmpty {
+                return described
+            }
+            return ImportFormats.invalidFileReason
+        }
+    }
 }
 
 // MARK: - ImportService
@@ -83,14 +98,14 @@ enum ImportService {
 
         let sha256 = sha256Hex(data)
 
-        let parsed: ParsedKML
+        let document: KMLDocument
+        let format: SourceFormat
         do {
-            parsed = try KMLReader.read(data: data)
+            format = try KMLReader.detectFormat(of: data)
+            document = try KMLReader.readDocument(data: data)
         } catch {
             throw ImportError.parseFailure(underlying: error)
         }
-
-        let document = parsed.document
 
         // Display name: document name → filename without extension.
         let stem = (sourceFilename as NSString).deletingPathExtension
@@ -128,7 +143,7 @@ enum ImportService {
             contentSHA256: sha256,
             storageFolderName: UUID().uuidString,
             originalData: data,
-            embeddedResources: parsed.embeddedResources,
+            format: format,
             remoteResourceHrefs: remoteResourceHrefs,
             indexEntries: PlacemarkIndex.entries(for: document)
         )
@@ -212,7 +227,9 @@ enum ImportService {
         let resourcesDir = storage.resourcesDirectory(for: entry)
         var cacheIsReady = true
         do {
-            try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
+            if result.format == .kmz {
+                try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+            }
             try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
         } catch {
             ImportService.logger.error(
