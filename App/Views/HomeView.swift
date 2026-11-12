@@ -130,6 +130,7 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SyncStatusBanner()
             pickerBar
             tagChipsBar
             importFailureBanner
