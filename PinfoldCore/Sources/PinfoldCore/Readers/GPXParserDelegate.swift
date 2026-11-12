@@ -203,9 +203,9 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
         }
     }
 
-    private func placemark(_ item: Item, coordinate: Coordinate?, hasPoint: Bool,
-                           geometries: [KMLGeometry]) -> KMLPlacemark
-    {
+    private func placemark(
+        _ item: Item, coordinate: Coordinate?, hasPoint: Bool, geometries: [KMLGeometry]
+    ) -> KMLPlacemark {
         idCounter += 1
         let usesComment = item.fields["desc"] == nil
         var data: [KMLDataItem] = []

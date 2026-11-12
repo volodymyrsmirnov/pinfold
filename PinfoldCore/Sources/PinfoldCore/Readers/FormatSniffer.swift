@@ -103,13 +103,13 @@ enum FormatSniffer {
 
     private static func elementName(_ bytes: [UInt8], from start: Int) -> String? {
         var index = start
-        while index < bytes.count, !isSpace(bytes[index]), bytes[index] != UInt8(ascii: ">"),
-              bytes[index] != UInt8(ascii: "/")
-        {
+        func endsName(_ byte: UInt8) -> Bool {
+            isSpace(byte) || byte == UInt8(ascii: ">") || byte == UInt8(ascii: "/")
+        }
+        while index < bytes.count, !endsName(bytes[index]) {
             index += 1
         }
-        let name = String(decoding: bytes[start ..< index], as: UTF8.self)
-        guard !name.isEmpty else { return nil }
+        guard let name = String(bytes: bytes[start ..< index], encoding: .utf8), !name.isEmpty else { return nil }
         return name.split(separator: ":").last.map(String.init)
     }
 }
