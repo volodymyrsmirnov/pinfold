@@ -51,7 +51,7 @@ enum AttributedHTML {
     /// exists so a crafted multi-megabyte description can't tie up the anchor-extraction pass.
     /// `plainText`/`readableText` are NOT capped — their passes are all linear-time regexes, so
     /// the anchor pass here is the only superlinear-risk surface.
-    private static let maxDescriptionLength = 256 * 1024
+    static let maxDescriptionLength = 256 * 1024
 
     /// Same tag-stripping / entity-decoding / line-tidying as `readableText`, but `<a href>`
     /// anchors with an allowlisted scheme, plus bare URLs / emails / phone numbers, become
@@ -148,7 +148,7 @@ enum AttributedHTML {
     private static let sentinelClose = "\u{E001}"
 
     /// Returns a `URL` only when `href` parses and its scheme is in `allowedLinkSchemes`.
-    private static func allowedURL(_ href: String) -> URL? {
+    static func allowedURL(_ href: String) -> URL? {
         let trimmed = href.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
             let url = URL(string: trimmed),
@@ -186,6 +186,16 @@ enum AttributedHTML {
         }
     }
 
+    /// Turns bare URLs / emails / phone numbers in the not-yet-linked parts of `attributed`
+    /// into tappable `.link` runs (same allowlist as `attributed(_:)`). Used by the block
+    /// renderer, whose anchors are already linked and must not be re-detected.
+    static func linkifyingBareURLs(_ attributed: AttributedString) -> AttributedString {
+        var result = attributed
+        let unlinked = result.runs.filter { $0.link == nil }.map(\.range)
+        detectLinks(in: &result, ranges: unlinked)
+        return result
+    }
+
     /// Maps a detector match to an allowlisted `URL`. Phone numbers arrive as a string (not a
     /// URL), so we synthesise a `tel:` link from their digits; links and detector-built
     /// `mailto:` emails must clear `allowedURL`.
@@ -211,7 +221,9 @@ enum AttributedHTML {
         var lines: [String] = []
         for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.isEmpty, lines.last?.isEmpty == true { continue }
+            if line.isEmpty, lines.last?.isEmpty == true {
+                continue
+            }
             lines.append(line)
         }
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -237,7 +249,7 @@ enum AttributedHTML {
 
     /// Decodes the common named and numeric HTML entities. `&amp;` is decoded **last** so
     /// double-encoded input such as `&amp;lt;` becomes the literal `&lt;`, not `<`.
-    private static func decodeEntities(_ html: String) -> String {
+    static func decodeEntities(_ html: String) -> String {
         var s = html
         // Numeric — hex (`&#xA0;`) first, then decimal (`&#160;`).
         s = s.replacing(#/&#x([0-9A-Fa-f]+);/#) { match in
