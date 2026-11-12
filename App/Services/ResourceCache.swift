@@ -194,6 +194,8 @@ final class ResourceCache: Sendable {
     /// `maxConcurrentDownloads` at a time.
     private func fetchDue(_ hrefs: [String], to resourcesDir: URL) async {
         let state = store.state(in: resourcesDir)
+        // Cleared by the user: wait until the entry is opened (`resumeDeferred(in:)`).
+        guard !state.deferredUntilOpened else { return }
         switch policy() {
         case .never: return
         case .ask where !state.consent: return
@@ -434,6 +436,32 @@ final class ResourceCache: Sendable {
         let recorded = store.recordedHrefs(in: resourcesDir)
         guard !recorded.isEmpty else { return }
         await retryPending(recorded, to: resourcesDir)
+    }
+
+    // MARK: - Clearing (C9)
+
+    /// Removes this entry's downloaded http(s) images and manifest entries, and defers
+    /// downloads until it is opened (`resumeDeferred(in:)`). KMZ-extracted resources, the
+    /// search index and permanent-skip markers (empty filename) stay.
+    func clearDownloaded(in resourcesDir: URL) {
+        let manifest = store.manifest(in: resourcesDir)
+        let remoteKeys = manifest.keys.filter {
+            ($0.hasPrefix("http://") || $0.hasPrefix("https://")) && manifest[$0]?.isEmpty == false
+        }
+        for key in remoteKeys {
+            try? FileManager.default.removeItem(at: resourcesDir.appendingPathComponent(manifest[key] ?? ""))
+        }
+        try? store.updateManifest(in: resourcesDir) { current in remoteKeys.forEach { current[$0] = nil } }
+        if !store.recordedHrefs(in: resourcesDir).isEmpty {
+            store.updateState(in: resourcesDir) { $0.deferredUntilOpened = true }
+        }
+    }
+
+    /// Clears the deferral and fetches the recorded hrefs again (policy, consent and backoff
+    /// still apply). Call when the entry is opened.
+    func resumeDeferred(in resourcesDir: URL) async {
+        store.updateState(in: resourcesDir) { $0.deferredUntilOpened = false }
+        await retryPending(in: resourcesDir)
     }
 
     // MARK: - Lookup
