@@ -52,3 +52,15 @@ enum UbiquityContainer {
         return result ?? Data()
     }
 }
+
+/// The live iCloud facts, for `StorageResolver`.
+struct SystemUbiquity: UbiquityProviding {
+    func documentsURL() -> URL? {
+        UbiquityContainer.documentsURL()
+    }
+
+    func identityToken() -> Data? {
+        guard let token = FileManager.default.ubiquityIdentityToken else { return nil }
+        return try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
+    }
+}

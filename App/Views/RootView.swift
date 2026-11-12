@@ -47,6 +47,10 @@ struct RootView: View {
     /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
     @State var rootIsUbiquitous = false
+    /// Whether iCloud sync is doing what the user asked; shared through the environment.
+    @State var syncStatus = SyncStatus()
+    /// `true` while `applyStorage` runs, so a re-resolve cannot interleave with it.
+    @State var isApplyingStorage = false
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
@@ -177,15 +181,18 @@ struct RootView: View {
             .modifier(AppEnvironmentBundle(
                 catalog: catalog, settings: settings, mapAppService: mapAppService,
                 migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-                resourceCache: resourceCache, router: router, importCoordinator: importCoordinator
+                resourceCache: resourceCache, router: router, importCoordinator: importCoordinator,
+                syncStatus: syncStatus
             ))
         }
         .navigationSplitViewStyle(.balanced)
         .modifier(AppEnvironmentBundle(
             catalog: catalog, settings: settings, mapAppService: mapAppService,
             migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-            resourceCache: resourceCache, router: router, importCoordinator: importCoordinator
+            resourceCache: resourceCache, router: router, importCoordinator: importCoordinator,
+            syncStatus: syncStatus
         ))
+        .catalogErrorAlert(catalog)
         .task { await bootstrap() }
         // Save the resume snapshot on the way OUT (`.inactive` is always passed through
         // before backgrounding — and before iOS's snapshot passes — and also fires on the
@@ -195,10 +202,19 @@ struct RootView: View {
             case .inactive:
                 saveResumeState()
             case .active:
-                Task { await drainInbox(); await drainDocumentsInbox(); await catalog.reload() }
+                Task {
+                    await reresolveStorageIfNeeded()
+                    await drainInbox()
+                    await drainDocumentsInbox()
+                    await catalog.reload()
+                }
             default:
                 break
             }
+        }
+        // iCloud account changes (sign in/out, switch) can make the container appear or vanish.
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSUbiquityIdentityDidChange)) { _ in
+            Task { await reresolveStorageIfNeeded() }
         }
         // Handle a file opened via the KML/KMZ file-type association ("Open in Pinfold"
         // from Files/Mail/Safari) or the share extension's `pinfold://import` launch URL.
@@ -267,6 +283,7 @@ private struct AppEnvironmentBundle: ViewModifier {
     let resourceCache: ResourceCache
     let router: NavigationRouter
     let importCoordinator: ImportCoordinator
+    let syncStatus: SyncStatus
 
     func body(content: Content) -> some View {
         content
@@ -277,6 +294,7 @@ private struct AppEnvironmentBundle: ViewModifier {
             .environment(importFailureLog)
             .environment(router)
             .environment(importCoordinator)
+            .environment(syncStatus)
             .environment(\.resourceCache, resourceCache)
             .environment(\.storageLocations, catalog.storage)
     }
