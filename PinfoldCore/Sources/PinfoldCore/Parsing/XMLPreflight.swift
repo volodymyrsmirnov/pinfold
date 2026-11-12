@@ -96,17 +96,20 @@ enum XMLPreflight {
         return String(trimmed[close.upperBound...])
     }
 
-    // MARK: Encoding allow-list
+    // MARK: Encoding deny-list
 
     /// Rejects input libxml2 could re-decode into something the byte-level DOCTYPE guard
-    /// cannot see (UTF-7, EBCDIC, ...). Runs on the post-transcode, post-trim bytes: the first
-    /// byte must be `<` (an EBCDIC `<` is 0x4C, a UTF-7 document still starts with `<?xml`), and
-    /// any declared encoding must be on the allow-list.
+    /// cannot see (UTF-7, EBCDIC, wide encodings declared over ASCII bytes, ...). Runs on the
+    /// post-transcode, post-trim bytes: the first byte must be `<` (an EBCDIC `<` is 0x4C, a
+    /// UTF-7 document still starts with `<?xml`), and the declared encoding must not be a
+    /// non-ASCII-compatible one. Every ASCII-compatible legacy encoding (Shift_JIS, GBK, Big5,
+    /// KOI8-R, cp1252, macintosh, ...) opened in 1.7 and still does; a name libxml2 does not
+    /// know fails in the parser itself.
     private static func requireSupportedEncoding(_ data: Data) throws {
         guard let first = data.first else { return } // empty: XMLParser reports it
         guard first == 0x3C else { throw KMLParseError.unsupportedEncoding }
         guard let name = declaredEncoding(in: data) else { return }
-        guard isAllowedEncoding(name.lowercased()) else { throw KMLParseError.unsupportedEncoding }
+        guard !isDeniedEncoding(name.lowercased()) else { throw KMLParseError.unsupportedEncoding }
     }
 
     /// The `encoding` pseudo-attribute of a leading `<?xml …?>` declaration, if any.
@@ -126,15 +129,36 @@ enum XMLPreflight {
         return String(value[..<close])
     }
 
-    private static func isAllowedEncoding(_ name: String) -> Bool {
-        let exact: Set = ["utf-8", "utf8", "us-ascii", "ascii", "latin1", "latin-1", "l1", "iso-ir-100",
-                          "utf-16", "utf-32", "utf-16le", "utf-16be", "utf-32le", "utf-32be"]
-        if exact.contains(name) {
+    /// Code pages of the EBCDIC family (`cpNNN` / `ibmNNN` / `ibm-NNN`).
+    private static let ebcdicCodePages: Set<Int> = [
+        37, 273, 277, 278, 280, 284, 285, 290, 297, 300, 420, 423, 424, 500, 833, 834, 835, 836, 837,
+        838, 870, 871, 875, 880, 905, 918, 930, 933, 935, 937, 939, 1025, 1026, 1027, 1047, 1097,
+        1112, 1122, 1123, 1130, 1132, 1137, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148,
+        1149, 1153, 1154, 1155, 1156, 1157, 1158, 1160, 1164, 1166, 1371, 1388, 1390, 1399, 4971,
+        5123, 8482, 9122, 12712, 16804, 20273, 20277, 20278, 20280, 20284, 20285, 20290, 20297,
+        20420, 20423, 20424, 20833, 20838, 20871, 20880, 20905, 20924, 21025, 21027, 29001,
+    ]
+
+    /// Fragments that identify an encoding that is not ASCII-compatible (or can switch to one
+    /// mid-document): UTF-7, UTF-16/32 and UCS (the wide ones were already transcoded, so a
+    /// remaining declaration lies about ASCII bytes), EBCDIC, ISO-2022 and HZ escape schemes,
+    /// BOCU/SCSU.
+    private static let deniedFragments = [
+        "utf-7", "utf7", "utf-16", "utf16", "utf-32", "utf32", "utf-1", "ucs", "unicode", "ebcdic",
+        "iso-2022", "iso2022", "bocu", "scsu", "csutf", "utf-ebcdic", "10646",
+    ]
+
+    private static func isDeniedEncoding(_ name: String) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        let isHZ = name == "hz" || name.hasPrefix("hz-") || name.hasPrefix("x-hz")
+        if isHZ || deniedFragments.contains(where: name.contains) {
             return true
         }
-        for prefix in ["iso-8859-", "windows-125"] where name.hasPrefix(prefix) {
-            let suffix = name.dropFirst(prefix.count)
-            return !suffix.isEmpty && suffix.count <= 2 && suffix.allSatisfy(\.isNumber)
+        for prefix in ["cp", "ibm", "csibm", "x-ibm", "x-cp"] where name.hasPrefix(prefix) {
+            let digits = name.dropFirst(prefix.count).drop { $0 == "-" || $0 == "_" }.prefix { $0.isNumber }
+            if let number = Int(digits), ebcdicCodePages.contains(number) {
+                return true
+            }
         }
         return false
     }

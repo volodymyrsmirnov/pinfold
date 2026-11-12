@@ -125,7 +125,7 @@ struct GPXReaderTests {
     }
 
     @Test func unsupportedEncodingIsRejected() {
-        let data = Data(#"<?xml version="1.0" encoding="x-evil"?><gpx/>"#.utf8)
+        let data = Data(#"<?xml version="1.0" encoding="UTF-7"?><gpx/>"#.utf8)
         #expect(throws: KMLParseError.unsupportedEncoding) { try GPXReader.read(data) }
     }
 
