@@ -20,7 +20,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             }
             return KMLContainer(id: id, name: name,
                                 children: children.map { $0.build(styleUrlOverrides: styleUrlOverrides) },
-                                placemarks: built)
+                                placemarks: built, descriptionHTML: description)
         }
     }
 
