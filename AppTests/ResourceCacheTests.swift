@@ -588,6 +588,22 @@ extension ResourceCacheTests {
         #expect(online.localURL(forHref: href, in: dir) != nil)
     }
 
+    /// The production downloader (`BoundedDownloader`) wraps `URLError`s in
+    /// `DownloadError.transport`, so the offline check must look through that wrapper.
+    @Test func wrappedOfflineErrors_doNotCountAsAttempts() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let cache = ResourceCache(downloader: { _ in
+            throw DownloadError.transport(URLError(.notConnectedToInternet))
+        })
+        for _ in 0 ..< 3 {
+            await cache.retryOrDownload(href, in: dir)
+        }
+        #expect(state(dir).hrefs[href] == nil, "wrapped offline failures leave no attempts or backoff")
+        #expect(ResourceCache.isConnectivityFailure(DownloadError.transport(URLError(.networkConnectionLost))))
+        #expect(!ResourceCache.isConnectivityFailure(DownloadError.transport(URLError(.cannotFindHost))))
+    }
+
     @Test func deadHostStillBacksOff() async throws {
         let dir = try makeTempDir()
         let href = "https://example.com/a.png"

@@ -261,20 +261,6 @@ final class ResourceCache: Sendable {
         }
     }
 
-    /// `true` for errors that say the *device* has no usable connection right now. Deliberately
-    /// excludes `.cannotFindHost` / `.timedOut` / `.cannotConnectToHost`, which a dead or
-    /// blocked host also produces and which must still back off.
-    static func isConnectivityFailure(_ error: Error) -> Bool {
-        guard let urlError = error as? URLError else { return false }
-        switch urlError.code {
-        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
-             .internationalRoamingOff, .callIsActive:
-            return true
-        default:
-            return false
-        }
-    }
-
     /// Delay before the next attempt after `attempts` failures: 60 s, doubling, capped at 24 h.
     static func backoff(afterAttempts attempts: Int) -> TimeInterval {
         guard attempts > 0 else { return 0 }
