@@ -60,7 +60,7 @@ public struct MapApp: Identifiable, Sendable, Hashable {
 // MARK: - Roster
 
 extension MapApp {
-    /// The full iOS/iPadOS roster of 12 supported map apps.
+    /// The full iOS/iPadOS roster of 13 supported map apps.
     ///
     /// Ordered with Apple Maps first (always available), followed by third-party apps in
     /// alphabetical order of their `id`. When displaying installed apps, filter this list
@@ -70,6 +70,7 @@ extension MapApp {
         google,
         waze,
         organic,
+        comaps,
         mapsme,
         osmand,
         magicearth,
@@ -163,6 +164,23 @@ extension MapApp {
         alwaysAvailable: false
     ) { lat, lng, name in
         var components = URLComponents(string: "om://map")!
+        components.queryItems = [
+            URLQueryItem(name: "v", value: "1"),
+            URLQueryItem(name: "ll", value: "\(lat),\(lng)"),
+            URLQueryItem(name: "n", value: name),
+        ]
+        return components.url
+    }
+
+    /// CoMaps (community fork of Organic Maps). Its Info.plist registers `cm`, and its own
+    /// `mwm_url.cpp` documents the `map?ll=lat,lon&n=name` API for that prefix.
+    static let comaps = MapApp(
+        id: "comaps",
+        displayName: "CoMaps",
+        urlScheme: "cm",
+        alwaysAvailable: false
+    ) { lat, lng, name in
+        var components = URLComponents(string: "cm://map")!
         components.queryItems = [
             URLQueryItem(name: "v", value: "1"),
             URLQueryItem(name: "ll", value: "\(lat),\(lng)"),

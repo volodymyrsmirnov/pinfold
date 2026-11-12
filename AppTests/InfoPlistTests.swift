@@ -23,4 +23,11 @@ struct InfoPlistTests {
             #expect(type["LSHandlerRank"] as? String == "Alternate")
         }
     }
+
+    @Test func everyRosterSchemeIsDeclaredInQueriesSchemes() throws {
+        let plist = try Self.appInfoPlist()
+        let declared = try Set(#require(plist["LSApplicationQueriesSchemes"] as? [String]))
+        let needed = Set(MapApp.roster.compactMap(\.urlScheme))
+        #expect(needed.subtracting(declared).isEmpty, "missing: \(needed.subtracting(declared))")
+    }
 }
