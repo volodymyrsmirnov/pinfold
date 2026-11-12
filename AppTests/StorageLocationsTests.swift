@@ -268,4 +268,100 @@ struct StorageLocationsTests {
         try storage.updateMetadata(forFolderNamed: folder) { $0.trashedAt = .now }
         #expect(try storage.readMetadata(forFolderNamed: folder) == nil)
     }
+
+    // MARK: - Coordinated writes and deletes (B14)
+
+    @Test func writeOriginal_roundTrips() throws {
+        let root = makeTempRoot()
+        let locations = StorageLocations(root: root)
+        let entry = makeEntry(storageFolderName: "w", sourceFilename: "a.kml")
+        try locations.createFolders(for: entry)
+
+        try locations.writeOriginal(Data("one".utf8), for: entry)
+        try locations.writeOriginal(Data("two".utf8), for: entry)
+
+        #expect(try Data(contentsOf: locations.originalFile(for: entry)) == Data("two".utf8))
+    }
+
+    @Test func removeFolder_removesSyncedFolderAndCache() throws {
+        let base = makeTempRoot()
+        let locations = StorageLocations(
+            root: base.appendingPathComponent("synced"), cacheRoot: base.appendingPathComponent("cache")
+        )
+        let entry = makeEntry(storageFolderName: "both")
+        try locations.createFolders(for: entry)
+        try locations.writeOriginal(Data("x".utf8), for: entry)
+
+        try locations.removeFolder(for: entry)
+
+        #expect(!FileManager.default.fileExists(atPath: locations.folder(for: entry).path))
+        #expect(!FileManager.default.fileExists(atPath: locations.resourcesDirectory(for: entry).path))
+        #expect(!FileManager.default.fileExists(
+            atPath: locations.cacheRoot.appendingPathComponent("both").path
+        ))
+    }
+
+    @Test func removeFolder_missingFolderIsANoOp() throws {
+        let locations = StorageLocations(root: makeTempRoot())
+        try locations.removeFolder(named: "never-existed")
+    }
+
+    // MARK: - Sidecar not downloaded (B2)
+
+    private func ubiquitousLocations(probe: FakeUbiquityProbe) -> StorageLocations {
+        var locations = StorageLocations(root: makeTempRoot())
+        locations.isUbiquitous = true
+        locations.probe = probe
+        return locations
+    }
+
+    @Test func readSidecar_missingInUbiquitousRoot_uuidFolder_isNotDownloaded() {
+        let locations = ubiquitousLocations(probe: FakeUbiquityProbe())
+        #expect(locations.readSidecar(forFolderNamed: UUID().uuidString) == .notDownloaded)
+    }
+
+    @Test func readSidecar_missingInUbiquitousRoot_placeholderOrStatus_isNotDownloaded() {
+        let placeholder = ubiquitousLocations(probe: FakeUbiquityProbe(placeholder: true))
+        #expect(placeholder.readSidecar(forFolderNamed: "Dropped") == .notDownloaded)
+        let stale = ubiquitousLocations(probe: FakeUbiquityProbe(status: .notDownloaded))
+        #expect(stale.readSidecar(forFolderNamed: "Dropped") == .notDownloaded)
+    }
+
+    @Test func readSidecar_missingInUbiquitousRoot_nonUUIDFolder_isMissing() {
+        let locations = ubiquitousLocations(probe: FakeUbiquityProbe())
+        #expect(locations.readSidecar(forFolderNamed: "Dropped") == .missing)
+    }
+
+    @Test func readSidecar_missingInLocalRoot_isMissingEvenForUUIDFolder() {
+        var locations = StorageLocations(root: makeTempRoot())
+        locations.probe = FakeUbiquityProbe(placeholder: true)
+        #expect(locations.readSidecar(forFolderNamed: UUID().uuidString) == .missing)
+    }
+
+    // MARK: - Tolerant sidecar (B12)
+
+    @Test func tolerantSidecar_recoversTrashStateFromUndecodableJSON() throws {
+        let locations = StorageLocations(root: makeTempRoot())
+        let id = UUID()
+        let folder = locations.root.appendingPathComponent("t", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let json = """
+        {"id":"\(id.uuidString)","displayName":"Kept","trashedAt":1234.5,"pointCount":"many"}
+        """
+        try Data(json.utf8).write(to: folder.appendingPathComponent("metadata.json"))
+
+        let tolerant = locations.tolerantSidecar(forFolderNamed: "t")
+
+        #expect(tolerant == TolerantSidecar(
+            id: id, displayName: "Kept", trashedAt: Date(timeIntervalSinceReferenceDate: 1234.5)
+        ))
+    }
+
+    @Test func tolerantSidecar_isNilForNonJSON() throws {
+        let locations = StorageLocations(root: makeTempRoot())
+        let folder = locations.root.appendingPathComponent("t", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("nope".utf8).write(to: folder.appendingPathComponent("metadata.json"))
+        #expect(locations.tolerantSidecar(forFolderNamed: "t") == nil)
+    }
 }
