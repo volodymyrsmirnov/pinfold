@@ -18,6 +18,10 @@ extension KMLDetailView {
         ScrollViewReader { proxy in
             List {
                 searchSection
+                if let offer = networkLinkOffer {
+                    networkLinkSection(offer)
+                }
+                remoteImagesSection
                 if let outline {
                     if outline.rows.isEmpty, !query.isEmpty {
                         Section {
@@ -33,6 +37,7 @@ extension KMLDetailView {
                         }
                     }
                 }
+                OrphanedNotesSection(notes: orphanedNotes)
             }
             .listStyle(.insetGrouped)
             .onGeometryChange(for: CGRect.self) { geometry in
@@ -64,7 +69,7 @@ extension KMLDetailView {
     ) -> some View {
         switch row.kind {
         case let .folder(name, id):
-            folderRow(name: name, id: id)
+            folderRow(name: name, id: id, descriptionHTML: document.root.container(atPath: id)?.descriptionHTML)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
                 .onGeometryChange(for: CGRect.self) { geometry in
                     geometry.frame(in: .global)
@@ -92,7 +97,24 @@ extension KMLDetailView {
     /// A tappable folder header row with a disclosure chevron that rotates with the
     /// collapsed state. A non-empty search ignores the collapsed set, so the chevron is
     /// pinned open while searching.
-    func folderRow(name: String, id: String) -> some View {
+    func folderRow(name: String, id: String, descriptionHTML: String? = nil) -> some View {
+        let preview = Self.folderPreview(descriptionHTML)
+        return HStack(spacing: 8) {
+            folderToggle(name: name, id: id, preview: preview)
+            if let descriptionHTML, preview != nil || descriptionHTML.contains("<img") {
+                Button {
+                    infoSheet = DescriptionSheetContent(id: "folder-\(id)", title: name, html: descriptionHTML)
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Folder description")
+            }
+        }
+    }
+
+    private func folderToggle(name: String, id: String, preview: String?) -> some View {
         let searching = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
         let collapsed = !searching && collapsedFolderIDs.contains(id)
         return Button {
@@ -109,9 +131,17 @@ extension KMLDetailView {
                     .rotationEffect(.degrees(collapsed ? 0 : 90))
                     // Purely decorative; the Button's label/value/hint carry the semantics.
                     .accessibilityHidden(true)
-                Text(name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    if let preview {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
@@ -122,6 +152,14 @@ extension KMLDetailView {
         .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
         // String literal resolves as a LocalizedStringKey, so it localizes like Text.
         .accessibilityHint("Expands or collapses this folder.")
+    }
+
+    /// One plain-text line of a folder description (only the head is converted, so a huge
+    /// description costs nothing per row render), or `nil` when there is nothing to show.
+    static func folderPreview(_ html: String?) -> String? {
+        guard let html, !html.isEmpty else { return nil }
+        let preview = AttributedHTML.plainText(String(html.prefix(2000)))
+        return preview.isEmpty ? nil : preview
     }
 
     // MARK: - Search field row

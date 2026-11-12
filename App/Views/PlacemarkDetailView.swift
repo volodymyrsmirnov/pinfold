@@ -53,21 +53,6 @@ struct PlacemarkDetailView: View {
         router ?? AppDependencies.shared.router
     }
 
-    /// The rendered description: tags stripped, entities decoded, line breaks preserved, and
-    /// `<a href>`/bare URLs/emails/phones turned into tappable links (scheme-allowlisted —
-    /// see `AttributedHTML`). Built once in `.task` since it is pure string work, keeping it
-    /// off `body`'s recompute path. KML descriptions are untrusted, so they are never sent
-    /// through `NSAttributedString`'s HTML importer.
-    @State private var description: AttributedString?
-
-    /// Builds the tappable, scheme-allowlisted description (pure string work, fine off-main).
-    /// A free method, not an inline `body` expression, to keep the view's SIL small.
-    private func renderedDescription() -> AttributedString? {
-        guard let html = placemark.descriptionHTML, !html.isEmpty else { return nil }
-        let attributed = AttributedHTML.attributed(html)
-        return attributed.characters.isEmpty ? nil : attributed
-    }
-
     private var coordinateString: String? {
         guard let coord = placemark.coordinate else { return nil }
         return CoordinateFormatter.string(for: coord)
@@ -99,7 +84,6 @@ struct PlacemarkDetailView: View {
         }
         .navigationTitle(placemark.name ?? "Untitled")
         .navigationBarTitleDisplayMode(.inline)
-        .task { description = renderedDescription() }
         .toolbar { toolbarMenu }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
@@ -137,12 +121,13 @@ struct PlacemarkDetailView: View {
             .padding(.horizontal)
 
             // Description
-            if let description {
-                Text(description)
-                    .font(.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if let html = placemark.descriptionHTML, !html.isEmpty {
+                DescriptionView(html: html, entry: entry)
                     .padding(.horizontal)
             }
+
+            // Address and phone
+            contactRows
 
             // Coordinates
             if let coordStr = coordinateString {
@@ -165,6 +150,38 @@ struct PlacemarkDetailView: View {
                 .padding(.bottom, 24)
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Address and phone rows
+
+    private var trimmedAddress: String? {
+        let value = placemark.address?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    /// A `tel:` URL for the placemark's phone number (digits and `+` only), when it has one.
+    private var phoneURL: URL? {
+        guard let phone = placemark.phoneNumber else { return nil }
+        let digits = phone.filter { $0.isNumber || $0 == "+" }
+        return digits.isEmpty ? nil : URL(string: "tel:\(digits)")
+    }
+
+    @ViewBuilder
+    private var contactRows: some View {
+        if let address = trimmedAddress {
+            Label(address, systemImage: "mappin.and.ellipse")
+                .font(.subheadline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .textSelection(.enabled)
+        }
+        if let phoneURL, let phone = placemark.phoneNumber {
+            Link(destination: phoneURL) {
+                Label(phone, systemImage: "phone")
+                    .font(.subheadline)
+            }
+            .padding(.horizontal)
+        }
     }
 
     // MARK: - Coordinates row
@@ -190,7 +207,7 @@ struct PlacemarkDetailView: View {
                 .padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(placemark.extendedData, id: \.name) { item in
+                    ForEach(placemark.extendedData) { item in
                         extendedDataChip(item)
                     }
                 }
@@ -201,7 +218,7 @@ struct PlacemarkDetailView: View {
 
     private func extendedDataChip(_ item: KMLDataItem) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(item.name)
+            Text(item.displayName ?? item.name)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(item.value)

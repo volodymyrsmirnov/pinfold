@@ -53,6 +53,17 @@ struct PlacemarkRow: View {
         .padding(.vertical, 2)
     }
 
+    // MARK: - Preview
+
+    /// The one-line preview under the name: the placemark's snippet when it has one (the
+    /// author's own teaser), otherwise the plain text of its description.
+    private var previewText: String? {
+        let snippet = placemark.snippet.flatMap { $0.isEmpty ? nil : $0 }
+        guard let source = snippet ?? placemark.descriptionHTML, !source.isEmpty else { return nil }
+        let preview = AttributedHTML.plainText(source)
+        return preview.isEmpty ? nil : preview
+    }
+
     // MARK: - Label stack
 
     private var labelStack: some View {
@@ -71,14 +82,11 @@ struct PlacemarkRow: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(annotations?.accessibilityDescription(for: placemark) ?? (placemark.name ?? "Untitled"))
-            if let html = placemark.descriptionHTML, !html.isEmpty {
-                let preview = AttributedHTML.plainText(html).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !preview.isEmpty {
-                    Text(preview)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+            if let preview = previewText {
+                Text(preview)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             if let distance {
                 Label(distance, systemImage: "location")
