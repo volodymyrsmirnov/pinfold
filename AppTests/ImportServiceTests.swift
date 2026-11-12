@@ -418,4 +418,38 @@ import Testing
             #expect(!error.localizedDescription.contains("NSXMLParserErrorDomain"))
         }
     }
+
+    // MARK: - Formats (FM-1)
+
+    @Test func gpxImports() throws {
+        let data = try FormatFixture.gpx()
+        let result = try ImportService.prepare(data: data, sourceFilename: "sample.gpx")
+        #expect(result.format == .gpx)
+        #expect(result.sourceFilename == "sample.gpx")
+        #expect(result.displayName == "Sample Hike")
+        #expect(result.pointCount > 0)
+        let bare = try ImportService.prepare(data: data, sourceFilename: "hike")
+        #expect(bare.sourceFilename == "hike.gpx")
+    }
+
+    @Test func geoJSONImports() throws {
+        let data = try AppFixture.data("sample.geojson")
+        let result = try ImportService.prepare(data: data, sourceFilename: "sample.geojson")
+        #expect(result.format == .geoJSON)
+        #expect(result.sourceFilename == "sample.geojson")
+        #expect(result.pointCount > 0)
+        #expect(try ImportService.prepare(data: data, sourceFilename: "places.json").sourceFilename == "places.json")
+        #expect(try ImportService.prepare(data: data, sourceFilename: "places").sourceFilename == "places.geojson")
+        let txt = try ImportService.prepare(data: data, sourceFilename: "places.txt")
+        #expect(txt.sourceFilename == "places.txt.geojson")
+    }
+
+    @Test func jsonNamedMetadataIsRenamed() throws {
+        let data = try AppFixture.data("sample.geojson")
+        let result = try ImportService.prepare(data: data, sourceFilename: "metadata.json")
+        #expect(result.sourceFilename == "metadata.geojson")
+        let upper = try ImportService.prepare(data: data, sourceFilename: "Metadata.JSON")
+        #expect(upper.sourceFilename.lowercased() != "metadata.json")
+        #expect(ImportFormats.originalExtensions.isSuperset(of: ["gpx", "geojson", "json"]))
+    }
 }

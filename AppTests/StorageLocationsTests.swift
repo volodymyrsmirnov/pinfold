@@ -68,6 +68,23 @@ struct StorageLocationsTests {
         #expect(locations.originalFileURL(inFolderNamed: "my-folder") == nil)
     }
 
+    @Test func originalFileURL_findsGPXAndGeoJSON_neverTheSidecar() throws {
+        let root = makeTempRoot()
+        let locations = StorageLocations(root: root)
+        let folder = root.appendingPathComponent("fmt", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("{}".utf8).write(to: folder.appendingPathComponent("metadata.json"))
+        #expect(locations.originalFileURL(inFolderNamed: "fmt") == nil)
+
+        try Data("<gpx/>".utf8).write(to: folder.appendingPathComponent("a.GPX"))
+        #expect(locations.originalFileURL(inFolderNamed: "fmt")?.lastPathComponent == "a.GPX")
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("a.GPX"))
+
+        try Data("{}".utf8).write(to: folder.appendingPathComponent("b.geojson"))
+        #expect(locations.originalFileURL(inFolderNamed: "fmt")?.lastPathComponent == "b.geojson")
+    }
+
     @Test func resourcesDirectoryURL_isInsideFolder() {
         let root = makeTempRoot()
         let locations = StorageLocations(root: root)
