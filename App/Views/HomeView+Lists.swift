@@ -42,37 +42,7 @@ extension HomeView {
                     Text("Files you trash will appear here.")
                 }
             } else {
-                List {
-                    ForEach(trashed) { entry in
-                        FileRow(entry: entry)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    Task { await catalog.deleteForever(entry) }
-                                } label: {
-                                    Label("Delete", systemImage: "trash.fill")
-                                }
-                                Button {
-                                    Task { await catalog.restore(entry) }
-                                } label: {
-                                    Label("Restore", systemImage: "arrow.uturn.backward")
-                                }
-                                .tint(.blue)
-                            }
-                            .contextMenu {
-                                Button {
-                                    Task { await catalog.restore(entry) }
-                                } label: {
-                                    Label("Restore", systemImage: "arrow.uturn.backward")
-                                }
-                                Button(role: .destructive) {
-                                    Task { await catalog.deleteForever(entry) }
-                                } label: {
-                                    Label("Delete", systemImage: "trash.fill")
-                                }
-                            }
-                    }
-                }
-                .listStyle(.insetGrouped)
+                TrashList(trashed: trashed)
             }
         }
     }

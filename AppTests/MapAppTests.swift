@@ -65,6 +65,17 @@ private let name = "Colosseo, Roma"
 
     // MARK: - URL construction: Organic Maps (exact)
 
+    @Test func comapsURL_exact() throws {
+        let url = try #require(MapApp.comaps.makeURL(lat, lng, name))
+        #expect(url.absoluteString == "cm://map?v=1&ll=41.8902,12.4922&n=Colosseo,%20Roma")
+        #expect(MapApp.comaps.urlScheme == "cm")
+    }
+
+    @Test func roster_hasThirteenAppsWithUniqueIDs() {
+        #expect(MapApp.roster.count == 13)
+        #expect(Set(MapApp.roster.map(\.id)).count == 13)
+    }
+
     @Test func organicURL_exact() throws {
         let url = try #require(MapApp.organic.makeURL(lat, lng, name))
         // Space in name is percent-encoded to %20; comma survives.

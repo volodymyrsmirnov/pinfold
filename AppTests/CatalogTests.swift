@@ -197,4 +197,32 @@ import Testing
         #expect(catalog.entries.map(\.storageFolderName) == ["new"])
         #expect(catalog.storage.root == newRoot)
     }
+
+    @Test func emptyTrash_removesAllTrashedAndKeepsActive() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        try seedFolder(storage, folder: "t1", sha: "a", trashedAt: Date(timeIntervalSince1970: 5))
+        try seedFolder(storage, folder: "t2", sha: "b", trashedAt: Date(timeIntervalSince1970: 6))
+        await catalog.reload()
+        #expect(catalog.trashed.count == 2)
+
+        await catalog.emptyTrash()
+
+        #expect(catalog.trashed.isEmpty)
+        #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
+        for gone in ["t1", "t2"] {
+            #expect(!FileManager.default.fileExists(atPath: storage.root.appendingPathComponent(gone).path))
+        }
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
+    }
+
+    @Test func emptyTrash_withNoTrashIsANoOp() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        await catalog.reload()
+
+        await catalog.emptyTrash()
+
+        #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
+    }
 }
