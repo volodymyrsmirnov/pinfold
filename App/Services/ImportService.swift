@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import PinfoldCore
 
 // MARK: - ImportResult
@@ -46,6 +47,11 @@ enum ImportError: Error {
 /// 1. `prepare` — off-main, pure computation; returns `ImportResult`.
 /// 2. `commit`  — main-actor, performs storage (writes files to disk); returns `CatalogEntry`.
 enum ImportService {
+    fileprivate static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "import"
+    )
+
     // MARK: - SHA-256
 
     /// Returns the lowercase hex SHA-256 digest of `data`.
@@ -170,26 +176,42 @@ enum ImportService {
             trashedAt: nil
         )
 
-        // Create on-disk folders before writing any files.
-        try storage.createFolders(for: entry)
+        // Create on-disk folders before writing any files. From here on a failure must leave
+        // nothing behind: an orphan folder is skipped by the scanner forever and a retry would
+        // create a second one (B8, E3).
+        do {
+            try storage.createFolders(for: entry)
 
-        // Write the synced metadata sidecar FIRST (see ordering invariant above).
-        try storage.writeMetadata(entry.metadata, for: entry)
+            // Write the synced metadata sidecar FIRST (see ordering invariant above).
+            try storage.writeMetadata(entry.metadata, for: entry)
 
-        // Write the original file bytes.
-        try storage.writeOriginal(result.originalData, for: entry)
+            // Write the original file bytes.
+            try storage.writeOriginal(result.originalData, for: entry)
+        } catch {
+            removeFailedImport(entry, storage: storage)
+            throw error
+        }
 
-        // Write KMZ-embedded resources synchronously (no network needed).
+        // The resource cache and search index are derivable, so a failure here never fails the
+        // import: drop the `resources/` directory (its existence is the scanner's
+        // "materialized" marker) and let the materialisation pass rebuild it.
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
-
-        // Write the local search index alongside the resource cache (derivable, never synced).
-        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        var cacheIsReady = true
+        do {
+            try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
+            try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        } catch {
+            ImportService.logger.error(
+                "Cache write failed for \(entry.storageFolderName, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            )
+            try? FileManager.default.removeItem(at: resourcesDir)
+            cacheIsReady = false
+        }
 
         // Kick off remote downloads in the background — non-blocking, offline-first.
-        let hrefs = result.remoteResourceHrefs
-        Task.detached {
-            await cache.downloadRemote(hrefs, to: resourcesDir)
+        // Skipped when the cache write failed: the materialisation pass rebuilds it all.
+        if cacheIsReady {
+            downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
         }
 
         // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
@@ -197,5 +219,26 @@ enum ImportService {
         SpotlightIndexer.index(entry: entry, indexEntries: result.indexEntries)
 
         return entry
+    }
+}
+
+/// Removes the synced folder and cache folder of an import that failed part-way. Best effort:
+/// the original error is what the caller reports.
+private func removeFailedImport(_ entry: CatalogEntry, storage: StorageLocations) {
+    do {
+        try storage.removeFolder(for: entry)
+    } catch {
+        ImportService.logger.error(
+            "Could not clean up failed import \(entry.storageFolderName, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        )
+    }
+}
+
+/// Starts the background download of `hrefs`. A free function so the `Task.detached` closure
+/// is compiled outside `ImportService.commit` (see the `ClosureLifetimeFixup` note in
+/// FavoritesView.swift).
+private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to resourcesDir: URL) {
+    Task.detached {
+        await cache.downloadRemote(hrefs, to: resourcesDir)
     }
 }
