@@ -198,4 +198,76 @@ struct EntryMetadataTests {
         let decoded = try EntryMetadata.decoded(from: meta.encoded())
         #expect(decoded.favoriteKeys.sorted() == ["a", "m", "z"])
     }
+
+    // MARK: - Notes
+
+    private func baseMeta(notes: [String: PlacemarkNote] = [:]) -> EntryMetadata {
+        EntryMetadata(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, displayName: "T",
+            sourceFilename: "t.kml", importDate: Date(timeIntervalSince1970: 0), pointCount: 0,
+            contentSHA256: "x", trashedAt: nil, notes: notes
+        )
+    }
+
+    private func note(_ text: String, at t: TimeInterval, name: String? = nil) -> PlacemarkNote {
+        PlacemarkNote(text: text, modifiedAt: Date(timeIntervalSince1970: t), placemarkName: name)
+    }
+
+    @Test func notesRoundTrip() throws {
+        let meta = baseMeta(notes: ["id:a": note("Hello", at: 5, name: "A"), "id:b": note("", at: 6)])
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        #expect(decoded == meta)
+        #expect(decoded.notes["id:a"]?.placemarkName == "A")
+    }
+
+    @Test func legacySidecarWithoutNotesDecodes() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","displayName":"T","sourceFilename":"t.kml",
+         "importDate":0,"pointCount":0,"contentSHA256":"x"}
+        """
+        let decoded = try EntryMetadata.decoded(from: Data(json.utf8))
+        #expect(decoded.notes.isEmpty)
+    }
+
+    @Test func merge_newerNoteWinsPerKey() {
+        let current = baseMeta(notes: ["k": note("old", at: 1), "j": note("cur", at: 9)])
+        let other = baseMeta(notes: ["k": note("new", at: 2), "j": note("stale", at: 3)])
+        let merged = current.merging(conflicts: [other])
+        #expect(merged.notes["k"]?.text == "new")
+        #expect(merged.notes["j"]?.text == "cur")
+    }
+
+    @Test func merge_tombstoneBeatsOlderText() {
+        let current = baseMeta(notes: ["k": note("text", at: 1)])
+        let other = baseMeta(notes: ["k": note("", at: 2)])
+        let merged = current.merging(conflicts: [other])
+        #expect(merged.notes["k"]?.text == "")
+        #expect(merged.notes["k"]?.modifiedAt == Date(timeIntervalSince1970: 2))
+    }
+
+    @Test func merge_isCommutativeAndIdempotent() {
+        let a = baseMeta(notes: ["k": note("apple", at: 1), "m": note("one", at: 4)])
+        let b = baseMeta(notes: ["k": note("banana", at: 1), "n": note("two", at: 2)])
+        let ab = a.merging(conflicts: [b])
+        let ba = b.merging(conflicts: [a])
+        #expect(ab.notes == ba.notes)
+        #expect(ab.notes["k"]?.text == "banana")
+        #expect(ab.merging(conflicts: [b]).notes == ab.notes)
+        #expect(ab.merging(conflicts: [ab]).notes == ab.notes)
+    }
+
+    @Test func merge_keepsNotesForUnknownKeys() {
+        let current = baseMeta(notes: ["gone:1": note("orphan", at: 1)])
+        let merged = current.merging(conflicts: [baseMeta(notes: ["gone:2": note("other", at: 2)])])
+        #expect(merged.notes.keys.sorted() == ["gone:1", "gone:2"])
+    }
+
+    @Test func encodingIsKeySorted() throws {
+        let meta = baseMeta(notes: ["z": note("z", at: 1), "a": note("a", at: 1)])
+        let text = try #require(String(data: meta.encoded(), encoding: .utf8))
+        let aIdx = try #require(text.range(of: "\"a\" : {"))
+        let zIdx = try #require(text.range(of: "\"z\" : {"))
+        #expect(aIdx.lowerBound < zIdx.lowerBound)
+        #expect(try meta.encoded() == meta.encoded())
+    }
 }

@@ -5,8 +5,8 @@ import Foundation
 ///
 /// This is the source of truth for an entry's *non-derivable* catalogue state
 /// (display name, trash status) plus a cached copy of the cheap-but-not-free
-/// derivable fields (`pointCount`, `contentSHA256`) so the reconciler can rebuild
-/// the local SwiftData index without re-parsing every file on every launch.
+/// derivable fields (`pointCount`, `contentSHA256`) so the catalogue scanner can rebuild
+/// the in-memory list without re-parsing every file on every launch.
 struct EntryMetadata: Codable, Equatable {
     /// Stable entry identity. For every entry created after the crash-safe-commit change this
     /// equals the folder-name UUID (`UUID(uuidString: storageFolderName)`): `commit` derives
@@ -29,12 +29,15 @@ struct EntryMetadata: Codable, Equatable {
     /// `Catalog.setTags` (trimmed, de-duplicated case-insensitively, sorted); stored as a
     /// plain array so the order is exactly the diff-stable sorted order written to disk.
     var tags: [String] = []
+    /// Personal notes keyed by `KMLPlacemark.stableKey`. An empty-text note is a tombstone.
+    /// Notes are kept even when their key no longer resolves (see `PlacemarkNote`).
+    var notes: [String: PlacemarkNote] = [:]
 
     init(
         id: UUID, displayName: String, sourceFilename: String, importDate: Date,
         pointCount: Int, contentSHA256: String, trashedAt: Date?,
         favoriteKeys: Set<String> = [], visitedKeys: Set<String> = [],
-        tags: [String] = []
+        tags: [String] = [], notes: [String: PlacemarkNote] = [:]
     ) {
         self.id = id
         self.displayName = displayName
@@ -46,6 +49,7 @@ struct EntryMetadata: Codable, Equatable {
         self.favoriteKeys = favoriteKeys
         self.visitedKeys = visitedKeys
         self.tags = tags
+        self.notes = notes
     }
 
     // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
@@ -53,7 +57,7 @@ struct EntryMetadata: Codable, Equatable {
     // property, update CodingKeys, init(from:), encode(to:), AND the memberwise init.
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
-        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags
+        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags, notes
     }
 
     init(from decoder: any Decoder) throws {
@@ -68,6 +72,7 @@ struct EntryMetadata: Codable, Equatable {
         favoriteKeys = try Set(c.decodeIfPresent([String].self, forKey: .favoriteKeys) ?? [])
         visitedKeys = try Set(c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        notes = try c.decodeIfPresent([String: PlacemarkNote].self, forKey: .notes) ?? [:]
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -86,6 +91,9 @@ struct EntryMetadata: Codable, Equatable {
         // Tags are already kept sorted by `Catalog.setTags`, but sort again here so a
         // hand-built/legacy-merged value still serializes diff-stably.
         try c.encode(tags.sorted(), forKey: .tags)
+        if !notes.isEmpty {
+            try c.encode(notes, forKey: .notes)
+        }
     }
 
     /// Encodes to pretty-printed, key-sorted JSON for stable, diff-friendly files.
@@ -115,6 +123,10 @@ struct EntryMetadata: Codable, Equatable {
     /// - `tags`: **union** across all versions (case-sensitive set union, then re-sorted),
     ///   consistent with `favoriteKeys` — a tag added on one device is never lost by a
     ///   conflicting copy that never saw it.
+    /// - `notes`: per key, the note with the newest `modifiedAt` wins (ties go to the
+    ///   lexicographically greater text), so the merge is commutative and idempotent. A
+    ///   tombstone (empty text) competes like any other note. Notes for keys that no longer
+    ///   resolve to a placemark are kept.
     /// - Scalar identity/content fields (`id`, `displayName`, `sourceFilename`, `importDate`,
     ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
     ///   underlying file, so the winning version is authoritative; there is nothing to merge.
@@ -131,6 +143,11 @@ struct EntryMetadata: Codable, Equatable {
             tagSet.formUnion(other.tags)
         }
         merged.tags = tagSet.sorted()
+        for other in conflicts {
+            for (key, note) in other.notes {
+                merged.notes[key] = merged.notes[key].map { PlacemarkNote.winner($0, note) } ?? note
+            }
+        }
         let trashStamps = ([self] + conflicts).compactMap(\.trashedAt)
         merged.trashedAt = trashStamps.max()
         return merged
