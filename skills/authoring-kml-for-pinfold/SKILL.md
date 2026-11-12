@@ -222,6 +222,81 @@ Keep descriptions concise and front-load the important sentence: lists show a on
 preview (unless a `<Snippet>` is given), and only the first ~1,000 characters of a
 description's text are searchable. Very long descriptions are truncated for display.
 
+## Images — embedding and linking
+
+Pinfold shows images in three places. All three use the same two sources.
+
+| Where it shows | How to declare it |
+|---|---|
+| **Pin icon** on the map and in the list | `<Style><IconStyle><Icon><href>…</href></Icon></IconStyle></Style>` |
+| **Row thumbnail and photo gallery** on the place page | `<Data name="gx_media_links"><value>…</value></Data>` in the placemark's `ExtendedData`, with whitespace-separated paths or URLs; the **first** one is the row thumbnail |
+| **Inline image** in a place, folder or document description | `<img src="…" alt="…">` inside the `<description>` HTML |
+
+Images are **never fetched while the user is looking at the screen**. Pinfold shows only images already stored on the device, so every image must be either embedded or downloadable.
+
+### Option A (recommended): embed images in a KMZ
+
+A KMZ is a ZIP. Put `doc.kml` at the root and the images in a subfolder:
+
+```
+Places.kmz
+├── doc.kml
+└── images/
+    ├── pin-cafe.png
+    ├── cafe-1.jpg
+    └── cafe-2.jpg
+```
+
+Reference each image by its **path inside the archive, relative to `doc.kml`**, using the same string in all three places:
+
+```xml
+<Style id="cafe">
+  <IconStyle><Icon><href>images/pin-cafe.png</href></Icon></IconStyle>
+</Style>
+
+<Placemark>
+  <name>Café Majestic</name>
+  <styleUrl>#cafe</styleUrl>
+  <description><![CDATA[
+    <p><b>Café Majestic</b>, open since 1921.</p>
+    <img src="images/cafe-2.jpg" alt="The dining room">
+  ]]></description>
+  <ExtendedData>
+    <Data name="gx_media_links"><value>images/cafe-1.jpg images/cafe-2.jpg</value></Data>
+  </ExtendedData>
+  <Point><coordinates>-8.6069,41.1469,0</coordinates></Point>
+</Placemark>
+```
+
+Build the archive from inside the folder, so `doc.kml` sits at the archive root:
+
+```bash
+cd Places && zip -r -X ../Places.kmz doc.kml images
+```
+
+Rules for embedded paths. Pinfold matches the string exactly, with no normalisation:
+- Write the path exactly as it is stored in the archive, with the same letter case. Don't prefix it with `./` and don't percent-encode it.
+- **No spaces in image file names.** `gx_media_links` is split on whitespace, so `my photo.jpg` becomes two broken links. Use lowercase, hyphens and ASCII, like `cafe-1.jpg`.
+- No absolute paths (`/…`) and no `..`. Such entries are skipped on import.
+- Embedded images always display, whatever the user's "Download Images" setting, and they work offline from the first launch.
+
+### Option B: link public web images
+
+Use full `https://` URLs in the same three places. Pinfold downloads each image once, at import, and keeps it for offline use:
+- The URL must be **publicly reachable without a sign-in, cookies or a referer**. Links that need a Google account return "403 Forbidden" and never appear: the `lh3.googleusercontent.com/umsh/…` photo links in Google My Maps exports are the common case. Host the images somewhere public, or embed them (Option A).
+- Downloads follow the user's **Download Images** setting: Always (the default), Ask per file, or Never. Under Ask or Never, remote images stay empty until the user allows them.
+- At most **500** distinct remote images per file, and **20 MB** per image. Over-size images are skipped. Pin icons are kept first under the 500 limit.
+- A failed download (server error, offline) is retried later with a growing delay. Meanwhile the row shows a grey photo placeholder.
+
+### Formats and sizes
+
+- **Formats:** PNG, JPEG, GIF, WebP, BMP, TIFF and HEIC/HEIF/AVIF. SVG is not supported. A download that isn't one of these, such as an HTML error page, is not shown.
+- **Pin icons:** square PNG, 64–128 px, transparent background. Icons are shown as-is: `IconStyle` `<color>` does not tint an icon image, and `<scale>` is ignored.
+- **Photos:** JPEG, at most about 1600 px on the long edge, ideally 100–300 KB each. Row thumbnails and gallery tiles are **square crops of the centre**, so keep the subject centred.
+- Give description images `alt` text. It is shown when the image is not available.
+
+The repository's `samples/` folder has a complete example of each option: `Image Sample (offline).kmz` (everything embedded) and `Image Sample (online).kml` (public Wikimedia Commons links).
+
 ## KMZ packaging (when bundling icons/photos)
 
 Produce a `.kmz` (a ZIP) when you want icons or photos to travel **inside** the file instead
@@ -307,6 +382,9 @@ Before emitting the file, verify:
 - [ ] Coordinates are `lon,lat[,alt]`, comma-separated, longitude first.
 - [ ] Colors are `AABBGGRR` hex.
 - [ ] Photo galleries go in `gx_media_links` (whitespace-separated URLs or KMZ paths).
+- [ ] Every image is either embedded in the KMZ (path written exactly as in the archive, no
+      spaces in file names) or a public `https://` URL that loads without a sign-in.
+- [ ] Images are PNG/JPEG/GIF/WebP/HEIC (no SVG), icons 64–128 px, photos ≤ ~1600 px.
 - [ ] Descriptions use paragraphs, bold/italic, lists, tables and http/https/mailto/tel
       links; wrapped in CDATA if they contain markup or `&`; the key sentence comes first.
 - [ ] For KMZ: main file is `doc.kml`; resources referenced by relative paths with no `..`
