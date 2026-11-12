@@ -49,8 +49,6 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// not mistaken for the document, folder or placemark ones.
     var elementStack: [String] = []
 
-    /// Local names a KML document may start with (a full `<kml>` or a bare fragment).
-    static let rootElements: Set<String> = ["kml", "Document", "Folder", "Placemark"]
     /// Parents under which `<name>` is meaningful.
     static let nameParents: Set<String> = ["Placemark", "Document", "Folder", "NetworkLink"]
     /// Parents under which `<description>` is stored; elsewhere it is swallowed and discarded.
@@ -261,7 +259,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         text = ""
         let local = Self.localName(elementName)
         let parent = elementStack.last
-        if parent == nil, !Self.rootElements.contains(local) {
+        if parent == nil, !Self.isRootElement(local) {
             abortError = KMLParseError.unsupportedRootElement(local)
             parser.abortParsing()
             return
