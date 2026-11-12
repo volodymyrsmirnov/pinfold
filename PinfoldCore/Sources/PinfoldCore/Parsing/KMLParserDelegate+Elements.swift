@@ -156,7 +156,14 @@ extension KMLParserDelegate {
     /// Indexes the assembled `<Style>` and, if it sits inside a StyleMap `<Pair>`, records it
     /// as that pair's style reference.
     private func closeStyleElement() {
-        if let b = styleBuilder {
+        if let b = styleBuilder, placemark != nil {
+            // Inline style: belongs to the placemark (or to the open Pair of an inline StyleMap).
+            if inPair {
+                pairInlineStyle = StyleFields(b)
+            } else {
+                placemark?.inlineStyle = StyleFields(b)
+            }
+        } else if let b = styleBuilder {
             styles[b.id] = KMLStyle(id: b.id, iconHref: b.iconHref,
                                     iconColor: b.iconColor, iconScale: b.iconScale,
                                     lineColor: b.lineColor, lineWidth: b.lineWidth,
@@ -186,10 +193,15 @@ extension KMLParserDelegate {
             }
         case "Pair":
             // Resolve only on close: KML allows <key> before or after the style reference.
-            if pairKey == "normal", let url = pairStyleURL {
-                styleMapNormalURL = url
+            if pairKey == "normal" {
+                if let url = pairStyleURL {
+                    styleMapNormalURL = url
+                }
+                if placemark != nil {
+                    applyInlinePair()
+                }
             }
-            inPair = false; pairKey = nil; pairStyleURL = nil
+            inPair = false; pairKey = nil; pairStyleURL = nil; pairInlineStyle = nil
         case "StyleMap":
             if let id = styleMapID, let normal = styleMapNormalURL {
                 styleMaps[id] = normal
@@ -200,6 +212,16 @@ extension KMLParserDelegate {
             return false
         }
         return true
+    }
+
+    /// Applies the normal pair of an inline `<StyleMap>` to the open placemark: an inline
+    /// style becomes its inline style, a `<styleUrl>` its style reference unless it has one.
+    private func applyInlinePair() {
+        if let inline = pairInlineStyle {
+            placemark?.inlineStyle = inline
+        } else if let url = pairStyleURL, placemark?.styleUrl == nil {
+            placemark?.styleUrl = url
+        }
     }
 
     /// Closes ExtendedData elements (ExtendedData/value/SimpleData/Data).

@@ -96,36 +96,23 @@ struct KMLParserTests {
         #expect(line != nil)
         #expect(line?.hasPoint == false)
         #expect(line?.coordinate != nil)
-        #expect(line?.geometries.contains { if case .lineString = $0 { true } else { false } } == true)
+        #expect(line?.geometries.contains {
+            if case .lineString = $0 {
+                true
+            } else {
+                false
+            }
+        } == true)
         let poly = doc.root.allPlacemarks.first { $0.name == "Building 40" } // Polygon
         #expect(poly != nil)
         #expect(poly?.hasPoint == false)
-        #expect(poly?.geometries.contains { if case .polygon = $0 { true } else { false } } == true)
-    }
-
-    @Test func inlinePlacemarkStyleDoesNotLeakIntoDocumentStyles() throws {
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <kml xmlns="http://www.opengis.net/kml/2.2">
-          <Document>
-            <name>Test</name>
-            <Placemark>
-              <name>Styled</name>
-              <Style>
-                <IconStyle>
-                  <Icon><href>inline.png</href></Icon>
-                </IconStyle>
-              </Style>
-              <Point><coordinates>1.0,2.0,0</coordinates></Point>
-            </Placemark>
-          </Document>
-        </kml>
-        """
-        let doc = try KMLParser.parse(data: Data(xml.utf8))
-        let pm = doc.root.allPlacemarks.first { $0.name == "Styled" }
-        #expect(pm != nil) // placemark is kept
-        #expect(pm?.coordinate?.longitude == 1.0)
-        #expect(doc.styles.isEmpty) // inline style must NOT leak into document table
+        #expect(poly?.geometries.contains {
+            if case .polygon = $0 {
+                true
+            } else {
+                false
+            }
+        } == true)
     }
 
     @Test func parseMalformedXMLThrows() {

@@ -14,10 +14,13 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             self.id = id
         }
 
-        func build() -> KMLContainer {
-            KMLContainer(id: id, name: name,
-                         children: children.map { $0.build() },
-                         placemarks: placemarks)
+        func build(styleUrlOverrides: [String: String] = [:]) -> KMLContainer {
+            let built = styleUrlOverrides.isEmpty ? placemarks : placemarks.map { placemark in
+                styleUrlOverrides[placemark.id].map { placemark.withStyleUrl($0) } ?? placemark
+            }
+            return KMLContainer(id: id, name: name,
+                                children: children.map { $0.build(styleUrlOverrides: styleUrlOverrides) },
+                                placemarks: built)
         }
     }
 
@@ -83,6 +86,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that
         /// has no point and no kept geometry.
         var fallbackCoordinate: Coordinate?
+        /// An inline `<Style>` (or the normal pair of an inline `<StyleMap>`).
+        var inlineStyle: StyleFields?
     }
 
     var placemark: PlacemarkBuilder?
@@ -126,6 +131,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     }
 
     var styleBuilder: StyleBuilder?
+    /// Inline styles collected from placemarks, merged and registered by `makeDocument()`.
+    var pendingInlineStyles: [PendingInlineStyle] = []
+    /// Inline `<Style>` buffered by the open `<Pair>` of an inline `<StyleMap>` in a placemark.
+    var pairInlineStyle: StyleFields?
 
     // StyleMap assembly. Each <Pair> buffers its <key> ("normal"/"highlight") and style
     // reference separately because KML allows them in either order; the pair is resolved
@@ -171,8 +180,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         } else {
             rootBuilder
         }
+        let overrides = resolveInlineStyles()
         return KMLDocument(name: effective.name, descriptionHTML: effective.description,
-                           root: effective.build(), styles: styles, styleMaps: styleMaps)
+                           root: effective.build(styleUrlOverrides: overrides),
+                           styles: styles, styleMaps: styleMaps)
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String,
@@ -213,10 +224,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             descriptionSawMarkup = false
             descriptionDiscard = !(parent.map(Self.descriptionParents.contains) ?? false)
         case "Style":
-            // Inline per-placemark styles (Style inside a Placemark) are intentionally not
-            // captured in Phase 1 — only document-level styles are indexed. Phase 2 will
-            // handle per-placemark rich styling.
-            guard placemark == nil else { break }
+            // Inside a Placemark the style is inline: `closeStyleElement` hands it to the
+            // placemark rather than indexing it by id.
             styleBuilder = StyleBuilder(id: attributeDict["id"] ?? nextID("s"))
         case "IconStyle":
             styleBuilder?.inIconStyle = true
@@ -225,16 +234,15 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "PolyStyle":
             styleBuilder?.inPolyStyle = true
         case "StyleMap":
-            // Same Phase 1 scope restriction as Style — skip inline StyleMaps inside Placemarks.
-            guard placemark == nil else { break }
             inStyleMap = true
-            styleMapID = attributeDict["id"]
+            styleMapID = placemark == nil ? attributeDict["id"] : nil
             styleMapNormalURL = nil
         case "Pair":
             guard inStyleMap else { break }
             inPair = true
             pairKey = nil
             pairStyleURL = nil
+            pairInlineStyle = nil
         case "ExtendedData":
             inExtendedData = true
         case "Data":
@@ -318,7 +326,12 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         let coordinate = pm.hasPoint
             ? pm.coordinate
             : Self.firstCoordinate(of: pm.geometries) ?? pm.fallbackCoordinate
-        let built = KMLPlacemark(id: nextID("p"), name: pm.name,
+        let id = nextID("p")
+        if let inline = pm.inlineStyle, !inline.isEmpty {
+            pendingInlineStyles.append(PendingInlineStyle(placemarkID: id, fields: inline,
+                                                          sharedStyleUrl: pm.styleUrl))
+        }
+        let built = KMLPlacemark(id: id, name: pm.name,
                                  descriptionHTML: pm.descriptionHTML,
                                  styleUrl: pm.styleUrl,
                                  coordinate: coordinate,

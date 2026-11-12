@@ -83,3 +83,12 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
         return "p:\(id)"
     }
 }
+
+extension KMLPlacemark {
+    /// A copy with a different `styleUrl` (used when inline styles are resolved).
+    func withStyleUrl(_ styleUrl: String?) -> KMLPlacemark {
+        KMLPlacemark(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
+                     coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
+                     extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID)
+    }
+}
