@@ -66,6 +66,26 @@ extension KMLDetailView {
     }
 }
 
+extension KMLDetailView {
+    /// (Re)builds the search corpus for the loaded document. Re-runs on every pop back from a
+    /// placemark, so the corpus is kept for the same document: matches must not vanish and
+    /// reappear mid-search.
+    func refreshSearchCorpus() async {
+        if searchCorpus != nil, let document, searchCorpusDocument == document {
+            return
+        }
+        searchCorpus = nil
+        searchCorpusDocument = nil
+        guard let document else { return }
+        let corpus = await makeSearchCorpus(root: document.root)
+        if Task.isCancelled {
+            return
+        }
+        searchCorpus = corpus
+        searchCorpusDocument = document
+    }
+}
+
 /// Builds a `SearchCorpus` on a background task (kept out of the view's isolation; see the
 /// `ClosureLifetimeFixup` note in CLAUDE.md).
 nonisolated func makeSearchCorpus(root: KMLContainer) async -> SearchCorpus {

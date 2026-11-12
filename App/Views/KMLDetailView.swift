@@ -55,6 +55,9 @@ struct KMLDetailView: View {
     /// document arrives (`buildSearchCorpus`). `nil` until ready: searches are name-only (plus
     /// notes) meanwhile, and the outline rebuilds when it lands.
     @State var searchCorpus: SearchCorpus?
+    /// The document `searchCorpus` was built from; lets the appearance-bound corpus task skip
+    /// a rebuild (and the transient `nil`) when the view re-appears with the same document.
+    @State var searchCorpusDocument: KMLDocument?
     /// Collapsed folder ids (tree paths like "0/2"). Toggled by tapping a folder row;
     /// ignored while searching (the outline force-expands then).
     @State var collapsedFolderIDs: Set<String> = []
@@ -170,6 +173,7 @@ struct KMLDetailView: View {
             loadError = nil
             outline = nil
             searchCorpus = nil
+            searchCorpusDocument = nil
             collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
@@ -260,13 +264,7 @@ struct KMLDetailView: View {
         // Build the search index off-main once the document (re)loads; `nil` first so a
         // replaced document never searches against a stale corpus.
         .task(id: document) {
-            searchCorpus = nil
-            guard let root = document?.root else { return }
-            let corpus = await makeSearchCorpus(root: root)
-            if Task.isCancelled {
-                return
-            }
-            searchCorpus = corpus
+            await refreshSearchCorpus()
         }
         // THE destination table: every EntryRoute pushed anywhere in this file's stack —
         // list rows, the toolbar map, the POI page's "Show on Map", the map's preview card,
