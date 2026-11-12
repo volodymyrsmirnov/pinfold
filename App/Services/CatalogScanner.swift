@@ -28,8 +28,11 @@ struct CatalogScanner {
     /// Builds an entry for one folder, honouring the never-overwrite-a-sidecar invariant:
     /// - `.ok`         → build the entry from the sidecar as today.
     /// - `.missing`    → backfill from the bare original (writes a fresh sidecar + cache).
-    /// - `.unreadable` → derive the entry in memory from the original but write NOTHING; if
-    ///   there is no readable original either, skip the folder entirely (no writes/deletes).
+    /// - `.unreadable` → derive the entry in memory from the original but write NOTHING (trash
+    ///   state, id and name are recovered from the damaged JSON where possible); the entry is
+    ///   read-only. If there is no readable original either, skip the folder entirely.
+    /// - `.notDownloaded` → (iCloud) the sidecar has probably not synced down yet: request its
+    ///   download and derive a read-only entry in memory, writing nothing (B2).
     private func entry(forFolderNamed name: String) -> CatalogEntry? {
         switch storage.readSidecar(forFolderNamed: name) {
         case let .ok(meta):
@@ -42,10 +45,26 @@ struct CatalogScanner {
         case .missing:
             return rebuildFromBareOriginal(folderNamed: name)
         case .unreadable:
-            // Derive in memory only — the on-disk sidecar is untouchable (newer schema or
-            // conflict artifact). No entry if there is nothing to derive from.
-            return deriveFromOriginal(folderNamed: name)?.entry
+            return readOnlyEntry(forFolderNamed: name, state: .unreadable)
+        case .notDownloaded:
+            storage.probe.startDownloading(storage.metadataFile(forFolderNamed: name))
+            return readOnlyEntry(forFolderNamed: name, state: .notDownloaded)
         }
+    }
+
+    /// Derives an entry in memory only — the on-disk sidecar is untouchable (newer schema,
+    /// conflict artifact, or not downloaded yet). For an unreadable sidecar the identity, name
+    /// and trash state are recovered from whatever JSON is still intact, so a trashed entry does
+    /// not pop back into the active list. `nil` if there is nothing to derive from.
+    private func readOnlyEntry(forFolderNamed name: String, state: CatalogEntry.SidecarState) -> CatalogEntry? {
+        guard var entry = deriveFromOriginal(folderNamed: name)?.entry else { return nil }
+        if state == .unreadable, let tolerant = storage.tolerantSidecar(forFolderNamed: name) {
+            entry.id = tolerant.id ?? entry.id
+            entry.displayName = tolerant.displayName ?? entry.displayName
+            entry.trashedAt = tolerant.trashedAt
+        }
+        entry.sidecarState = state
+        return entry
     }
 
     /// Parses the original file in `name`, writes a sidecar + caches resources, and

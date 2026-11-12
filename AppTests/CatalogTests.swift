@@ -225,4 +225,80 @@ import Testing
 
         #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
     }
+
+    // MARK: - Read-only entries and action errors (B12)
+
+    private func seedUnreadable(_ storage: StorageLocations, folder: String) throws -> Data {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let garbage = Data("not json".utf8)
+        try garbage.write(to: dir.appendingPathComponent("metadata.json"))
+        return garbage
+    }
+
+    @Test func renameOnReadOnlyEntry_setsActionErrorAndWritesNothing() async throws {
+        let (catalog, storage) = makeCatalog()
+        let garbage = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        #expect(entry.isReadOnly)
+
+        await catalog.rename(entry, to: "New Name")
+
+        #expect(catalog.actionError != nil)
+        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
+        #expect(catalog.active.first?.displayName == "Rome")
+    }
+
+    @Test func setTagsOnReadOnlyEntry_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        _ = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.setTags(["a"], for: entry)
+
+        #expect(catalog.actionError != nil)
+    }
+
+    @Test func moveToTrashOnReadOnlyEntry_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        _ = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.moveToTrash(entry)
+
+        #expect(catalog.actionError != nil)
+        #expect(catalog.active.count == 1)
+    }
+
+    @Test func mutationOnHealthyEntry_leavesActionErrorNil() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "ok")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.rename(entry, to: "Renamed")
+
+        #expect(catalog.actionError == nil)
+        #expect(catalog.active.first?.displayName == "Renamed")
+    }
+
+    @Test func deleteForeverFailure_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "stuck")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        // A read-only root: the folder itself cannot be unlinked.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: storage.root.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: storage.root.path) }
+
+        await catalog.deleteForever(entry)
+
+        // The folder's contents may be removed before the unlink of the folder itself fails,
+        // so only the reported error is asserted.
+        #expect(catalog.actionError != nil)
+    }
 }

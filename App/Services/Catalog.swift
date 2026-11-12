@@ -15,6 +15,10 @@ import Observation
     /// The active storage root. Changes (live) when the iCloud sync toggle flips.
     private(set) var storage: StorageLocations
 
+    /// The last user-initiated mutation that could not be carried out (a read-only entry, a
+    /// failed write or delete). Observable; shown by `CatalogErrorAlert`, which clears it.
+    var actionError: CatalogActionError?
+
     @ObservationIgnored private let cache: ResourceCache
     /// At most one resource-materialization pass runs at a time (see `reload`).
     @ObservationIgnored private var materializeTask: Task<Void, Never>?
@@ -90,7 +94,7 @@ import Observation
     /// A trashed entry should disappear from system (Core Spotlight) search, so its items are
     /// removed here. Restore re-indexes them.
     func moveToTrash(_ entry: CatalogEntry) async {
-        writeTrashedAt(.now, to: entry)
+        guard writeTrashedAt(.now, to: entry) else { return }
         let toRemove = await indexEntries(for: entry)
         SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
         await reload()
@@ -98,7 +102,7 @@ import Observation
 
     /// Restores a trashed entry by clearing `trashedAt` in its sidecar, then reloading.
     func restore(_ entry: CatalogEntry) async {
-        writeTrashedAt(nil, to: entry)
+        guard writeTrashedAt(nil, to: entry) else { return }
         let toIndex = await indexEntries(for: entry)
         SpotlightIndexer.index(entry: entry, indexEntries: toIndex)
         await reload()
@@ -113,7 +117,7 @@ import Observation
     func rename(_ entry: CatalogEntry, to newName: String) async {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.displayName = trimmed }
+        guard updateSidecar(of: entry, { $0.displayName = trimmed }) else { return }
         // Re-index the whole entry so Spotlight reflects the new name everywhere: the entry
         // item's title AND every placemark item's contentDescription embed the display name, so
         // a name-only reindex would leave stale "<old name>" subtitles on the placemark hits.
@@ -135,7 +139,7 @@ import Observation
     /// field (favorites/visited/trash/name) — mirrors `rename`.
     func setTags(_ tags: [String], for entry: CatalogEntry) async {
         let normalized = Self.normalizeTags(tags)
-        try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.tags = normalized }
+        guard updateSidecar(of: entry, { $0.tags = normalized }) else { return }
         await reload()
     }
 
@@ -161,8 +165,12 @@ import Observation
         // The read is `await`ed (now off-main) and completes fully before `removeFolder`, so the
         // ordering is preserved.
         let toRemove = await indexEntries(for: entry)
-        try? storage.removeFolder(named: entry.storageFolderName)
-        SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
+        do {
+            try storage.removeFolder(named: entry.storageFolderName)
+            SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
+        } catch {
+            actionError = .deleteFailed(entryName: entry.displayName, error: error)
+        }
         await reload()
     }
 
@@ -187,8 +195,26 @@ import Observation
         await readIndexEntries(from: storage.resourcesDirectory(for: entry))
     }
 
-    private func writeTrashedAt(_ date: Date?, to entry: CatalogEntry) {
-        try? storage.updateMetadata(forFolderNamed: entry.storageFolderName) { $0.trashedAt = date }
+    private func writeTrashedAt(_ date: Date?, to entry: CatalogEntry) -> Bool {
+        updateSidecar(of: entry) { $0.trashedAt = date }
+    }
+
+    /// Applies `mutate` to the entry's sidecar, refusing read-only entries (whose sidecar must
+    /// not be touched) and reporting a failed write through `actionError`. Returns whether the
+    /// change was written. The live catalogue state wins over a stale copy held by a view.
+    private func updateSidecar(of entry: CatalogEntry, _ mutate: (inout EntryMetadata) -> Void) -> Bool {
+        let live = entries.first { $0.storageFolderName == entry.storageFolderName } ?? entry
+        if live.isReadOnly {
+            actionError = .readOnly(entryName: live.displayName, state: live.sidecarState)
+            return false
+        }
+        do {
+            try storage.updateMetadata(forFolderNamed: entry.storageFolderName, mutate)
+            return true
+        } catch {
+            actionError = .saveFailed(entryName: live.displayName, error: error)
+            return false
+        }
     }
 }
 

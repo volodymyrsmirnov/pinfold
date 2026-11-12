@@ -42,8 +42,13 @@ extension RootView {
     ///   already where the resolved root expects them).
     func applyStorage(migrate: Bool) async {
         let (storage, ubiquitous) = await resolveStorage()
+        if ubiquitous {
+            // Earlier builds could upload the local cache root into iCloud as a fake entry
+            // folder; remove that leftover (only when its shape matches exactly).
+            await removeStrayCacheFolder(inSyncedRoot: storage.root)
+        }
         if migrate {
-            let from = catalog.storage.root
+            let from = catalog.storage
             let wasUbiquitous = rootIsUbiquitous
             // Run the move off-main, then surface any per-folder failures. We do NOT swallow
             // the report: a folder that fails to move stays in the old root and would silently
@@ -51,9 +56,9 @@ extension RootView {
             // path) leave `report` nil and are best-effort ignored — the repoint below still
             // happens so the app keeps working against the resolved root.
             let report = try? await Task.detached {
-                try StorageLocations.migrateEntryFolders(
+                try StorageLocations.migrateEntries(
                     from: from,
-                    to: storage.root,
+                    to: storage,
                     fromUbiquitous: wasUbiquitous,
                     toUbiquitous: ubiquitous
                 )
@@ -103,4 +108,12 @@ extension RootView {
         watcher.start(root: root, ubiquitous: ubiquitous)
         self.watcher = watcher
     }
+}
+
+/// Runs the stray-cache cleanup off the main actor (it takes a file-coordination lock).
+/// A `nonisolated` free function so the `Task.detached` closure is compiled outside the view.
+private nonisolated func removeStrayCacheFolder(inSyncedRoot root: URL) async {
+    await Task.detached {
+        StorageLocations.removeStrayCacheFolder(inSyncedRoot: root)
+    }.value
 }

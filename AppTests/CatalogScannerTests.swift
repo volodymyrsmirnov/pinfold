@@ -318,4 +318,115 @@ import Testing
         #expect(!changed)
         #expect(FileManager.default.fileExists(atPath: sentinel.path), "must not clobber the cache")
     }
+
+    // MARK: - Unreadable sidecars keep their state (B12)
+
+    private func seedUnreadable(_ storage: StorageLocations, folder: String, sidecar: Data) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let url = dir.appendingPathComponent("metadata.json")
+        try sidecar.write(to: url)
+        return url
+    }
+
+    @Test func unreadableSidecarWithTrashedAt_staysTrashed() throws {
+        let (scanner, storage) = makeScanner()
+        let json = """
+        {"id":"\(UUID().uuidString)","displayName":"Old Rome","trashedAt":5000,"pointCount":"many"}
+        """
+        let url = try seedUnreadable(storage, folder: "t", sidecar: Data(json.utf8))
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(entry.isTrashed)
+        #expect(entry.displayName == "Old Rome")
+        #expect(entry.isReadOnly)
+        #expect(entry.sidecarState == .unreadable)
+        #expect(try Data(contentsOf: url) == Data(json.utf8))
+    }
+
+    @Test func unreadableSidecarThatIsNotJSON_isActiveAndReadOnly() throws {
+        let (scanner, storage) = makeScanner()
+        _ = try seedUnreadable(storage, folder: "g", sidecar: Data("garbage".utf8))
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(!entry.isTrashed)
+        #expect(entry.isReadOnly)
+        #expect(entry.displayName == "Rome")
+    }
+
+    @Test func unreadableSidecarIsNeverRewritten() throws {
+        let (scanner, storage) = makeScanner()
+        let garbage = Data("{\"trashedAt\": 1, broken".utf8)
+        let url = try seedUnreadable(storage, folder: "g", sidecar: garbage)
+
+        _ = scanner.scan()
+        _ = scanner.scan()
+
+        #expect(try Data(contentsOf: url) == garbage)
+    }
+
+    // MARK: - Sidecar not downloaded (B2)
+
+    private func scanner(ubiquitous probe: FakeUbiquityProbe, storage: StorageLocations) -> CatalogScanner {
+        var storage = storage
+        storage.isUbiquitous = true
+        storage.probe = probe
+        return CatalogScanner(storage: storage, cache: ResourceCache { _ in Data() })
+    }
+
+    private func seedBareOriginal(_ storage: StorageLocations, folder: String) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        return dir
+    }
+
+    @Test func missingSidecarInUbiquitousRoot_uuidFolder_isNotBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let name = UUID().uuidString
+        let dir = try seedBareOriginal(storage, folder: name)
+        let probe = FakeUbiquityProbe()
+
+        let entry = try #require(scanner(ubiquitous: probe, storage: storage).scan().first)
+
+        #expect(entry.isReadOnly)
+        #expect(entry.sidecarState == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+        #expect(probe.downloadRequests == [storage.metadataFile(forFolderNamed: name)])
+    }
+
+    @Test func placeholderPresent_isNotBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: "Dropped")
+
+        let entry = try #require(
+            scanner(ubiquitous: FakeUbiquityProbe(placeholder: true), storage: storage).scan().first
+        )
+
+        #expect(entry.sidecarState == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
+
+    @Test func missingSidecarInLocalRoot_isStillBackfilled() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: UUID().uuidString)
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(!entry.isReadOnly)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
+
+    @Test func nonUUIDFolderInUbiquitousRoot_isBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: "Dropped")
+
+        let entry = try #require(scanner(ubiquitous: FakeUbiquityProbe(), storage: storage).scan().first)
+
+        #expect(!entry.isReadOnly)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
 }

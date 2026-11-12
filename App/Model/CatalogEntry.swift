@@ -19,6 +19,24 @@ struct CatalogEntry: Identifiable, Equatable {
     /// User-assigned labels (per-ENTRY), copied from the sidecar so the catalogue list can
     /// render filter chips and per-row tag text without re-reading metadata. Kept sorted.
     var tags: [String] = []
+    /// Whether the entry's `metadata.json` was read normally. Anything but `.ok` means the
+    /// entry was derived in memory and must not be mutated (B2, B12).
+    var sidecarState: SidecarState = .ok
+
+    /// The health of an entry's sidecar.
+    enum SidecarState: Equatable {
+        /// Read and decoded normally.
+        case ok
+        /// Exists but cannot be decoded (newer schema, or damaged). Never rewritten.
+        case unreadable
+        /// Not yet downloaded from iCloud. Never backfilled over.
+        case notDownloaded
+    }
+
+    /// `true` when changes would have to write a sidecar that must not be touched.
+    var isReadOnly: Bool {
+        sidecarState != .ok
+    }
 
     /// `true` when the entry has been moved to Trash.
     var isTrashed: Bool {
