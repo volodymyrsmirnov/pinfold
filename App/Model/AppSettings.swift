@@ -1,6 +1,31 @@
 import Foundation
 import Observation
 
+/// Whether remote icons and photos named by an imported file are downloaded.
+///
+/// Downloading reveals the device's IP address to every host the file names, so the user
+/// chooses. Stored per device under `settings.remoteImagePolicy`.
+enum RemoteImagePolicy: String, CaseIterable, Identifiable {
+    /// Download as soon as a file is imported or opened (default).
+    case always
+    /// Download only after the user allows it for that file.
+    case ask
+    /// Never download; links are remembered but nothing is fetched.
+    case never
+
+    var id: String {
+        rawValue
+    }
+
+    /// The `UserDefaults` key the policy is stored under.
+    static let defaultsKey = "settings.remoteImagePolicy"
+
+    /// The stored policy in `defaults`, or `.always` when unset or unrecognised.
+    static func stored(in defaults: UserDefaults) -> RemoteImagePolicy {
+        defaults.string(forKey: defaultsKey).flatMap(RemoteImagePolicy.init(rawValue:)) ?? .always
+    }
+}
+
 /// App preferences, backed by `UserDefaults`.
 ///
 /// Replaces the SwiftData `AppSettings` model. Values are stored in observable properties
@@ -27,6 +52,7 @@ import Observation
         static let defaultMapAppID = "settings.defaultMapAppID"
         static let clusterMapPins = "settings.clusterMapPins"
         static let syncEnabled = "settings.syncEnabled"
+        static let remoteImagePolicy = RemoteImagePolicy.defaultsKey
         static let entrySort = "settings.entrySort"
         static let restoreSessionEnabled = "settings.restoreSessionEnabled"
         static let resumeEntryFolderName = "settings.resumeEntryFolderName"
@@ -56,6 +82,11 @@ import Observation
     /// Whether this device participates in iCloud Drive sync. Off by default (opt-in).
     var syncEnabled: Bool {
         didSet { defaults.set(syncEnabled, forKey: Key.syncEnabled) }
+    }
+
+    /// Whether remote icons and photos are downloaded on import. Defaults to `.always`.
+    var remoteImagePolicy: RemoteImagePolicy {
+        didSet { defaults.set(remoteImagePolicy.rawValue, forKey: Key.remoteImagePolicy) }
     }
 
     /// How the catalogue's active list is ordered (presentation-level; see `EntrySort`).
@@ -136,6 +167,7 @@ import Observation
         defaultMapAppID = defaults.string(forKey: Key.defaultMapAppID)
         clusterMapPins = defaults.bool(forKey: Key.clusterMapPins)
         syncEnabled = defaults.bool(forKey: Key.syncEnabled)
+        remoteImagePolicy = RemoteImagePolicy.stored(in: defaults)
         entrySort = defaults.string(forKey: Key.entrySort)
             .flatMap(EntrySort.init(rawValue:)) ?? .dateDesc
         restoreSessionEnabled = defaults.object(forKey: Key.restoreSessionEnabled) as? Bool ?? true

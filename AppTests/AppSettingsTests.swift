@@ -173,3 +173,24 @@ import Testing
         #expect(fresh.resumeEntryFolderName == "folder-a")
     }
 }
+
+@Suite(.serialized) @MainActor struct RemoteImagePolicySettingsTests {
+    @Test func remoteImagePolicy_defaultsToAlways_andPersists() throws {
+        let suite = "RemoteImagePolicyTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.remoteImagePolicy == .always)
+
+        settings.remoteImagePolicy = .ask
+        #expect(AppSettings(defaults: defaults).remoteImagePolicy == .ask)
+        #expect(RemoteImagePolicy.stored(in: defaults) == .ask)
+
+        settings.remoteImagePolicy = .never
+        #expect(AppSettings(defaults: defaults).remoteImagePolicy == .never)
+
+        defaults.set("bogus", forKey: RemoteImagePolicy.defaultsKey)
+        #expect(AppSettings(defaults: defaults).remoteImagePolicy == .always)
+    }
+}
