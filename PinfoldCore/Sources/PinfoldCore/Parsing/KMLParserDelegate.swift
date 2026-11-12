@@ -198,6 +198,49 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                            styles: styles, styleMaps: styleMaps, networkLinks: networkLinks)
     }
 
+    // MARK: DTD declarations (defence in depth behind the byte-level DOCTYPE guard)
+
+    private func rejectDeclaration(_ parser: XMLParser) {
+        abortError = KMLParseError.dtdProhibited
+        parser.abortParsing()
+    }
+
+    func parser(_ parser: XMLParser, foundInternalEntityDeclarationWithName _: String, value _: String?) {
+        rejectDeclaration(parser)
+    }
+
+    func parser(_ parser: XMLParser, foundExternalEntityDeclarationWithName _: String,
+                publicID _: String?, systemID _: String?)
+    // swiftlint:disable:next opening_brace
+    {
+        rejectDeclaration(parser)
+    }
+
+    func parser(_ parser: XMLParser, foundUnparsedEntityDeclarationWithName _: String, publicID _: String?,
+                systemID _: String?, notationName _: String?)
+    // swiftlint:disable:next opening_brace
+    {
+        rejectDeclaration(parser)
+    }
+
+    func parser(_ parser: XMLParser, foundElementDeclarationWithName _: String, model _: String) {
+        rejectDeclaration(parser)
+    }
+
+    func parser(_ parser: XMLParser, foundAttributeDeclarationWithName _: String, forElement _: String,
+                type _: String?, defaultValue _: String?)
+    // swiftlint:disable:next opening_brace
+    {
+        rejectDeclaration(parser)
+    }
+
+    func parser(_ parser: XMLParser, foundNotationDeclarationWithName _: String,
+                publicID _: String?, systemID _: String?)
+    // swiftlint:disable:next opening_brace
+    {
+        rejectDeclaration(parser)
+    }
+
     func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?,
                 attributes attributeDict: [String: String] = [:])
