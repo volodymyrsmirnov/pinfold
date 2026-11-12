@@ -146,4 +146,126 @@ struct KMZArchiveTests {
         #expect(parsed.rootKMLPath == "doc.kml")
         #expect(parsed.embeddedResources["images/icon.png"] == Data([0x01, 0x02]))
     }
+
+    // MARK: - CC-1 streaming and root-first extraction
+
+    private func tempDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("KMZArchiveTests-\(UUID().uuidString)")
+    }
+
+    @Test func defaultCapsAreLowered() {
+        #expect(KMZArchive.defaultMaxUncompressedBytes == 256 * 1024 * 1024)
+        #expect(KMZArchive.defaultMaxStreamedBytes == 1024 * 1024 * 1024)
+        #expect(KMLReader.defaultMaxPlainBytes == 256 * 1024 * 1024)
+    }
+
+    @Test func extractRoot_doesNotInflateResources() throws {
+        let big = Data(repeating: 0x41, count: 1024 * 1024)
+        let zip = try makeZip([("images/big.png", big), ("doc.kml", minimalKML)])
+        let root = try KMZArchive.extractRoot(zip, maxRootBytes: 4096)
+        #expect(root.rootKMLPath == "doc.kml")
+        #expect(root.rootKML == minimalKML)
+        #expect(throws: KMZArchiveError.archiveTooLarge) {
+            try KMZArchive.extractRoot(zip, maxRootBytes: 16)
+        }
+    }
+
+    @Test func extractResources_writesFilesAndReturnsRootRelativeKeys() throws {
+        let zip = try makeZip([
+            ("folder/doc.kml", minimalKML),
+            ("folder/icons/pin.png", Data([0xAA, 0xBB])),
+            ("other/x.png", Data([0xCC])),
+        ])
+        let dir = tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let map = try KMZArchive.extractResources(zip, into: dir) { $0.replacingOccurrences(of: "/", with: "_") }
+        #expect(map == ["icons/pin.png": "icons_pin.png", "other/x.png": "other_x.png"])
+        #expect(try Data(contentsOf: dir.appendingPathComponent("icons_pin.png")) == Data([0xAA, 0xBB]))
+        #expect(try Data(contentsOf: dir.appendingPathComponent("other_x.png")) == Data([0xCC]))
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("doc.kml").path))
+    }
+
+    @Test func extractResources_enforcesBudgetMidStream() throws {
+        let zip = try makeZip([
+            ("doc.kml", minimalKML),
+            ("a.bin", Data(repeating: 1, count: 4096)),
+        ])
+        let dir = tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(throws: KMZArchiveError.archiveTooLarge) {
+            try KMZArchive.extractResources(zip, into: dir, filenameFor: { $0 }, maxUncompressedBytes: 100)
+        }
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("a.bin").path))
+    }
+
+    @Test func extractResources_skipsTraversalEntries() throws {
+        let zip = try makeZip([
+            ("../evil.png", Data([0x01])),
+            ("/abs.png", Data([0x02])),
+            ("ok.png", Data([0x03])),
+            ("doc.kml", minimalKML),
+        ])
+        let parent = tempDirectory()
+        let dir = parent.appendingPathComponent("out")
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let map = try KMZArchive.extractResources(zip, into: dir) { $0 }
+        #expect(map == ["ok.png": "ok.png"])
+        #expect(!FileManager.default.fileExists(atPath: parent.appendingPathComponent("evil.png").path))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["ok.png"])
+    }
+
+    @Test func extractResources_skipsUnsafeFilenamesFromCallback() throws {
+        let zip = try makeZip([("doc.kml", minimalKML), ("a.png", Data([1])), ("b.png", Data([2]))])
+        let parent = tempDirectory()
+        let dir = parent.appendingPathComponent("out")
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let map = try KMZArchive.extractResources(zip, into: dir) { $0 == "a.png" ? "../escape.png" : $0 }
+        #expect(map == ["b.png": "b.png"])
+        #expect(!FileManager.default.fileExists(atPath: parent.appendingPathComponent("escape.png").path))
+    }
+
+    @Test func readDocument_matchesReadForEveryKMZFixture() throws {
+        for name in ["Rome.kmz", "Munich Sole.kmz", "Iceland.kmz"] {
+            let data = try Fixture.data(name)
+            let doc = try KMLReader.readDocument(data: data)
+            let parsed = try KMLReader.read(data: data)
+            #expect(doc.name == parsed.document.name)
+            #expect(doc.placemarkCount == parsed.document.placemarkCount)
+            #expect(doc.pointCount == parsed.document.pointCount)
+        }
+    }
+
+    @Test func readDocument_doesNotInflateResources() throws {
+        let big = Data(repeating: 0x41, count: 1024 * 1024)
+        let zip = try makeZip([("images/big.png", big), ("doc.kml", minimalKML)])
+        let doc = try KMLReader.readDocument(data: zip, maxPlainBytes: 1024, maxRootBytes: 4096)
+        #expect(doc.name == "Zipped")
+        // The in-memory read, by contrast, honours the budget across resources.
+        #expect(throws: KMZArchiveError.archiveTooLarge) {
+            try KMLReader.read(data: zip, maxPlainBytes: 1024, maxArchiveBytes: 4096)
+        }
+    }
+
+    @Test func plainInputOverCap_throwsFileTooLarge() throws {
+        let data = try Fixture.data("Rome.kml")
+        do {
+            _ = try KMLReader.readDocument(data: data, maxPlainBytes: 10, maxRootBytes: 10)
+            Issue.record("expected fileTooLarge")
+        } catch KMLReadError.fileTooLarge {}
+        do {
+            _ = try KMLReader.read(data: data, maxPlainBytes: 10, maxArchiveBytes: 10)
+            Issue.record("expected fileTooLarge")
+        } catch KMLReadError.fileTooLarge {}
+    }
+
+    @Test func extractResources_viaReaderMatchesArchive() throws {
+        let dir = tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let kmz = try Fixture.data("Rome.kmz")
+        let map = try KMLReader.extractResources(fromKMZ: kmz, into: dir) {
+            $0.replacingOccurrences(of: "/", with: "_")
+        }
+        #expect(map["images/icon-1.png"] == "images_icon-1.png")
+    }
 }
