@@ -81,10 +81,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         // `shouldShowPin` suppresses pins for pure line/polygon placemarks (the overlay is
         // their representation); track and point placemarks keep their pin.
         for placemark in placemarks where Self.shouldShowPin(placemark) {
-            guard let annotation = makeAnnotation(for: placemark, coordinator: context.coordinator)
-            else { continue }
-            mapView.addAnnotation(annotation)
-            context.coordinator.annotationsByKey[annotation.stableKey] = annotation
+            context.coordinator.addPins(for: placemark, to: mapView)
         }
         context.coordinator.lastPlacemarkKeys = Set(context.coordinator.annotationsByKey.keys)
         context.coordinator.lastDesiredKeys = Set(placemarks.map(\.stableKey))
@@ -99,7 +96,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             context.coordinator.overlaysByKey[styled.stableKey, default: []].append(styled)
         }
 
-        let coordinates = placemarks.compactMap(\.coordinate)
+        let coordinates = Self.fitCoordinates(for: placemarks)
         let focusKey = initialFocusKey
         let savedCamera = cameraStore.camera(forFolderName: entry.storageFolderName)
         let userLocationVisible = showsUserLocation
@@ -165,15 +162,10 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 currentKeys: coordinator.lastPlacemarkKeys, desired: placemarks
             )
             for key in diff.toRemove {
-                if let annotation = coordinator.annotationsByKey.removeValue(forKey: key) {
-                    mapView.removeAnnotation(annotation)
-                }
+                coordinator.removePins(forKey: key, from: mapView)
             }
             for placemark in diff.toAdd where Self.shouldShowPin(placemark) {
-                guard let annotation = makeAnnotation(for: placemark, coordinator: coordinator)
-                else { continue }
-                mapView.addAnnotation(annotation)
-                coordinator.annotationsByKey[annotation.stableKey] = annotation
+                coordinator.addPins(for: placemark, to: mapView)
             }
             coordinator.lastPlacemarkKeys = Set(coordinator.annotationsByKey.keys)
 
@@ -200,7 +192,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             coordinator.suppressCameraSave = true
             let allOverlays = coordinator.overlaysByKey.values.flatMap(\.self)
             Self.fit(
-                coordinates: placemarks.compactMap(\.coordinate),
+                coordinates: Self.fitCoordinates(for: placemarks),
                 overlays: allOverlays, in: mapView, animated: true
             )
         }
@@ -224,7 +216,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         if decorationChanged {
             coordinator.lastFavoriteKeys = favoriteKeys
             coordinator.lastVisitedKeys = visitedKeys
-            for annotation in coordinator.annotationsByKey.values {
+            for annotation in coordinator.allPinAnnotations {
                 let fresh = PlacemarkPinImage.decorated(
                     annotation.baseImage,
                     isFavorite: favoriteKeys.contains(annotation.stableKey),
@@ -250,12 +242,16 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     // The pure diff/pin-rule helpers (`annotationDiff`, `overlayDiff`, `shouldShowPin`) live
     // in `PlacemarkMapSupport.swift` as a `nonisolated` extension on this type.
 
-    /// Builds a `PlacemarkAnnotation` for `placemark` (returns `nil` if it has no
-    /// coordinate). Single creation path shared by `makeUIView` and `updateUIView`'s
-    /// reconciliation. The base image is resolved through `coordinator.pinImageCache`,
-    /// keyed by style identity, so the disk I/O + scaling happens once per distinct style
-    /// (O(styles)), not per placemark; decoration stays per-annotation.
-    func makeAnnotation(for placemark: KMLPlacemark, coordinator: Coordinator) -> PlacemarkAnnotation? {
+    /// Builds the `PlacemarkAnnotation` for `placemark`'s representative point, plus one per
+    /// extra MultiGeometry point (all sharing the placemark's `stableKey`). Returns `nil`
+    /// if the placemark has no coordinate. Single creation path shared by `makeUIView` and
+    /// `updateUIView`'s reconciliation. The base image is resolved through
+    /// `coordinator.pinImageCache`, keyed by style identity, so the disk I/O + scaling
+    /// happens once per distinct style (O(styles)), not per placemark; decoration stays
+    /// per-annotation.
+    func makeAnnotations(
+        for placemark: KMLPlacemark, coordinator: Coordinator
+    ) -> (primary: PlacemarkAnnotation, extras: [PlacemarkAnnotation])? {
         guard let coordinate = placemark.coordinate else { return nil }
         let key = PlacemarkPinImage.cacheKey(for: placemark, document: document)
         let base: (image: UIImage, anchor: PinAnchor)
@@ -274,15 +270,18 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             isVisited: visitedKeys.contains(placemark.stableKey),
             anchor: base.anchor
         )
-        return PlacemarkAnnotation(
-            stableKey: placemark.stableKey,
-            coordinate: CLLocationCoordinate2D(
-                latitude: coordinate.latitude, longitude: coordinate.longitude
-            ),
-            title: placemark.name,
-            baseImage: base.image,
-            image: image,
-            anchor: base.anchor
-        )
+        func annotation(at coordinate: Coordinate) -> PlacemarkAnnotation {
+            PlacemarkAnnotation(
+                stableKey: placemark.stableKey,
+                coordinate: CLLocationCoordinate2D(
+                    latitude: coordinate.latitude, longitude: coordinate.longitude
+                ),
+                title: placemark.name,
+                baseImage: base.image,
+                image: image,
+                anchor: base.anchor
+            )
+        }
+        return (annotation(at: coordinate), Self.extraPoints(of: placemark).map(annotation(at:)))
     }
 }

@@ -53,6 +53,12 @@ extension PlacemarkMapRepresentable {
         /// changes — and that cannot happen within a single parse, where each id appears
         /// once. The diff therefore never needs to compare content under a stable key.
         var annotationsByKey: [String: PlacemarkAnnotation] = [:]
+        /// The extra pins of multi-point placemarks (the 2nd+ `<Point>` of a MultiGeometry),
+        /// keyed by the owning placemark's `stableKey` — the same key as the primary pin in
+        /// `annotationsByKey`. Same **Registry invariant**: this is the sole mutator of
+        /// those annotations; they are added, removed and re-decorated as a group with the
+        /// placemark, and selecting any of them selects the placemark.
+        var extraAnnotationsByKey: [String: [PlacemarkAnnotation]] = [:]
         /// Live index of the geometry overlays on the map, keyed by the owning placemark's
         /// `stableKey`. A multi-geometry placemark maps to several `StyledOverlay`s under one
         /// key (added/removed as a group). Mirrors `annotationsByKey`; see that property's
@@ -114,7 +120,7 @@ extension PlacemarkMapRepresentable {
             mapView.setUserTrackingMode(.none, animated: false)
             let overlays = overlaysByKey.values.flatMap(\.self)
             PlacemarkMapRepresentable.fit(
-                coordinates: parent.placemarks.compactMap(\.coordinate),
+                coordinates: PlacemarkMapRepresentable.fitCoordinates(for: parent.placemarks),
                 overlays: overlays, in: mapView, animated: true
             )
         }

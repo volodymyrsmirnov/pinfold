@@ -182,4 +182,13 @@ struct OverlayBuilderTests {
         #expect(overlays.contains { $0.overlay is MKPolyline && !($0.overlay is MKPolygon) })
         #expect(overlays.contains { $0.overlay is MKPolygon })
     }
+
+    /// Extra MultiGeometry points are pins, never overlays.
+    @Test func pointGeometryProducesNoOverlay() {
+        let pm = placemark(
+            id: "mp", hasPoint: true,
+            geometries: [.point(Coordinate(longitude: 5, latitude: 5))]
+        )
+        #expect(OverlayBuilder.overlays(for: [pm], document: document(style: nil)).isEmpty)
+    }
 }

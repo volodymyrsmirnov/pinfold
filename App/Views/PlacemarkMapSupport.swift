@@ -217,9 +217,28 @@ extension PlacemarkMapRepresentable {
     nonisolated static func shouldShowPin(_ placemark: KMLPlacemark) -> Bool {
         guard !placemark.geometries.isEmpty, !placemark.hasPoint else { return true }
         let isPureLineOrPolygon = placemark.geometries.allSatisfy { geometry in
-            if case .track = geometry { return false }
-            return true
+            switch geometry {
+            case .track, .point: false
+            default: true
+            }
         }
         return !isPureLineOrPolygon
+    }
+
+    /// The extra `<Point>`s of a MultiGeometry placemark (everything after the
+    /// representative point, which is the placemark's own `coordinate`). Each becomes an
+    /// additional pin sharing the placemark's `stableKey`.
+    nonisolated static func extraPoints(of placemark: KMLPlacemark) -> [Coordinate] {
+        placemark.geometries.compactMap { geometry in
+            if case let .point(coordinate) = geometry { coordinate } else { nil }
+        }
+    }
+
+    /// Every coordinate the fit-to-content framing must include: each placemark's
+    /// representative point plus its extra MultiGeometry points.
+    nonisolated static func fitCoordinates(for placemarks: [KMLPlacemark]) -> [Coordinate] {
+        placemarks.flatMap { placemark in
+            (placemark.coordinate.map { [$0] } ?? []) + extraPoints(of: placemark)
+        }
     }
 }

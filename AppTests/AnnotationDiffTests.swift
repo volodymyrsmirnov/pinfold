@@ -78,4 +78,36 @@ struct AnnotationDiffTests {
         #expect(diff.toAdd.isEmpty)
         #expect(diff.toRemove.isEmpty)
     }
+
+    // MARK: - Extra points (A2b)
+
+    private func multiPoint(source: String, extras: [Coordinate]) -> KMLPlacemark {
+        KMLPlacemark(
+            id: "p-\(source)", name: "N", descriptionHTML: nil, styleUrl: nil,
+            coordinate: Coordinate(longitude: 1, latitude: 2), hasPoint: true,
+            geometries: extras.map { KMLGeometry.point($0) },
+            extendedData: [], photoLinks: [], sourceID: source
+        )
+    }
+
+    /// Extra points share the placemark's key, so the one key-level diff adds and removes
+    /// the whole group; `extraPoints(of:)` says how many pins the group has.
+    @Test func extraPointsAreAddedAndRemovedWithTheirPlacemark() {
+        let extras = [Coordinate(longitude: 3, latitude: 4), Coordinate(longitude: 5, latitude: 6)]
+        let multi = multiPoint(source: "m", extras: extras)
+        #expect(PlacemarkMapRepresentable.extraPoints(of: multi) == extras)
+
+        let add = PlacemarkMapRepresentable.annotationDiff(currentKeys: [], desired: [multi])
+        #expect(add.toAdd.map(\.stableKey) == ["id:m"])
+        #expect(PlacemarkMapRepresentable.extraPoints(of: add.toAdd[0]).count == 2)
+
+        let remove = PlacemarkMapRepresentable.annotationDiff(currentKeys: ["id:m"], desired: [])
+        #expect(remove.toRemove == ["id:m"])
+    }
+
+    /// A multi-point placemark always shows its pins, even though it carries geometries.
+    @Test func multiPointPlacemarkShowsPins() {
+        let multi = multiPoint(source: "m", extras: [Coordinate(longitude: 3, latitude: 4)])
+        #expect(PlacemarkMapRepresentable.shouldShowPin(multi))
+    }
 }
