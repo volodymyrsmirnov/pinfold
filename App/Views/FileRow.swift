@@ -30,6 +30,13 @@ struct FileRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
+                if entry.isReadOnly {
+                    Label(readOnlyBadge, systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
+
                 if !entry.tags.isEmpty {
                     Label(entry.tags.joined(separator: ", "), systemImage: "tag")
                         .font(.caption2)
@@ -43,6 +50,10 @@ struct FileRow: View {
     }
 
     // MARK: - Private helpers
+
+    private var readOnlyBadge: String {
+        entry.sidecarState == .notDownloaded ? "Downloading from iCloud" : "Saved data unreadable"
+    }
 
     private var secondaryLine: String {
         let dateStr = entry.importDate.formatted(date: .abbreviated, time: .omitted)

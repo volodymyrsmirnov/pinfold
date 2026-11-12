@@ -45,10 +45,27 @@ enum UbiquityContainer {
         var result: Data?
         var coordinationError: NSError?
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
+            // A plain read: mapping would page bytes in lazily after the coordination ends.
             do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
         }
-        if let coordinationError { throw coordinationError }
-        if let accessorError { throw accessorError }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let accessorError {
+            throw accessorError
+        }
         return result ?? Data()
+    }
+}
+
+/// The live iCloud facts, for `StorageResolver`.
+struct SystemUbiquity: UbiquityProviding {
+    func documentsURL() -> URL? {
+        UbiquityContainer.documentsURL()
+    }
+
+    func identityToken() -> Data? {
+        guard let token = FileManager.default.ubiquityIdentityToken else { return nil }
+        return try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true)
     }
 }

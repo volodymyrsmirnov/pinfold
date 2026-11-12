@@ -24,4 +24,16 @@ final class MigrationAlertState {
             comment: "Partial iCloud migration alert body; placeholder is a list of entry names."
         )
     }
+
+    /// Reports that the whole migration could not run (enumeration or setup error). Nothing was
+    /// moved and the catalogue stays on its current root.
+    func reportFailure(_ error: Error) {
+        // One localized literal; splitting it would split the translation key.
+        // swiftlint:disable line_length
+        message = String(
+            localized: "Your files couldn't be moved, so they stay where they are and the iCloud setting was not changed (\(error.localizedDescription)).",
+            comment: "iCloud migration failed entirely; placeholder is the underlying error."
+        )
+        // swiftlint:enable line_length
+    }
 }

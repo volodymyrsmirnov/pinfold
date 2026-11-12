@@ -23,7 +23,17 @@ extension KMLParserDelegate {
 
     /// Returns the local name without a namespace prefix (e.g. "gx:Track" -> "Track").
     static func localName(_ raw: String) -> String {
-        if let colon = raw.firstIndex(of: ":") { return String(raw[raw.index(after: colon)...]) }
+        if let colon = raw.firstIndex(of: ":") {
+            return String(raw[raw.index(after: colon)...])
+        }
         return raw
+    }
+
+    /// Lower-cased local names a KML document may start with (a full `<kml>` or a bare
+    /// fragment). Matched case-insensitively: 1.7 accepted `<KML><Document>`.
+    private static let rootElements: Set<String> = ["kml", "document", "folder", "placemark"]
+
+    static func isRootElement(_ localName: String) -> Bool {
+        rootElements.contains(localName.lowercased())
     }
 }

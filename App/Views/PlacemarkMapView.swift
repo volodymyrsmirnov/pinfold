@@ -26,6 +26,7 @@ struct PlacemarkMapView: View {
 
     @State private var selectedPlacemarkKey: String?
     @State private var locationAuth = LocationAuthorization()
+    @State private var network = NetworkStatus()
 
     /// The router that owns the detail column's path: the environment value when propagation
     /// delivers it, else the shared instance published to `AppDependencies` at bootstrap.
@@ -69,7 +70,15 @@ struct PlacemarkMapView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if !network.isOnline {
+                OfflineMapBanner()
+                    .padding(.top, 8)
+                    .transition(.opacity)
+            }
+        }
         .animation(.snappy, value: selectedPlacemarkKey)
+        .animation(.default, value: network.isOnline)
         // Let the map show through the navigation bar; the glass back button floats over
         // it. No title — a label with no scrim would be unreadable over varied map tiles
         // (matches Apple Maps' full-screen presentation).

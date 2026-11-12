@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import PinfoldCore
 
 // MARK: - ImportResult
@@ -22,8 +23,9 @@ struct ImportResult {
     let storageFolderName: String
     /// The original file bytes to be written to disk.
     let originalData: Data
-    /// KMZ-embedded resources keyed by archive-relative path (empty for plain KML).
-    let embeddedResources: [String: Data]
+    /// The detected source format; a KMZ has its embedded resources streamed out of
+    /// `originalData` at commit time.
+    let format: SourceFormat
     /// Remote http(s) resource URLs gathered from icon styles and placemark photo links.
     let remoteResourceHrefs: [String]
     /// Flattened placemark search-index entries (stableKey + name + coordinate), built from
@@ -36,16 +38,36 @@ struct ImportResult {
 
 /// Errors thrown by `ImportService`.
 enum ImportError: Error {
-    /// The file bytes could not be parsed as valid KML or KMZ.
+    /// The file bytes could not be parsed as a supported file.
     case parseFailure(underlying: Error)
+}
+
+extension ImportError: LocalizedError {
+    /// The underlying description when it is readable, else the generic invalid-file reason
+    /// (never a raw `NSXMLParserErrorDomain` string).
+    var errorDescription: String? {
+        switch self {
+        case let .parseFailure(underlying):
+            if let described = (underlying as? any LocalizedError)?.errorDescription, !described.isEmpty {
+                return described
+            }
+            return ImportFormats.invalidFileReason
+        }
+    }
 }
 
 // MARK: - ImportService
 
 /// Static methods that implement the two-phase import flow:
 /// 1. `prepare` — off-main, pure computation; returns `ImportResult`.
-/// 2. `commit`  — main-actor, performs storage (writes files to disk); returns `CatalogEntry`.
+/// 2. `commit`  — plain synchronous file I/O, `nonisolated`; the coordinator runs it through
+///    `commitOffMain` so the main actor stays free. Returns the `CatalogEntry` on disk.
 enum ImportService {
+    fileprivate static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "import"
+    )
+
     // MARK: - SHA-256
 
     /// Returns the lowercase hex SHA-256 digest of `data`.
@@ -72,18 +94,21 @@ enum ImportService {
         // three import paths flow through. A crafted name like "images/evil.kml" would
         // otherwise create nested paths under the per-entry folder and break the top-level
         // original-file lookup. The sanitized name is what we store and surface.
-        let sourceFilename = SafeFilename.sanitize(rawSourceFilename)
+        let sourceFilename = ImportFormats.storedFilename(for: SafeFilename.sanitize(rawSourceFilename), data: data)
 
         let sha256 = sha256Hex(data)
 
-        let parsed: ParsedKML
+        let document: KMLDocument
+        let format: SourceFormat
         do {
-            parsed = try KMLReader.read(data: data)
+            format = try KMLReader.detectFormat(of: data)
+            document = try KMLReader.readDocument(data: data)
+        } catch is CancellationError {
+            // A cancelled parse is not a bad file: let the caller see the cancellation.
+            throw CancellationError()
         } catch {
             throw ImportError.parseFailure(underlying: error)
         }
-
-        let document = parsed.document
 
         // Display name: document name → filename without extension.
         let stem = (sourceFilename as NSString).deletingPathExtension
@@ -93,26 +118,37 @@ enum ImportService {
 
         // Gather remote resource hrefs from icon styles and placemark photo links.
         // Deduplicate and keep only http/https URLs (KMZ paths are handled separately).
-        var hrefSet: Set<String> = []
+        var iconHrefs: Set<String> = []
+        var photoHrefs: Set<String> = []
+        var imageHrefs: Set<String> = []
         for style in document.styles.values {
             guard let href = style.iconHref else { continue }
-            if href.hasPrefix("http://") || href.hasPrefix("https://") {
-                hrefSet.insert(href)
+            if ResourceCache.isRemoteHref(href) {
+                iconHrefs.insert(href)
             }
+        }
+        /// Description images are only ever rendered from the cache, so they must be fetched
+        /// here. `imageSources` trims, matching the key `DescriptionView` looks up. This covers
+        /// placemark, folder and document descriptions (all shown through `DescriptionView`).
+        func gatherImages(from html: String?) {
+            guard let html, html.contains("<") else { return }
+            for src in DescriptionBlocks.imageSources(in: html) where ResourceCache.isRemoteHref(src) {
+                imageHrefs.insert(src)
+            }
+        }
+        gatherImages(from: document.descriptionHTML)
+        var containers = [document.root]
+        while let container = containers.popLast() {
+            gatherImages(from: container.descriptionHTML)
+            containers.append(contentsOf: container.children)
         }
         for placemark in document.root.allPlacemarks {
-            for link in placemark.photoLinks {
-                if link.hasPrefix("http://") || link.hasPrefix("https://") {
-                    hrefSet.insert(link)
-                }
+            for link in placemark.photoLinks where ResourceCache.isRemoteHref(link) {
+                photoHrefs.insert(link)
             }
+            gatherImages(from: placemark.descriptionHTML)
         }
-        // Cap the carried array (DoS bound): a crafted file can reference thousands of
-        // distinct remote hrefs. `ResourceCache.downloadRemote` enforces the authoritative
-        // per-entry cap for *all* callers; trimming here just avoids carrying a huge array
-        // through commit and the recorded-hrefs file. Sorted first so the prefix is
-        // deterministic (the set is unordered).
-        let remoteResourceHrefs = Array(hrefSet.sorted().prefix(500))
+        let remoteResourceHrefs = Self.cappedHrefs(icons: iconHrefs, photos: photoHrefs, images: imageHrefs)
 
         return ImportResult(
             displayName: displayName,
@@ -121,13 +157,37 @@ enum ImportService {
             contentSHA256: sha256,
             storageFolderName: UUID().uuidString,
             originalData: data,
-            embeddedResources: parsed.embeddedResources,
+            format: format,
             remoteResourceHrefs: remoteResourceHrefs,
             indexEntries: PlacemarkIndex.entries(for: document)
         )
     }
 
-    // MARK: - Commit (main actor)
+    /// Caps the carried hrefs at 500 (DoS bound; `ResourceCache.downloadRemote` enforces the
+    /// authoritative per-entry cap for all callers). Icons come first, then photo links, then
+    /// description images, each group sorted, so a flood of description images can never push
+    /// the pin icons out.
+    static func cappedHrefs(icons: Set<String>, photos: Set<String>, images: Set<String>) -> [String] {
+        var seen: Set<String> = []
+        let ordered = (icons.sorted() + photos.sorted() + images.sorted()).filter { seen.insert($0).inserted }
+        return Array(ordered.prefix(500))
+    }
+
+    // MARK: - Commit
+
+    /// Runs `commit` on a background task so the file writes never block the main actor (B11).
+    /// The caller reloads the `Catalog` afterwards, on the main actor.
+    ///
+    /// - Parameter onStart: Called on the background task just before the writes begin. A test
+    ///   seam: it lets a test observe which thread the commit runs on.
+    static func commitOffMain(
+        _ result: ImportResult,
+        storage: StorageLocations,
+        cache: ResourceCache,
+        onStart: (@Sendable () -> Void)? = nil
+    ) async throws -> CatalogEntry {
+        try await detachedCommit(result, storage: storage, cache: cache, onStart: onStart)
+    }
 
     /// Persists a prepared import result to disk: creates the per-entry folder, writes the
     /// `metadata.json` sidecar and the original file, caches embedded resources, and fires a
@@ -147,7 +207,6 @@ enum ImportService {
     ///
     /// - Returns: The `CatalogEntry` that now exists on disk.
     /// - Throws: A file-system error if folder creation or file writing fails.
-    @MainActor
     @discardableResult
     static func commit(
         _ result: ImportResult,
@@ -170,26 +229,50 @@ enum ImportService {
             trashedAt: nil
         )
 
-        // Create on-disk folders before writing any files.
-        try storage.createFolders(for: entry)
+        // Create on-disk folders before writing any files. From here on a failure must leave
+        // nothing behind: an orphan folder is skipped by the scanner forever and a retry would
+        // create a second one (B8, E3).
+        do {
+            try storage.createFolders(for: entry)
 
-        // Write the synced metadata sidecar FIRST (see ordering invariant above).
-        try storage.writeMetadata(entry.metadata, for: entry)
+            // Write the synced metadata sidecar FIRST (see ordering invariant above).
+            try storage.writeMetadata(entry.metadata, for: entry)
 
-        // Write the original file bytes.
-        try result.originalData.write(to: storage.originalFile(for: entry), options: .atomic)
+            // Write the original file bytes.
+            try storage.writeOriginal(result.originalData, for: entry)
+        } catch {
+            removeFailedImport(entry, storage: storage)
+            throw error
+        }
 
-        // Write KMZ-embedded resources synchronously (no network needed).
+        // The resource cache and search index are derivable, so a failure here never fails the
+        // import: drop the `resources/` directory (its existence is the scanner's
+        // "materialized" marker) and let the materialisation pass rebuild it.
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
-
-        // Write the local search index alongside the resource cache (derivable, never synced).
-        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        var cacheIsReady = true
+        do {
+            if result.format == .kmz {
+                try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+            }
+            try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+            // Stamp at import so the scanner neither re-parses nor re-stamps a fresh entry.
+            PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+        } catch {
+            ImportService.logger.error(
+                """
+                Cache write failed for \(entry.storageFolderName, privacy: .public): \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            try? FileManager.default.removeItem(at: resourcesDir)
+            cacheIsReady = false
+        }
 
         // Kick off remote downloads in the background — non-blocking, offline-first.
-        let hrefs = result.remoteResourceHrefs
-        Task.detached {
-            await cache.downloadRemote(hrefs, to: resourcesDir)
+        // Skipped when the cache write failed: the materialisation pass rebuilds it all.
+        if cacheIsReady {
+            downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
         }
 
         // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
@@ -198,4 +281,43 @@ enum ImportService {
 
         return entry
     }
+}
+
+/// Removes the synced folder and cache folder of an import that failed part-way. Best effort:
+/// the original error is what the caller reports.
+private func removeFailedImport(_ entry: CatalogEntry, storage: StorageLocations) {
+    do {
+        try storage.removeFolder(for: entry)
+    } catch {
+        ImportService.logger.error(
+            """
+            Could not clean up failed import \(entry.storageFolderName, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
+    }
+}
+
+/// Starts the background download of `hrefs`. A free function so the `Task.detached` closure
+/// is compiled outside `ImportService.commit` (see the `ClosureLifetimeFixup` note in
+/// FavoritesView.swift).
+private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to resourcesDir: URL) {
+    Task.detached {
+        await cache.downloadRemote(hrefs, to: resourcesDir)
+    }
+}
+
+/// Runs `ImportService.commit` in a detached task. A `nonisolated` free function so the
+/// `Task.detached` closure is compiled outside any `@MainActor` caller's SIL (see the
+/// `ClosureLifetimeFixup` note in FavoritesView.swift).
+private func detachedCommit(
+    _ result: ImportResult,
+    storage: StorageLocations,
+    cache: ResourceCache,
+    onStart: (@Sendable () -> Void)?
+) async throws -> CatalogEntry {
+    try await Task.detached(priority: .userInitiated) {
+        onStart?()
+        return try ImportService.commit(result, storage: storage, cache: cache)
+    }.value
 }

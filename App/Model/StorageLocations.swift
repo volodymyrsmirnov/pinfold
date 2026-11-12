@@ -13,6 +13,9 @@ enum SidecarReadResult: Equatable {
     case unreadable
     /// A `metadata.json` was read and decoded successfully.
     case ok(EntryMetadata)
+    /// No sidecar is on disk *yet*, but in an iCloud root it very likely exists remotely and has
+    /// just not downloaded. Treated like `.unreadable`: never backfilled over (B2).
+    case notDownloaded
 }
 
 /// Computes on-disk paths for imported KML/KMZ files.
@@ -42,6 +45,18 @@ struct StorageLocations {
     let root: URL
     /// Local root: holds per-entry `resources/` caches. Never synced.
     let cacheRoot: URL
+    /// `true` when `root` is the iCloud container (set by `synced(root:)`). Gates the
+    /// "never backfill over a sidecar that has not downloaded" rule.
+    var isUbiquitous = false
+    /// Answers "has this iCloud item downloaded?" Injectable so tests need no iCloud.
+    var probe: any UbiquityProbe = SystemUbiquityProbe()
+    /// Unresolved iCloud conflict versions of a file. Injectable; defaults to `NSFileVersion`.
+    var conflictVersions: @Sendable (URL) -> [ConflictVersion] = ConflictVersion.systemVersions(of:)
+    /// Discards every other version of a file once all conflicts were folded in. Injectable.
+    var removeOtherVersions: @Sendable (URL) throws -> Void = ConflictVersion.removeSystemOtherVersions(of:)
+
+    /// Top-level folder name reserved for the local cache root; never an entry folder.
+    static let reservedCacheFolderName = "resources"
 
     // MARK: - Init
 
@@ -87,8 +102,11 @@ struct StorageLocations {
     /// A `StorageLocations` whose originals live in the given synced (iCloud) root and
     /// whose resources live under `<Application Support>/Pinfold/resources`.
     static func synced(root: URL) -> StorageLocations {
-        let cacheRoot = applicationSupportRoot.appendingPathComponent("resources", isDirectory: true)
-        return StorageLocations(root: root, cacheRoot: cacheRoot)
+        let cacheRoot = applicationSupportRoot
+            .appendingPathComponent(reservedCacheFolderName, isDirectory: true)
+        var locations = StorageLocations(root: root, cacheRoot: cacheRoot)
+        locations.isUbiquitous = true
+        return locations
     }
 
     // MARK: - Path helpers
@@ -101,6 +119,12 @@ struct StorageLocations {
     /// The original KML/KMZ file: `folder/<sourceFilename>`.
     func originalFile(for entry: CatalogEntry) -> URL {
         folder(for: entry).appendingPathComponent(entry.sourceFilename)
+    }
+
+    /// Writes the original KML/KMZ bytes to `originalFile(for:)` atomically, under an
+    /// `NSFileCoordinator` `.forReplacing` lock (pass-through for local roots).
+    func writeOriginal(_ data: Data, for entry: CatalogEntry) throws {
+        try coordinatedWrite(data, to: originalFile(for: entry))
     }
 
     /// The sidecar metadata file: `folder/metadata.json`.
@@ -126,22 +150,7 @@ struct StorageLocations {
             .appendingPathComponent("resources", isDirectory: true)
     }
 
-    /// Locates the original KML/KMZ file inside a synced folder, by extension.
-    /// Deterministic (alphabetical) when several match; `nil` if none. Used by the
-    /// reconciler to rebuild an entry from a folder that has files but no sidecar.
-    func originalFileURL(inFolderNamed name: String) -> URL? {
-        let folder = root.appendingPathComponent(name, isDirectory: true)
-        let fm = FileManager.default
-        guard let contents = try? fm.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return nil }
-        return contents
-            .filter { ["kml", "kmz"].contains($0.pathExtension.lowercased()) }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .first
-    }
+    // `originalFileURL(inFolderNamed:)` lives in StorageLocations+Original.swift.
 
     // MARK: - Coordinated file I/O
 
@@ -149,7 +158,7 @@ struct StorageLocations {
     /// write can't tear the file out from under us. Applied unconditionally: for local
     /// (non-ubiquitous) files coordination is cheap and a transparent pass-through, and the
     /// synced root may be the iCloud container, where racing the daemon is the actual bug.
-    private func coordinatedRead(at url: URL) throws -> Data {
+    func coordinatedRead(at url: URL) throws -> Data {
         let coordinator = NSFileCoordinator(filePresenter: nil)
         // NSFileCoordinator surfaces accessor failures through the `byAccessor` closure, not
         // its own `error` out-param, so capture into an outer var and rethrow afterwards.
@@ -159,25 +168,50 @@ struct StorageLocations {
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
             do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
         }
-        if let coordinationError { throw coordinationError }
-        if let accessorError { throw accessorError }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let accessorError {
+            throw accessorError
+        }
         // `result` is non-nil whenever neither error fired.
         return result ?? Data()
     }
 
     /// Writes `data` to `url` under an `NSFileCoordinator` write lock (`.forReplacing`),
     /// atomically. Applied unconditionally for the same reason as `coordinatedRead`.
-    private func coordinatedWrite(_ data: Data, to url: URL) throws {
+    func coordinatedWrite(_ data: Data, to url: URL) throws {
+        try Self.coordinate(writingAt: url, options: .forReplacing) { writeURL in
+            try data.write(to: writeURL, options: .atomic)
+        }
+    }
+
+    /// Removes `url` under an `NSFileCoordinator` `.forDeleting` lock.
+    static func coordinatedRemove(at url: URL) throws {
+        try coordinate(writingAt: url, options: .forDeleting) { target in
+            try FileManager.default.removeItem(at: target)
+        }
+    }
+
+    /// Runs `body` inside a coordinated write on `url`, rethrowing both coordination and
+    /// accessor failures (the latter surface through the accessor closure, not `error:`).
+    static func coordinate(
+        writingAt url: URL,
+        options: NSFileCoordinator.WritingOptions,
+        _ body: (URL) throws -> Void
+    ) throws {
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var accessorError: Error?
         var coordinationError: NSError?
-        coordinator.coordinate(
-            writingItemAt: url, options: .forReplacing, error: &coordinationError
-        ) { writeURL in
-            do { try data.write(to: writeURL, options: .atomic) } catch { accessorError = error }
+        coordinator.coordinate(writingItemAt: url, options: options, error: &coordinationError) { target in
+            do { try body(target) } catch { accessorError = error }
         }
-        if let coordinationError { throw coordinationError }
-        if let accessorError { throw accessorError }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let accessorError {
+            throw accessorError
+        }
     }
 
     // MARK: - Sidecar I/O
@@ -211,7 +245,10 @@ struct StorageLocations {
     /// for callers that only need the happy path (e.g. `updateMetadata`).
     func readSidecar(forFolderNamed name: String) -> SidecarReadResult {
         let url = metadataFile(forFolderNamed: name)
-        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return isUbiquitous && sidecarProbablyExistsRemotely(at: url, folderNamed: name)
+                ? .notDownloaded : .missing
+        }
         guard let data = try? coordinatedRead(at: url),
               let meta = try? EntryMetadata.decoded(from: data)
         else { return .unreadable }
@@ -240,12 +277,12 @@ struct StorageLocations {
     /// undecodable ones stay unresolved for a future build that understands them. Leaving
     /// conflicts pending is safe: the union merge is idempotent, so re-merging on a later
     /// read — including two devices alternating writes — converges on the same merged set.
-    private func resolvingConflicts(of current: EntryMetadata, at url: URL) -> EntryMetadata {
-        let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) ?? []
+    func resolvingConflicts(of current: EntryMetadata, at url: URL) -> EntryMetadata {
+        let conflicts = conflictVersions(url)
         guard !conflicts.isEmpty else { return current }
 
-        let decodedPairs = conflicts.compactMap { version -> (NSFileVersion, EntryMetadata)? in
-            guard let data = try? Data(contentsOf: version.url),
+        let decodedPairs = conflicts.compactMap { version -> (ConflictVersion, EntryMetadata)? in
+            guard let data = version.read(),
                   let meta = try? EntryMetadata.decoded(from: data)
             else { return nil }
             return (version, meta)
@@ -255,11 +292,11 @@ struct StorageLocations {
         do {
             try coordinatedWrite(merged.encoded(), to: url)
             for (version, _) in decodedPairs {
-                version.isResolved = true
+                version.markResolved()
             }
             if decodedPairs.count == conflicts.count {
                 // Every version was folded into the merge — safe to discard the copies.
-                try? NSFileVersion.removeOtherVersionsOfItem(at: url)
+                try? removeOtherVersions(url)
             }
             return merged
         } catch {
@@ -269,21 +306,20 @@ struct StorageLocations {
         }
     }
 
-    /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field
-    /// the caller does not touch. No-op if the sidecar is absent. Use this instead of
-    /// reconstructing `EntryMetadata` from an in-memory `CatalogEntry` (which does not
-    /// carry the favorite/visited sets and would clobber them).
-    func updateMetadata(forFolderNamed name: String, _ mutate: (inout EntryMetadata) -> Void) throws {
-        guard var meta = try readMetadata(forFolderNamed: name) else { return }
-        mutate(&meta)
-        try writeMetadata(meta, forFolderNamed: name)
-    }
+    // `updateMetadata` / `updateExistingMetadata` live in StorageLocations+Update.swift.
 
     // MARK: - Enumeration
 
     /// Names of all per-entry folders directly under the synced root. Returns `[]`
     /// if the root does not yet exist.
     func entryFolderNames() throws -> [String] {
+        try Self.entryFolderNames(in: root)
+    }
+
+    /// Names of the per-entry folders directly under `root`: every directory except the
+    /// reserved `resources` cache root. (Not "UUID folders only": the scanner deliberately
+    /// supports legacy and user-dropped folders with other names.)
+    static func entryFolderNames(in root: URL) throws -> [String] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: root.path) else { return [] }
         let contents = try fm.contentsOfDirectory(
@@ -293,99 +329,20 @@ struct StorageLocations {
         )
         return contents.compactMap { url in
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-            return isDir ? url.lastPathComponent : nil
+            let name = url.lastPathComponent
+            return isDir && name != reservedCacheFolderName ? name : nil
         }
-    }
-
-    // MARK: - Root migration
-
-    /// The outcome of a root migration: which per-entry folders moved and which couldn't.
-    ///
-    /// Migration is best-effort *per folder* — a single failing folder must not strand the
-    /// rest in the old root — so the result is a report rather than a thrown error. The caller
-    /// repoints storage to `newRoot` regardless (the moved majority lives there) and surfaces
-    /// `failed` to the user, whose files remain readable in the previous location.
-    struct MigrationReport {
-        var moved: [String] = []
-        var failed: [MigrationFailure] = []
-    }
-
-    /// A single per-folder migration failure: the folder that could not be moved and why.
-    struct MigrationFailure {
-        let folderName: String
-        let error: Error
-    }
-
-    /// Moves every per-entry folder from `oldRoot` into `newRoot`, so nothing disappears
-    /// from the catalogue when the iCloud sync toggle changes the active root.
-    ///
-    /// Picks the correct file API for the move:
-    /// - **local → iCloud** (`toUbiquitous`): `setUbiquitous(true,…)` to publish the folder
-    ///   into the ubiquity container (plain `moveItem` into iCloud is unsupported).
-    /// - **iCloud → local** (`fromUbiquitous`): `setUbiquitous(false,…)` to evict it.
-    /// - **otherwise** (local → local): `moveItem`.
-    ///
-    /// Each move (`setUbiquitous`/`moveItem`) removes the source folder on success, so after a
-    /// fully successful migration no per-entry folders remain in `oldRoot`.
-    ///
-    /// Creates `newRoot` if absent. Skips any folder whose name already exists at the
-    /// destination (the destination is authoritative — e.g. iCloud already holds that
-    /// entry) without recording a failure. **Per-folder failures are collected and the loop
-    /// continues**, so one bad folder never strands the others; the returned `MigrationReport`
-    /// lists what moved and what failed. Returns an empty report when the roots are equal or
-    /// `oldRoot` is absent. Only throws for failures *before* the per-folder loop (creating
-    /// `newRoot`, enumerating `oldRoot`).
-    @discardableResult
-    static func migrateEntryFolders(
-        from oldRoot: URL,
-        to newRoot: URL,
-        fromUbiquitous: Bool = false,
-        toUbiquitous: Bool = false
-    ) throws -> MigrationReport {
-        var report = MigrationReport()
-        guard oldRoot.standardizedFileURL != newRoot.standardizedFileURL else { return report }
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: oldRoot.path) else { return report }
-        try fm.createDirectory(at: newRoot, withIntermediateDirectories: true)
-
-        let contents = try fm.contentsOfDirectory(
-            at: oldRoot,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )
-        for source in contents {
-            let isDir = (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-            guard isDir else { continue }
-            let name = source.lastPathComponent
-            let dest = newRoot.appendingPathComponent(name, isDirectory: true)
-            if fm.fileExists(atPath: dest.path) { continue }
-
-            do {
-                if toUbiquitous, !fromUbiquitous {
-                    try fm.setUbiquitous(true, itemAt: source, destinationURL: dest)
-                } else if fromUbiquitous, !toUbiquitous {
-                    try fm.setUbiquitous(false, itemAt: source, destinationURL: dest)
-                } else {
-                    try fm.moveItem(at: source, to: dest)
-                }
-                report.moved.append(name)
-            } catch {
-                // Collect and keep going — a single un-movable folder (e.g. a non-empty
-                // destination already present, or a transient iCloud error) must not strand
-                // the remaining entries in the old root.
-                report.failed.append(MigrationFailure(folderName: name, error: error))
-            }
-        }
-        return report
     }
 
     // MARK: - Directory management
 
-    /// Creates the synced per-entry folder and the local `resources/` subdirectory.
+    /// Creates the synced per-entry folder (coordinated) and the local `resources/` subdirectory.
     /// Idempotent.
     func createFolders(for entry: CatalogEntry) throws {
         let fm = FileManager.default
-        try fm.createDirectory(at: folder(for: entry), withIntermediateDirectories: true)
+        try Self.coordinate(writingAt: folder(for: entry), options: []) { target in
+            try fm.createDirectory(at: target, withIntermediateDirectories: true)
+        }
         try fm.createDirectory(at: resourcesDirectory(for: entry), withIntermediateDirectories: true)
     }
 
@@ -395,12 +352,17 @@ struct StorageLocations {
         try removeFolder(named: entry.storageFolderName)
     }
 
-    /// Removes the synced folder and local resources folder for a raw folder name.
+    /// Removes the synced folder (coordinated, `.forDeleting`) and the local resources folder
+    /// (plain: it never syncs) for a raw folder name.
     func removeFolder(named name: String) throws {
         let fm = FileManager.default
         let synced = root.appendingPathComponent(name, isDirectory: true)
-        if fm.fileExists(atPath: synced.path) { try fm.removeItem(at: synced) }
+        if fm.fileExists(atPath: synced.path) {
+            try Self.coordinatedRemove(at: synced)
+        }
         let cache = cacheRoot.appendingPathComponent(name, isDirectory: true)
-        if fm.fileExists(atPath: cache.path) { try fm.removeItem(at: cache) }
+        if fm.fileExists(atPath: cache.path) {
+            try fm.removeItem(at: cache)
+        }
     }
 }

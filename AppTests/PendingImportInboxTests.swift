@@ -11,6 +11,7 @@ import Testing
     /// imports into, so tests can inject I/O failures (chmod the root) and assert on failures.
     private struct Environment {
         let inbox: PendingImportInbox
+        let coordinator: ImportCoordinator
         let catalog: Catalog
         let inboxURL: URL
         let storageRoot: URL
@@ -33,15 +34,16 @@ import Testing
         let catalog = Catalog(storage: storage, cache: cache)
         let failureLog = ImportFailureLog()
 
+        let coordinator = ImportCoordinator(failureLog: failureLog)
         let inbox = PendingImportInbox(
             inboxURL: inboxURL,
+            coordinator: coordinator,
             catalog: catalog,
-            storage: storage,
-            cache: cache,
-            failureLog: failureLog
+            cache: cache
         )
         return Environment(
             inbox: inbox,
+            coordinator: coordinator,
             catalog: catalog,
             inboxURL: inboxURL,
             storageRoot: storageRoot,
@@ -59,40 +61,60 @@ import Testing
         try data.write(to: inboxURL.appendingPathComponent(destName))
     }
 
+    /// Scans the inbox (enqueueing on the coordinator) and waits for the queue to settle.
+    /// Returns the number of files the scan enqueued.
+    @discardableResult
+    private func drainAndSettle(_ env: Environment) async -> Int {
+        let enqueued = env.inbox.drain()
+        await env.coordinator.drainForTesting()
+        return enqueued
+    }
+
     // MARK: - Tests
 
     @Test func drain_singleFile_importsOneEntryAndRemovesFile() async throws {
         let env = try makeEnvironment()
         try copyFixture(named: "Rome.kml", as: "Rome.kml", into: env.inboxURL)
 
-        let count = await env.inbox.drain()
+        let count = await drainAndSettle(env)
 
-        #expect(count == 1, "drain() should return 1 for a single new file")
+        #expect(count == 1, "drain() should enqueue 1 file")
         #expect(env.catalog.active.count == 1, "Exactly one active entry must exist after import")
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining.isEmpty, "Inbox must be empty after a successful drain")
     }
 
-    @Test func drain_duplicateContent_skipsSecondImportAndReturnsZero() async throws {
+    @Test func drain_ignoresPartialShareCopies() async throws {
+        let env = try makeEnvironment()
+        try Data("<kml".utf8).write(to: env.inboxURL.appendingPathComponent(".abc.partial"))
+        try Data("<kml".utf8).write(to: env.inboxURL.appendingPathComponent("visible.partial"))
+
+        let count = await drainAndSettle(env)
+
+        #expect(count == 0)
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
+        #expect(remaining.count == 2, "half-written copies are neither imported nor deleted")
+    }
+
+    @Test func drain_duplicateContent_skipsSecondImportSilently() async throws {
         let env = try makeEnvironment()
 
         try copyFixture(named: "Rome.kml", as: "Rome.kml", into: env.inboxURL)
-        let firstCount = await env.inbox.drain()
-        #expect(firstCount == 1, "First drain must import exactly 1 file")
+        await drainAndSettle(env)
+        #expect(env.catalog.active.count == 1, "First drain must import exactly 1 file")
 
         // Same bytes again under a different name.
         try copyFixture(named: "Rome.kml", as: "Rome-copy.kml", into: env.inboxURL)
-        let secondCount = await env.inbox.drain()
+        await drainAndSettle(env)
 
-        #expect(secondCount == 0, "Second drain of identical content must return 0 (dedup)")
         #expect(env.catalog.active.count == 1, "Only one entry must exist after dedup")
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining.isEmpty, "Inbox must be empty after the second drain")
     }
 
-    @Test func drain_nonExistentInbox_returnsZeroWithoutThrowing() async {
+    @Test func drain_nonExistentInbox_returnsZeroWithoutThrowing() {
         let tempBase = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let nonExistentInbox = tempBase.appendingPathComponent("DoesNotExist", isDirectory: true)
@@ -102,17 +124,17 @@ import Testing
 
         let inbox = PendingImportInbox(
             inboxURL: nonExistentInbox,
+            coordinator: ImportCoordinator(),
             catalog: catalog,
-            storage: storage,
             cache: cache
         )
-        let count = await inbox.drain()
+        let count = inbox.drain()
         #expect(count == 0, "Draining a non-existent inbox must return 0")
     }
 
     @Test func drain_emptyInbox_returnsZero() async throws {
         let env = try makeEnvironment()
-        let count = await env.inbox.drain()
+        let count = await drainAndSettle(env)
         #expect(count == 0, "Draining an empty inbox must return 0")
     }
 
@@ -122,9 +144,9 @@ import Testing
         try Data("garbage not kml".utf8).write(to: env.inboxURL.appendingPathComponent("bad.kml"))
         try copyFixture(named: "Rome.kml", as: "Rome.kml", into: env.inboxURL)
 
-        let count = await env.inbox.drain()
+        await drainAndSettle(env)
 
-        #expect(count == 1, "Only the valid file should be imported; malformed skipped")
+        #expect(env.catalog.active.count == 1, "Only the valid file should be imported; malformed skipped")
         #expect(env.catalog.active.count == 1, "Exactly one active entry after mixed drain")
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
@@ -136,9 +158,9 @@ import Testing
         // Garbage bytes that cannot be parsed as KML or KMZ.
         try Data("garbage not kml".utf8).write(to: env.inboxURL.appendingPathComponent("bad.kml"))
 
-        let count = await env.inbox.drain()
+        await drainAndSettle(env)
 
-        #expect(count == 0, "A parse failure imports nothing")
+        #expect(env.catalog.active.isEmpty, "A parse failure imports nothing")
         // Parse failure is permanent → file removed so it is not retried forever.
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining.isEmpty, "A permanently-failing (parse) file must be removed")
@@ -146,6 +168,7 @@ import Testing
         #expect(env.failureLog.failures.count == 1, "The parse failure must be recorded")
         #expect(env.failureLog.failures.first?.filename == "bad.kml")
         #expect(env.failureLog.failures.first?.reason.isEmpty == false, "A reason must be recorded")
+        #expect(env.failureLog.failures.first?.reason.contains("NSXMLParserErrorDomain") == false)
     }
 
     @Test func drain_ioFailure_keepsFileForRetry() async throws {
@@ -162,9 +185,9 @@ import Testing
             )
         }
 
-        let count = await env.inbox.drain()
+        await drainAndSettle(env)
 
-        #expect(count == 0, "An I/O failure imports nothing")
+        #expect(env.catalog.active.isEmpty, "An I/O failure imports nothing")
         // I/O failure is transient → file KEPT so a later drain can retry it.
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining == ["Rome.kml"], "A transiently-failing file must be kept for retry")
@@ -176,12 +199,13 @@ import Testing
         let env = try makeEnvironment()
         try copyFixture(named: "Rome.kml", as: "Rome.kml", into: env.inboxURL)
 
-        // Two drains kicked off concurrently. Without serialization both read the inbox before
-        // either removes the file, so the same file imports twice. The inbox must guard against
-        // this so exactly one entry folder ends up on disk.
-        async let first = env.inbox.drain()
-        async let second = env.inbox.drain()
-        _ = await (first, second)
+        // Two scans back to back, before the first file is imported. Without the queue's
+        // queued-path guard both would enqueue the same file, so it would import twice.
+        let first = env.inbox.drain()
+        let second = env.inbox.drain()
+        await env.coordinator.drainForTesting()
+        #expect(first == 1)
+        #expect(second == 0, "a file already queued must not be enqueued again")
 
         let folders = try FileManager.default.contentsOfDirectory(atPath: env.storageRoot.path)
             .filter { !$0.hasPrefix(".") }
@@ -195,12 +219,29 @@ import Testing
         try copyFixture(named: "Rome.kml", as: "Rome-a.kml", into: env.inboxURL)
         try copyFixture(named: "Rome.kml", as: "Rome-b.kml", into: env.inboxURL)
 
-        let count = await env.inbox.drain()
+        await drainAndSettle(env)
 
-        #expect(count == 1, "Two identical files in one batch must import only once")
+        #expect(env.catalog.entries.count == 1, "Two identical files in one batch must import only once")
         #expect(env.catalog.active.count == 1, "Only one entry must exist after same-batch dedup")
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining.isEmpty, "Both inbox files must be removed")
+    }
+
+    @Test func sharedFileWithoutDocumentName_usesCleanFilenameAsTitle() async throws {
+        let env = try makeEnvironment()
+        let kml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+          <Placemark><Point><coordinates>1,2,0</coordinates></Point></Placemark>
+        </Document></kml>
+        """
+        let name = "0F8FAD5B-D9CB-469F-A165-70867728950E-Weekend Walk.kml"
+        try Data(kml.utf8).write(to: env.inboxURL.appendingPathComponent(name))
+
+        await drainAndSettle(env)
+
+        #expect(env.catalog.active.first?.displayName == "Weekend Walk")
+        #expect(env.catalog.active.first?.sourceFilename == "Weekend Walk.kml")
     }
 }

@@ -3,6 +3,9 @@ import Foundation
 
 /// One captured geometry of a placemark beyond its representative point.
 public enum KMLGeometry: Equatable, Sendable {
+    /// A second or later `<Point>` of a `<MultiGeometry>`. The first valid point is the
+    /// placemark's own `coordinate`, not a geometry.
+    case point(Coordinate)
     case lineString([Coordinate])
     case polygon(outer: [Coordinate], inners: [[Coordinate]])
     case track([Coordinate])
@@ -27,7 +30,7 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// True when the source placemark had an explicit `<Point>` geometry. Distinguishes a
     /// real point from a representative point synthesized from line/polygon/track geometry.
     public let hasPoint: Bool
-    /// Captured geometries beyond the representative point (lines, polygons, tracks).
+    /// Captured geometries beyond the representative point (extra points, lines, polygons, tracks).
     public var geometries: [KMLGeometry] = []
     public let extendedData: [KMLDataItem]
     /// Photo URLs gathered from ExtendedData `gx_media_links` (kept separate from extendedData).
@@ -35,13 +38,36 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// The author-supplied `id` attribute from `<Placemark id="...">` in the source KML, if present.
     /// `nil` when the attribute was absent; empty string when the attribute was explicitly empty.
     public let sourceID: String?
+    /// The `<Snippet>` (or legacy `<snippet>`) teaser text, if any.
+    public let snippet: String?
+    /// The `<address>` text, if any.
+    public let address: String?
+    /// The `<phoneNumber>` text, if any.
+    public let phoneNumber: String?
 
     public init(id: String, name: String?, descriptionHTML: String?, styleUrl: String?,
                 coordinate: Coordinate?, hasPoint: Bool = true,
                 geometries: [KMLGeometry] = [],
                 extendedData: [KMLDataItem], photoLinks: [String],
-                sourceID: String? = nil)
+                sourceID: String? = nil,
+                snippet: String? = nil, address: String? = nil, phoneNumber: String? = nil)
     // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
+    // swiftlint:disable:next opening_brace
+    {
+        self.init(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
+                  coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
+                  extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID,
+                  snippet: snippet, address: address, phoneNumber: phoneNumber,
+                  stableKey: nil)
+    }
+
+    /// Designated init. A non-nil `stableKey` is stored as is (the parser derives it from
+    /// legacy-compatible inputs, see `LegacyKeyInputs`); nil computes it from the display
+    /// name and coordinate.
+    init(id: String, name: String?, descriptionHTML: String?, styleUrl: String?,
+         coordinate: Coordinate?, hasPoint: Bool, geometries: [KMLGeometry],
+         extendedData: [KMLDataItem], photoLinks: [String], sourceID: String?,
+         snippet: String?, address: String?, phoneNumber: String?, stableKey: String?)
     // swiftlint:disable:next opening_brace
     {
         self.id = id
@@ -54,16 +80,27 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
         self.extendedData = extendedData
         self.photoLinks = photoLinks
         self.sourceID = sourceID
+        self.snippet = snippet
+        self.address = address
+        self.phoneNumber = phoneNumber
+        self.stableKey = stableKey
+            ?? Self.makeStableKey(id: id, name: name, coordinate: coordinate, sourceID: sourceID)
     }
 
-    /// A durable identity for this placemark, safe to persist across re-parses.
+    /// A durable identity for this placemark, safe to persist across re-parses. Computed once
+    /// in `init`.
     ///
     /// Fallback chain:
     /// 1. `"id:<sourceID>"` when the author supplied a non-empty `<Placemark id>`.
     /// 2. `"h:<hash>"` — a SHA-256 (16 hex chars) of `"<name>|<lat>|<lon>"`. Survives
     ///    folder reordering; only changes if this placemark's own name/coordinate change.
     /// 3. `"p:<id>"` — parse-order id, last resort for a placeless, nameless placemark.
-    public var stableKey: String {
+    public let stableKey: String
+
+    static func makeStableKey(id: String, name: String?, coordinate: Coordinate?,
+                              sourceID: String?) -> String
+    // swiftlint:disable:next opening_brace
+    {
         if let sourceID, !sourceID.trimmingCharacters(in: .whitespaces).isEmpty {
             return "id:\(sourceID.trimmingCharacters(in: .whitespaces))"
         }
@@ -78,5 +115,16 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
             return "h:\(hex)"
         }
         return "p:\(id)"
+    }
+}
+
+extension KMLPlacemark {
+    /// A copy with a different `styleUrl` (used when inline styles are resolved).
+    func withStyleUrl(_ styleUrl: String?) -> KMLPlacemark {
+        KMLPlacemark(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
+                     coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
+                     extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID,
+                     snippet: snippet, address: address, phoneNumber: phoneNumber,
+                     stableKey: stableKey)
     }
 }

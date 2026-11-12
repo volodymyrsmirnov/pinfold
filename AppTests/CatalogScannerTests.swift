@@ -155,6 +155,20 @@ import Testing
                 "a missing sidecar must be backfilled on scan")
     }
 
+    @Test func bareGPXOriginalIsBackfilled() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("gpx-bare", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FormatFixture.gpx().write(to: dir.appendingPathComponent("sample.gpx"))
+
+        let entries = scanner.scan()
+
+        let meta = try #require(try storage.readMetadata(forFolderNamed: "gpx-bare"))
+        #expect(meta.sourceFilename == "sample.gpx")
+        #expect(meta.pointCount > 0)
+        #expect(entries.contains { $0.storageFolderName == "gpx-bare" })
+    }
+
     /// A corrupt sidecar with NO original file: nothing to derive an entry from, so the folder
     /// is skipped and left entirely untouched (no writes, no deletes).
     @Test func scan_corruptSidecarNoOriginal_folderUntouchedAndSkipped() throws {
@@ -317,5 +331,193 @@ import Testing
 
         #expect(!changed)
         #expect(FileManager.default.fileExists(atPath: sentinel.path), "must not clobber the cache")
+    }
+
+    // MARK: - Unreadable sidecars keep their state (B12)
+
+    private func seedUnreadable(_ storage: StorageLocations, folder: String, sidecar: Data) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let url = dir.appendingPathComponent("metadata.json")
+        try sidecar.write(to: url)
+        return url
+    }
+
+    @Test func unreadableSidecarWithTrashedAt_staysTrashed() throws {
+        let (scanner, storage) = makeScanner()
+        let json = """
+        {"id":"\(UUID().uuidString)","displayName":"Old Rome","trashedAt":5000,"pointCount":"many"}
+        """
+        let url = try seedUnreadable(storage, folder: "t", sidecar: Data(json.utf8))
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(entry.isTrashed)
+        #expect(entry.displayName == "Old Rome")
+        #expect(entry.isReadOnly)
+        #expect(entry.sidecarState == .unreadable)
+        #expect(try Data(contentsOf: url) == Data(json.utf8))
+    }
+
+    @Test func unreadableSidecarThatIsNotJSON_isActiveAndReadOnly() throws {
+        let (scanner, storage) = makeScanner()
+        _ = try seedUnreadable(storage, folder: "g", sidecar: Data("garbage".utf8))
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(!entry.isTrashed)
+        #expect(entry.isReadOnly)
+        #expect(entry.displayName == "Rome")
+    }
+
+    @Test func unreadableSidecarIsNeverRewritten() throws {
+        let (scanner, storage) = makeScanner()
+        let garbage = Data("{\"trashedAt\": 1, broken".utf8)
+        let url = try seedUnreadable(storage, folder: "g", sidecar: garbage)
+
+        _ = scanner.scan()
+        _ = scanner.scan()
+
+        #expect(try Data(contentsOf: url) == garbage)
+    }
+
+    // MARK: - Sidecar not downloaded (B2)
+
+    private func scanner(ubiquitous probe: FakeUbiquityProbe, storage: StorageLocations) -> CatalogScanner {
+        var storage = storage
+        storage.isUbiquitous = true
+        storage.probe = probe
+        return CatalogScanner(storage: storage, cache: ResourceCache { _ in Data() })
+    }
+
+    private func seedBareOriginal(_ storage: StorageLocations, folder: String) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        return dir
+    }
+
+    @Test func missingSidecarInUbiquitousRoot_uuidFolder_isNotBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let name = UUID().uuidString
+        let dir = try seedBareOriginal(storage, folder: name)
+        let probe = FakeUbiquityProbe()
+
+        let entry = try #require(scanner(ubiquitous: probe, storage: storage).scan().first)
+
+        #expect(entry.isReadOnly)
+        #expect(entry.sidecarState == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+        #expect(probe.downloadRequests == [storage.metadataFile(forFolderNamed: name)])
+    }
+
+    @Test func placeholderPresent_isNotBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: "Dropped")
+
+        let entry = try #require(
+            scanner(ubiquitous: FakeUbiquityProbe(placeholder: true), storage: storage).scan().first
+        )
+
+        #expect(entry.sidecarState == .notDownloaded)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
+
+    @Test func missingSidecarInLocalRoot_isStillBackfilled() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: UUID().uuidString)
+
+        let entry = try #require(scanner.scan().first)
+
+        #expect(!entry.isReadOnly)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
+
+    @Test func nonUUIDFolderInUbiquitousRoot_isBackfilled() throws {
+        let (_, storage) = makeScanner()
+        let dir = try seedBareOriginal(storage, folder: "Dropped")
+
+        let entry = try #require(scanner(ubiquitous: FakeUbiquityProbe(), storage: storage).scan().first)
+
+        #expect(!entry.isReadOnly)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
+    }
+
+    // MARK: - Streamed extraction and one full refresh (A10b, B17, A11)
+
+    private func seedMaterialized(
+        _ storage: StorageLocations, folder: String, fixture: String, withIndex: Bool
+    ) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data(fixture).write(to: dir.appendingPathComponent(fixture))
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: folder)
+        try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        if withIndex {
+            try PlacemarkIndex.write([], to: resourcesDir)
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+        }
+        return resourcesDir
+    }
+
+    @Test func materialize_kmzManifestUsesCachedFilenameScheme() async throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("kmz", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kmz").write(to: dir.appendingPathComponent("Rome.kmz"))
+
+        _ = await scanner.materializeMissingResources()
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: "kmz")
+        let manifest = ResourceManifestStore.shared.manifest(in: resourcesDir)
+        #expect(manifest["images/icon-1.png"] == scanner.cache.cachedFilename(for: "images/icon-1.png"))
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: resourcesDir) != nil)
+    }
+
+    @Test func rebuildFromBareOriginal_extractsKmzResources() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("bareKmz", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kmz").write(to: dir.appendingPathComponent("Rome.kmz"))
+
+        _ = scanner.scan()
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: "bareKmz")
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: resourcesDir) != nil)
+    }
+
+    /// A pre-2.0 folder (resources present, v2 index absent) is fully refreshed exactly once:
+    /// index rewritten, resources re-extracted, remote hrefs re-recorded.
+    @Test func materialize_missingIndexTriggersOneFullRefresh() async throws {
+        let (scanner, storage) = makeScanner()
+        let kmzDir = try seedMaterialized(storage, folder: "oldKmz", fixture: "Rome.kmz", withIndex: false)
+        let kmlDir = try seedMaterialized(storage, folder: "oldKml", fixture: "Rome.kml", withIndex: false)
+
+        _ = await scanner.materializeMissingResources()
+
+        #expect(PlacemarkIndex.exists(in: kmzDir))
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: kmzDir) != nil)
+        #expect(PlacemarkIndex.exists(in: kmlDir))
+        #expect(!ResourceManifestStore.shared.recordedHrefs(in: kmlDir).isEmpty,
+                "remote hrefs must be re-recorded for retry")
+
+        // Second pass: the index now exists, so nothing is re-extracted.
+        let icon = try #require(scanner.cache.localURL(forHref: "images/icon-1.png", in: kmzDir))
+        try FileManager.default.removeItem(at: icon)
+        _ = await scanner.materializeMissingResources()
+        #expect(!FileManager.default.fileExists(atPath: icon.path), "only one refresh pass")
+    }
+
+    /// With the index present the original must not be read or parsed (asserted by the
+    /// absence of any re-extraction).
+    @Test func materialize_existingIndexDoesNotReadOriginal() async throws {
+        let (scanner, storage) = makeScanner()
+        let dir = try seedMaterialized(storage, folder: "current", fixture: "Rome.kmz", withIndex: true)
+
+        _ = await scanner.materializeMissingResources()
+
+        #expect(ResourceManifestStore.shared.manifest(in: dir).isEmpty)
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: dir) == nil)
     }
 }

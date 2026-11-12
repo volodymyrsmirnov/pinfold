@@ -92,7 +92,7 @@ struct SpotlightIndexerTests {
         // No placemarks → just the entry item.
         #expect(items.count == 1)
         let entryItem = try? #require(items.first)
-        #expect(entryItem?.domainIdentifier == "entries")
+        #expect(entryItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "11111111-1111-1111-1111-111111111111"))
         #expect(entryItem?.uniqueIdentifier == "11111111-1111-1111-1111-111111111111")
         #expect(entryItem?.attributeSet.title == "Rome Trip")
     }
@@ -103,8 +103,9 @@ struct SpotlightIndexerTests {
             PlacemarkIndex.Entry(key: "h:1", name: "Colosseum", lat: 41.89, lon: 12.49),
         ]
         let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
-        let placemarkItem = try? #require(items.first { $0.domainIdentifier == "placemarks" })
+        let placemarkItem = try? #require(items.first { $0.uniqueIdentifier != "FOLDER" })
         #expect(placemarkItem?.uniqueIdentifier == "FOLDER/h:1")
+        #expect(placemarkItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "FOLDER"))
         #expect(placemarkItem?.attributeSet.title == "Colosseum")
         #expect(placemarkItem?.attributeSet.contentDescription == "Rome Trip")
         #expect(placemarkItem?.attributeSet.latitude == 41.89)
@@ -118,8 +119,28 @@ struct SpotlightIndexerTests {
             PlacemarkIndex.Entry(key: "h:9", name: "Pantheon", lat: nil, lon: nil),
         ]
         let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
-        let placemarkItem = try? #require(items.first { $0.domainIdentifier == "placemarks" })
+        let placemarkItem = try? #require(items.first { $0.uniqueIdentifier != "FOLDER" })
         #expect(placemarkItem?.attributeSet.latitude == nil)
         #expect(placemarkItem?.attributeSet.longitude == nil)
+    }
+}
+
+extension SpotlightIndexerTests {
+    @Test func everyItemOfAFolderSharesItsPerFolderDomain() {
+        let entry = makeEntry(folderName: "FOLDER")
+        let rows = [PlacemarkIndex.Entry(key: "h:1", name: "A", lat: nil, lon: nil)]
+        let domains = Set(SpotlightIndexer.items(for: entry, indexEntries: rows).map(\.domainIdentifier))
+        #expect(domains == [SpotlightIndexer.domain(forFolderName: "FOLDER")])
+    }
+
+    @Test func domainNeverContainsAPeriodFromTheFolderName() {
+        let suffix = SpotlightIndexer.domain(forFolderName: "a.b").dropFirst("entry.".count)
+        #expect(!suffix.contains("."))
+        #expect(SpotlightIndexer.domain(forFolderName: "a.b") != SpotlightIndexer.domain(forFolderName: "a"))
+    }
+
+    @Test func distinctFolderNamesMapToDistinctDomains() {
+        #expect(SpotlightIndexer.domain(forFolderName: "a.b") != SpotlightIndexer.domain(forFolderName: "a_b"))
+        #expect(SpotlightIndexer.domain(forFolderName: "é") != SpotlightIndexer.domain(forFolderName: "e"))
     }
 }

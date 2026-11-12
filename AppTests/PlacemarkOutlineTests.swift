@@ -275,4 +275,62 @@ struct PlacemarkOutlineTests {
             #expect(Set(ids).count == ids.count, "Row ids must be unique (sort: \(sort))")
         }
     }
+
+    @Test func accentInsensitiveName() {
+        let root = KMLContainer(
+            id: "root", name: nil, children: [],
+            placemarks: [placemark(id: "r1", name: "Reykjavík"), placemark(id: "r2", name: "Oslo")]
+        )
+        let outline = PlacemarkOutline.build(from: root, matching: "reykjavik", collapsed: [])
+        #expect(outline.rows.count == 1)
+    }
+
+    // MARK: - Beyond the name (C3, D8)
+
+    private func richRoot() -> KMLContainer {
+        let described = KMLPlacemark(
+            id: "d1", name: "Camp", descriptionHTML: "<p>Quiet <b>riverside</b> spot</p>", styleUrl: nil,
+            coordinate: Coordinate(longitude: 1, latitude: 2),
+            extendedData: [KMLDataItem(name: "owner", value: "Ranger Anna")], photoLinks: [], sourceID: "d1"
+        )
+        let plain = placemark(id: "o1", name: "Oslo")
+        return KMLContainer(id: "root", name: nil, children: [], placemarks: [described, plain])
+    }
+
+    @Test func matchesDescriptionWhenCorpusGiven() {
+        let root = richRoot()
+        let corpus = SearchCorpus(root: root)
+        let outline = PlacemarkOutline.build(from: root, matching: "RIVERSIDE", collapsed: [], corpus: corpus)
+        #expect(outline.rows.map(\.id) == ["p0"])
+    }
+
+    @Test func matchesExtendedDataValue() {
+        let root = richRoot()
+        let corpus = SearchCorpus(root: root)
+        let outline = PlacemarkOutline.build(from: root, matching: "ranger ánna", collapsed: [], corpus: corpus)
+        #expect(outline.rows.map(\.id) == ["p0"])
+        #expect(outline.mappablePlacemarks.count == 1)
+    }
+
+    @Test func matchesNoteText() {
+        let root = richRoot()
+        let notes = ["id:o1": "Bring a torch"]
+        let outline = PlacemarkOutline.build(from: root, matching: "torch", collapsed: [], notes: notes)
+        #expect(outline.rows.map(\.id) == ["p1"])
+    }
+
+    @Test func nameOnlyWithoutCorpus() {
+        let outline = PlacemarkOutline.build(from: richRoot(), matching: "riverside", collapsed: [])
+        #expect(outline.rows.isEmpty)
+    }
+
+    @Test func restoredSearchTextStillMatchesWithCorpus() {
+        let root = richRoot()
+        let corpus = SearchCorpus(root: root)
+        let nearest = PlacemarkOutline.build(
+            from: root, matching: "riverside", collapsed: [],
+            sort: .nearest(CLLocation(latitude: 0, longitude: 0)), corpus: corpus
+        )
+        #expect(nearest.rows.count == 1)
+    }
 }

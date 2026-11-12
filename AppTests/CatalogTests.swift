@@ -197,4 +197,161 @@ import Testing
         #expect(catalog.entries.map(\.storageFolderName) == ["new"])
         #expect(catalog.storage.root == newRoot)
     }
+
+    @Test func emptyTrash_removesAllTrashedAndKeepsActive() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        try seedFolder(storage, folder: "t1", sha: "a", trashedAt: Date(timeIntervalSince1970: 5))
+        try seedFolder(storage, folder: "t2", sha: "b", trashedAt: Date(timeIntervalSince1970: 6))
+        await catalog.reload()
+        #expect(catalog.trashed.count == 2)
+
+        await catalog.emptyTrash()
+
+        #expect(catalog.trashed.isEmpty)
+        #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
+        for gone in ["t1", "t2"] {
+            #expect(!FileManager.default.fileExists(atPath: storage.root.appendingPathComponent(gone).path))
+        }
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
+    }
+
+    @Test func emptyTrash_withNoTrashIsANoOp() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        await catalog.reload()
+
+        await catalog.emptyTrash()
+
+        #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
+    }
+
+    // MARK: - Read-only entries and action errors (B12)
+
+    private func seedUnreadable(_ storage: StorageLocations, folder: String) throws -> Data {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kml").write(to: dir.appendingPathComponent("Rome.kml"))
+        let garbage = Data("not json".utf8)
+        try garbage.write(to: dir.appendingPathComponent("metadata.json"))
+        return garbage
+    }
+
+    @Test func renameOnReadOnlyEntry_setsActionErrorAndWritesNothing() async throws {
+        let (catalog, storage) = makeCatalog()
+        let garbage = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        #expect(entry.isReadOnly)
+
+        await catalog.rename(entry, to: "New Name")
+
+        #expect(catalog.actionError != nil)
+        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
+        #expect(catalog.active.first?.displayName == "Rome")
+    }
+
+    @Test func setTagsOnReadOnlyEntry_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        _ = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.setTags(["a"], for: entry)
+
+        #expect(catalog.actionError != nil)
+    }
+
+    @Test func moveToTrashOnReadOnlyEntry_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        _ = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.moveToTrash(entry)
+
+        #expect(catalog.actionError != nil)
+        #expect(catalog.active.count == 1)
+    }
+
+    @Test func mutationOnHealthyEntry_leavesActionErrorNil() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "ok")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.rename(entry, to: "Renamed")
+
+        #expect(catalog.actionError == nil)
+        #expect(catalog.active.first?.displayName == "Renamed")
+    }
+
+    @Test func deleteForeverFailure_setsActionError() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "stuck")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+        // A read-only root: the folder itself cannot be unlinked.
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: storage.root.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: storage.root.path) }
+
+        await catalog.deleteForever(entry)
+
+        // The folder's contents may be removed before the unlink of the folder itself fails,
+        // so only the reported error is asserted.
+        #expect(catalog.actionError != nil)
+    }
+
+    // MARK: - Bulk actions (C8)
+
+    @Test func bulkTrash_trashesAllSelectedWithOneReload() async throws {
+        let (catalog, storage) = makeCatalog()
+        for name in ["a", "b", "c"] {
+            try seedFolder(storage, folder: name)
+        }
+        await catalog.reload()
+        let picked = catalog.active.filter { $0.storageFolderName != "c" }
+
+        await catalog.moveToTrash(picked)
+
+        #expect(catalog.active.map(\.storageFolderName) == ["c"])
+        #expect(Set(catalog.trashed.map(\.storageFolderName)) == ["a", "b"])
+        #expect(try storage.readMetadata(forFolderNamed: "a")?.trashedAt != nil)
+        #expect(catalog.actionError == nil)
+    }
+
+    @Test func bulkAddTags_mergesWithExistingTags() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "a")
+        try seedFolder(storage, folder: "b")
+        try storage.updateMetadata(forFolderNamed: "a") { $0.tags = ["Hiking", "zoo"] }
+        await catalog.reload()
+
+        await catalog.addTags(["hiking", " Food ", ""], to: catalog.active)
+
+        let byName = Dictionary(uniqueKeysWithValues: catalog.active.map { ($0.storageFolderName, $0.tags) })
+        #expect(byName["a"] == ["Food", "Hiking", "zoo"])
+        #expect(byName["b"] == ["Food", "hiking"])
+        #expect(catalog.actionError == nil)
+    }
+
+    @Test func bulkActionsSkipReadOnlyEntries() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "ok")
+        let garbage = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let all = catalog.active
+
+        await catalog.addTags(["t"], to: all)
+        #expect(catalog.actionError != nil)
+        #expect(catalog.active.first { $0.storageFolderName == "ok" }?.tags == ["t"])
+        catalog.actionError = nil
+
+        await catalog.moveToTrash(all)
+
+        #expect(catalog.actionError != nil)
+        #expect(catalog.trashed.map(\.storageFolderName) == ["ok"])
+        #expect(catalog.active.map(\.storageFolderName) == ["bad"])
+        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
+    }
 }

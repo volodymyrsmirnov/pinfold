@@ -14,37 +14,78 @@ public struct Coordinate: Equatable, Sendable {
     /// Parses the first `lon,lat[,alt]` tuple from a KML `<coordinates>` string.
     /// Returns nil if no valid tuple is present.
     public init?(parsingFirstTuple raw: String) {
-        let firstTuple = raw
-            .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
-            .first
-        guard let firstTuple else { return nil }
-        self.init(parsingTuple: String(firstTuple), wholeStringFallback: raw)
+        guard let first = Self.tokenize(raw, limit: 1).first else { return nil }
+        self.init(parts: first)
     }
 
-    /// Parses every whitespace-separated `lon,lat[,alt]` tuple from a KML `<coordinates>`
-    /// string, in order. Unparseable tuples are skipped.
+    /// Parses every `lon,lat[,alt]` tuple from a KML `<coordinates>` string, in order.
+    /// Unparseable tuples are skipped.
     public static func parseList(_ raw: String) -> [Coordinate] {
-        raw
-            .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
-            .compactMap { Coordinate(parsingTuple: String($0), wholeStringFallback: nil) }
+        tokenize(raw, limit: Int.max).compactMap { Coordinate(parts: $0) }
     }
 
-    /// Parses a single comma-separated `lon,lat[,alt]` tuple. `wholeStringFallback`, when
-    /// provided, is the original `<coordinates>` text used to recover tuples written with
-    /// whitespace after the commas ("lon, lat, alt") — only meaningful for a single-tuple
-    /// string, so `parseList` passes nil.
-    private init?(parsingTuple tuple: String, wholeStringFallback raw: String?) {
-        var parts = tuple.split(separator: ",", omittingEmptySubsequences: false)
-            .map { String($0) }
-        if parts.prefix(2).compactMap(Double.init).count < 2, let raw {
-            // Fallback for tuples with whitespace after the commas ("lon, lat, alt"):
-            // the whitespace split above truncated the tuple, so re-split the whole
-            // string on commas, trim each component, and take the first two/three.
-            parts = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                .split(separator: ",", omittingEmptySubsequences: false)
-                .prefix(3)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// Splits `raw` into tuples of number strings. A comma (with optional whitespace on
+    /// either side) continues the current tuple; whitespace with no comma starts the next
+    /// one, so "1, 2, 0 3, 4, 0" yields two tuples. Stops once `limit` tuples are complete.
+    private static func tokenize(_ raw: String, limit: Int) -> [[String]] {
+        var tuples: [[String]] = []
+        var current: [String] = []
+        var continues = false // the last significant token was a comma
+        var tokenStart: Int?
+        let comma = UInt8(ascii: ",")
+
+        func isSpace(_ byte: UInt8) -> Bool {
+            byte == 0x20 || byte == 0x0A || byte == 0x09 || byte == 0x0D
         }
+
+        var text = raw
+        text.makeContiguousUTF8()
+        return text.utf8.withContiguousStorageIfAvailable { bytes -> [[String]] in
+            func flushNumber(upTo end: Int) {
+                guard let start = tokenStart else { return }
+                tokenStart = nil
+                // The bytes come from a UTF-8 buffer, not Data, so the Data lint rule does not apply.
+                // swiftlint:disable:next optional_data_string_conversion
+                let token = String(decoding: UnsafeBufferPointer(rebasing: bytes[start ..< end]), as: UTF8.self)
+                if continues, !current.isEmpty {
+                    current.append(token)
+                } else {
+                    if !current.isEmpty {
+                        tuples.append(current)
+                    }
+                    current = [token]
+                }
+                continues = false
+            }
+            for index in 0 ..< bytes.count {
+                if tuples.count >= limit {
+                    return tuples
+                }
+                let byte = bytes[index]
+                if byte == comma {
+                    flushNumber(upTo: index)
+                    if continues {
+                        current.append("")
+                    } // ",," leaves an empty component
+                    if current.isEmpty {
+                        current = [""]
+                    }
+                    continues = true
+                } else if isSpace(byte) {
+                    flushNumber(upTo: index)
+                } else if tokenStart == nil {
+                    tokenStart = index
+                }
+            }
+            flushNumber(upTo: bytes.count)
+            if !current.isEmpty {
+                tuples.append(current)
+            }
+            return Array(tuples.prefix(limit))
+        } ?? []
+    }
+
+    private init?(parts: [String]) {
         guard parts.count >= 2,
               let lon = Double(parts[0]),
               let lat = Double(parts[1]),

@@ -1,4 +1,5 @@
 import Foundation
+import os
 @testable import Pinfold
 import PinfoldCore
 import Testing
@@ -161,6 +162,17 @@ struct ResourceCacheTests {
         }
     }
 
+    @Test func downloadRemote_upperCaseSchemeIsFetchedAndKeyedByTheOriginalHref() async throws {
+        let dir = try makeTempDir()
+        let stubData = Self.pngBytes
+        let cache = ResourceCache { _ in stubData }
+        let href = "HTTP://example.com/Upper.png"
+
+        await cache.downloadRemote([href], to: dir)
+
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+    }
+
     @Test func downloadRemote_offlineFirst_failingURLDoesNotBlockOthers() async throws {
         let dir = try makeTempDir()
         let successData = Self.pngBytes
@@ -275,19 +287,6 @@ struct ResourceCacheTests {
 
         #expect(cache.localURL(forHref: href, in: dir) == nil,
                 "Non-image payload must not be written")
-
-        // Permanently skipped — retry must not re-attempt.
-        actor CallCounter { var count = 0; func increment() {
-            count += 1
-        } }
-        let counter = CallCounter()
-        let retry = ResourceCache { _ in
-            await counter.increment()
-            return Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
-        }
-        await retry.retryPending(in: dir)
-        #expect(await counter.count == 0,
-                "A non-image href must be permanently skipped, not retried")
     }
 
     @Test func download_acceptsRealImageMagicBytes() async throws {
@@ -332,6 +331,64 @@ struct ResourceCacheTests {
                 "Hrefs beyond the cap must not be downloaded")
     }
 
+    // MARK: - clearDownloaded / resumeDeferred (C9)
+
+    private func countingCache(_ counter: OSAllocatedUnfairLock<Int>) -> ResourceCache {
+        ResourceCache(downloader: { _ in
+            counter.withLock { $0 += 1 }
+            return Self.pngBytes
+        })
+    }
+
+    @Test func clearDownloaded_removesRemoteFilesKeepsEmbeddedAndIndex() async throws {
+        let dir = try makeTempDir()
+        let remote = "https://example.com/photo.png"
+        let embedded = "images/icon.png"
+        let cache = ResourceCache(downloader: { _ in Self.pngBytes })
+        try cache.writeEmbedded([embedded: Self.pngBytes], to: dir)
+        let indexURL = dir.appendingPathComponent(PlacemarkIndex.filename)
+        try Data("{}".utf8).write(to: indexURL)
+        await cache.downloadRemote([remote], to: dir)
+        let remoteFile = try #require(cache.localURL(forHref: remote, in: dir))
+
+        cache.clearDownloaded(in: dir)
+
+        #expect(!FileManager.default.fileExists(atPath: remoteFile.path))
+        #expect(cache.localURL(forHref: remote, in: dir) == nil)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[remote] == nil)
+        #expect(cache.localURL(forHref: embedded, in: dir) != nil)
+        #expect(FileManager.default.fileExists(atPath: indexURL.path))
+        #expect(ResourceManifestStore.shared.state(in: dir).deferredUntilOpened)
+    }
+
+    @Test func clearedEntryIsNotRetriedByBackgroundPass() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/photo.png"
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let cache = countingCache(calls)
+        await cache.downloadRemote([href], to: dir)
+        cache.clearDownloaded(in: dir)
+        let before = calls.withLock { $0 }
+
+        await cache.retryPending(in: dir)
+
+        #expect(calls.withLock { $0 } == before)
+        #expect(cache.localURL(forHref: href, in: dir) == nil)
+    }
+
+    @Test func resumeDeferredFetchesAgain() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/photo.png"
+        let cache = ResourceCache(downloader: { _ in Self.pngBytes })
+        await cache.downloadRemote([href], to: dir)
+        cache.clearDownloaded(in: dir)
+
+        await cache.resumeDeferred(in: dir)
+
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+        #expect(!ResourceManifestStore.shared.state(in: dir).deferredUntilOpened)
+    }
+
     // MARK: - retryPending
 
     @Test func retryPending_downloadsOnlyMissingHrefs() async throws {
@@ -367,16 +424,18 @@ struct ResourceCacheTests {
         let href = "https://example.com/icon.png"
 
         // First attempt fails (offline) but records the expected href list to disk.
-        let failing = ResourceCache { _ in
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let failing = ResourceCache(downloader: { _ in
             struct FakeNetworkError: Error {}
             throw FakeNetworkError()
-        }
+        }, now: { clock.value })
         await failing.downloadRemote([href], to: dir)
         #expect(failing.localURL(forHref: href, in: dir) == nil, "Initial download must fail")
 
         // Connectivity restored: a retry that is NOT handed the href list reads the recorded
         // one (no re-parse) and succeeds.
-        let succeeding = ResourceCache { _ in Self.pngBytes }
+        clock.value = clock.value.addingTimeInterval(3600) // past the backoff window
+        let succeeding = ResourceCache(downloader: { _ in Self.pngBytes }, now: { clock.value })
         await succeeding.retryPending(in: dir)
         #expect(succeeding.localURL(forHref: href, in: dir) != nil,
                 "retryPending(in:) should fetch the recorded pending href without being given it")
@@ -394,5 +453,309 @@ struct ResourceCacheTests {
         }
         await cache.retryPending(in: dir)
         #expect(await counter.count == 0, "Retry with no recorded hrefs must not download")
+    }
+}
+
+// MARK: - DL-1 / DL-2 / DL-3
+
+private final class Counter: Sendable {
+    private let value = OSAllocatedUnfairLock(initialState: 0)
+    func increment() {
+        value.withLock { $0 += 1 }
+    }
+
+    var count: Int {
+        value.withLock { $0 }
+    }
+}
+
+private final class Mutable<T: Sendable>: Sendable {
+    private let box: OSAllocatedUnfairLock<T>
+    init(_ initial: T) {
+        box = OSAllocatedUnfairLock(initialState: initial)
+    }
+
+    func mutate(_ body: @Sendable (inout T) -> Void) {
+        box.withLock { body(&$0) }
+    }
+
+    var value: T {
+        get { box.withLock { $0 } }
+        set { box.withLock { $0 = newValue } }
+    }
+}
+
+extension ResourceCacheTests {
+    private static let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    private static let html = Data("<html>portal</html>".utf8)
+
+    private func state(_ dir: URL) -> DownloadState {
+        ResourceManifestStore.shared.state(in: dir)
+    }
+
+    // MARK: DL-1
+
+    @Test func http404_isRetriedLater_notMarkedSkipped() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let failing = ResourceCache(downloader: { _ in throw DownloadError.httpStatus(404) }, now: { clock.value })
+        await failing.downloadRemote([href], to: dir)
+        #expect(failing.localURL(forHref: href, in: dir) == nil)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[href] == nil, "must not be a permanent skip")
+
+        clock.value = clock.value.addingTimeInterval(3600)
+        let working = ResourceCache(downloader: { _ in Self.png }, now: { clock.value })
+        await working.retryPending(in: dir)
+        #expect(working.localURL(forHref: href, in: dir) != nil)
+    }
+
+    @Test func nonImage200_isNotSkippedOnFirstAttempt() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let portal = ResourceCache(downloader: { _ in Self.html }, now: { clock.value })
+        await portal.downloadRemote([href], to: dir)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[href] == nil)
+        #expect(state(dir).hrefs[href]?.attempts == 1)
+
+        clock.value = clock.value.addingTimeInterval(3600)
+        let working = ResourceCache(downloader: { _ in Self.png }, now: { clock.value })
+        await working.retryPending(in: dir)
+        #expect(working.localURL(forHref: href, in: dir) != nil)
+    }
+
+    @Test func tooLargeError_isPermanentSkip() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/big.png"
+        let cache = ResourceCache { _ in throw DownloadError.tooLarge }
+        await cache.downloadRemote([href], to: dir)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[href] == "")
+    }
+
+    // MARK: DL-2
+
+    @Test func retryPending_skipsHrefsInsideBackoffWindow() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let calls = Counter()
+        let cache = ResourceCache(downloader: { _ in
+            calls.increment()
+            throw DownloadError.httpStatus(503)
+        }, now: { clock.value })
+
+        await cache.downloadRemote([href], to: dir)
+        #expect(calls.count == 1)
+        await cache.retryPending(in: dir)
+        #expect(calls.count == 1, "inside the backoff window nothing is requested")
+
+        clock.value = clock.value.addingTimeInterval(61)
+        await cache.retryPending(in: dir)
+        #expect(calls.count == 2)
+    }
+
+    @Test func attemptCounterGrowsAndBackoffDoubles() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let clock = Mutable(start)
+        let cache = ResourceCache(downloader: { _ in throw DownloadError.httpStatus(500) }, now: { clock.value })
+
+        var expectedDelays: [TimeInterval] = [60, 120, 240, 480]
+        for attempt in 1 ... 4 {
+            await cache.retryOrDownload(href, in: dir)
+            let entry = try #require(state(dir).hrefs[href])
+            #expect(entry.attempts == attempt)
+            #expect(entry.nextAttemptAt == clock.value.addingTimeInterval(expectedDelays.removeFirst()))
+            clock.value = clock.value.addingTimeInterval(86400)
+        }
+        #expect(ResourceCache.backoff(afterAttempts: 30) == 24 * 60 * 60)
+    }
+
+    @Test func offlineErrors_doNotCountAsAttempts() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let offline = ResourceCache(downloader: { _ in throw URLError(.notConnectedToInternet) }, now: { clock.value })
+        for _ in 0 ..< 5 {
+            await offline.retryOrDownload(href, in: dir)
+        }
+        #expect(state(dir).hrefs[href] == nil, "offline failures leave no attempts or backoff")
+
+        let online = ResourceCache(downloader: { _ in Self.png }, now: { clock.value })
+        await online.retryOrDownload(href, in: dir)
+        #expect(online.localURL(forHref: href, in: dir) != nil)
+    }
+
+    /// The production downloader (`BoundedDownloader`) wraps `URLError`s in
+    /// `DownloadError.transport`, so the offline check must look through that wrapper.
+    @Test func wrappedOfflineErrors_doNotCountAsAttempts() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let cache = ResourceCache(downloader: { _ in
+            throw DownloadError.transport(URLError(.notConnectedToInternet))
+        })
+        for _ in 0 ..< 3 {
+            await cache.retryOrDownload(href, in: dir)
+        }
+        #expect(state(dir).hrefs[href] == nil, "wrapped offline failures leave no attempts or backoff")
+        #expect(ResourceCache.isConnectivityFailure(DownloadError.transport(URLError(.networkConnectionLost))))
+        #expect(!ResourceCache.isConnectivityFailure(DownloadError.transport(URLError(.cannotFindHost))))
+    }
+
+    @Test func deadHostStillBacksOff() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let cache = ResourceCache(downloader: { _ in throw URLError(.cannotFindHost) })
+        await cache.retryOrDownload(href, in: dir)
+        #expect(state(dir).hrefs[href]?.attempts == 1)
+    }
+
+    @Test func successClearsDownloadState() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let works = Mutable(false)
+        let cache = ResourceCache(downloader: { _ in
+            if works.value {
+                return Self.png
+            }
+            throw DownloadError.httpStatus(500)
+        }, now: { clock.value })
+        await cache.downloadRemote([href], to: dir)
+        #expect(state(dir).hrefs[href] != nil)
+
+        works.value = true
+        clock.value = clock.value.addingTimeInterval(3600)
+        await cache.retryPending(in: dir)
+        #expect(state(dir).hrefs[href] == nil)
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+    }
+
+    @Test func concurrentPassesDoNotLoseManifestEntries() async throws {
+        let dir = try makeTempDir()
+        let cache = ResourceCache { _ in Self.png }
+        let groups = (0 ..< 8).map { g in (0 ..< 10).map { "https://example.com/\(g)-\($0).png" } }
+        await withTaskGroup(of: Void.self) { group in
+            for hrefs in groups {
+                group.addTask { await cache.downloadRemote(hrefs, to: dir) }
+            }
+        }
+        let manifest = ResourceManifestStore.shared.manifest(in: dir)
+        #expect(manifest.count == 80)
+        #expect(ResourceManifestStore.shared.recordedHrefs(in: dir).count == 80)
+    }
+
+    @Test func nonImageContent_isSkippedAfterMaxAttempts() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let calls = Counter()
+        let cache = ResourceCache(downloader: { _ in
+            calls.increment()
+            return Self.html
+        }, now: { clock.value })
+        for _ in 0 ..< 8 {
+            await cache.downloadRemote([href], to: dir)
+            clock.value = clock.value.addingTimeInterval(86400)
+        }
+        #expect(calls.count == 5)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[href] == "")
+        #expect(state(dir).hrefs[href] == nil)
+    }
+
+    @Test func downloadsRunAtMostFourAtATime() async throws {
+        let dir = try makeTempDir()
+        let current = Mutable(0)
+        let peak = Mutable(0)
+        let cache = ResourceCache { _ in
+            current.mutate { $0 += 1 }
+            peak.mutate { $0 = max($0, current.value) }
+            try await Task.sleep(for: .milliseconds(30))
+            current.mutate { $0 -= 1 }
+            return Self.png
+        }
+        await cache.downloadRemote((0 ..< 12).map { "https://example.com/\($0).png" }, to: dir)
+        #expect(peak.value <= 4)
+        #expect(ResourceManifestStore.shared.manifest(in: dir).count == 12)
+    }
+
+    // MARK: DL-3
+
+    @Test func policyNever_recordsHrefsButFetchesNothing() async throws {
+        let dir = try makeTempDir()
+        let calls = Counter()
+        let cache = ResourceCache(downloader: { _ in
+            calls.increment()
+            return Self.png
+        }, policy: { .never })
+        await cache.downloadRemote(["https://example.com/a.png"], to: dir)
+        #expect(calls.count == 0)
+        #expect(ResourceManifestStore.shared.recordedHrefs(in: dir) == ["https://example.com/a.png"])
+    }
+
+    @Test func policyAsk_fetchesOnlyAfterConsent() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let calls = Counter()
+        let cache = ResourceCache(downloader: { _ in
+            calls.increment()
+            return Self.png
+        }, policy: { .ask })
+        await cache.downloadRemote([href], to: dir)
+        await cache.retryPending(in: dir)
+        #expect(calls.count == 0)
+        #expect(cache.pendingConsent(in: dir).count == 1)
+
+        await cache.grantConsent(in: dir)
+        #expect(calls.count == 1)
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+        #expect(cache.pendingConsent(in: dir) == .none)
+        #expect(state(dir).consent)
+    }
+
+    @Test func switchingToAlways_resumesPending() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let policy = Mutable(RemoteImagePolicy.never)
+        let cache = ResourceCache(downloader: { _ in Self.png }, policy: { policy.value })
+        await cache.downloadRemote([href], to: dir)
+        #expect(cache.localURL(forHref: href, in: dir) == nil)
+
+        policy.value = .always
+        await cache.retryPending(in: dir)
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+    }
+
+    @Test func pendingConsent_listsDistinctHosts() async throws {
+        let dir = try makeTempDir()
+        let cache = ResourceCache(downloader: { _ in Self.png }, policy: { .ask })
+        await cache.downloadRemote([
+            "https://B.example.com/1.png", "https://b.example.com/2.png",
+            "http://a.example.org/3.png",
+        ], to: dir)
+        let pending = cache.pendingConsent(in: dir)
+        #expect(pending.count == 3)
+        #expect(pending.hosts == ["a.example.org", "b.example.com"])
+    }
+
+    @Test func pendingConsent_isEmptyUnlessPolicyIsAsk() async throws {
+        let dir = try makeTempDir()
+        let cache = ResourceCache(downloader: { _ in Self.png }, policy: { .never })
+        await cache.downloadRemote(["https://example.com/a.png"], to: dir)
+        #expect(cache.pendingConsent(in: dir) == .none)
+    }
+
+    @Test func downloadStateDecodesWithMissingKeys() throws {
+        let decoded = try JSONDecoder().decode(DownloadState.self, from: Data("{}".utf8))
+        #expect(decoded == DownloadState())
+    }
+}
+
+private extension ResourceCache {
+    /// Test helper: one pass over a single href.
+    func retryOrDownload(_ href: String, in dir: URL) async {
+        await downloadRemote([href], to: dir)
     }
 }

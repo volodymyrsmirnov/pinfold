@@ -53,7 +53,7 @@ struct EntryQuery: EntityStringQuery {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         let matches = trimmed.isEmpty
             ? catalog.active
-            : catalog.active.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+            : catalog.active.filter { SearchText.contains($0.displayName, query: trimmed) }
         return matches.map(CatalogEntryEntity.init(entry:))
     }
 

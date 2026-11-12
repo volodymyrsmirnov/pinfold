@@ -10,7 +10,8 @@ import SwiftUI
 /// 2. Plain-text description (HTML tags stripped, entities decoded, line breaks kept).
 /// 3. Coordinates.
 /// 4. Extended data as chip rows.
-/// 5. "Open in Maps" primary action button.
+/// 5. "My Notes" block.
+/// 6. "Open in Maps" primary action button.
 ///
 /// Toolbar menu provides secondary actions: Copy Coordinates, Share, Copy Name.
 struct PlacemarkDetailView: View {
@@ -26,6 +27,7 @@ struct PlacemarkDetailView: View {
     @Environment(AppSettings.self) private var environmentSettings: AppSettings?
     @Environment(\.resourceCache) private var resourceCache
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
+    @Environment(Catalog.self) private var catalog: Catalog?
     @Environment(NavigationRouter.self) private var router: NavigationRouter?
 
     // MARK: - State
@@ -49,21 +51,6 @@ struct PlacemarkDetailView: View {
     /// live instance.
     private var activeRouter: NavigationRouter? {
         router ?? AppDependencies.shared.router
-    }
-
-    /// The rendered description: tags stripped, entities decoded, line breaks preserved, and
-    /// `<a href>`/bare URLs/emails/phones turned into tappable links (scheme-allowlisted —
-    /// see `AttributedHTML`). Built once in `.task` since it is pure string work, keeping it
-    /// off `body`'s recompute path. KML descriptions are untrusted, so they are never sent
-    /// through `NSAttributedString`'s HTML importer.
-    @State private var description: AttributedString?
-
-    /// Builds the tappable, scheme-allowlisted description (pure string work, fine off-main).
-    /// A free method, not an inline `body` expression, to keep the view's SIL small.
-    private func renderedDescription() -> AttributedString? {
-        guard let html = placemark.descriptionHTML, !html.isEmpty else { return nil }
-        let attributed = AttributedHTML.attributed(html)
-        return attributed.characters.isEmpty ? nil : attributed
     }
 
     private var coordinateString: String? {
@@ -97,8 +84,9 @@ struct PlacemarkDetailView: View {
         }
         .navigationTitle(placemark.name ?? "Untitled")
         .navigationBarTitleDisplayMode(.inline)
-        .task { description = renderedDescription() }
         .toolbar { toolbarMenu }
+        // Favourite / Open in Maps menu commands act on the place open in THIS window.
+        .focusedSceneValue(\.placeCommands, placeCommands)
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -109,6 +97,15 @@ struct PlacemarkDetailView: View {
                 .environment(settings)
             }
         }
+    }
+
+    /// The menu-bar actions for this place (⌘D, ⇧⌘O); each is `nil` (menu item disabled) when
+    /// it cannot apply.
+    private var placeCommands: PlaceCommands {
+        PlaceCommands(
+            toggleFavorite: annotations.map { store in { store.toggleFavorite(placemark) } },
+            openInMaps: hasCoordinate ? { openInMaps() } : nil
+        )
     }
 
     // MARK: - Content stack
@@ -135,12 +132,13 @@ struct PlacemarkDetailView: View {
             .padding(.horizontal)
 
             // Description
-            if let description {
-                Text(description)
-                    .font(.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if let html = placemark.descriptionHTML, !html.isEmpty {
+                DescriptionView(html: html, entry: entry)
                     .padding(.horizontal)
             }
+
+            // Address and phone
+            contactRows
 
             // Coordinates
             if let coordStr = coordinateString {
@@ -152,12 +150,49 @@ struct PlacemarkDetailView: View {
                 extendedDataSection
             }
 
+            // Personal note
+            if let annotations {
+                PlacemarkNoteBlock(placemark: placemark, annotations: annotations, catalog: catalog)
+            }
+
             // Open in Maps button
             openInMapsButton
                 .padding(.horizontal)
                 .padding(.bottom, 24)
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Address and phone rows
+
+    private var trimmedAddress: String? {
+        let value = placemark.address?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    /// A `tel:` URL for the placemark's phone number (digits and `+` only), when it has one.
+    private var phoneURL: URL? {
+        guard let phone = placemark.phoneNumber else { return nil }
+        let digits = phone.filter { $0.isNumber || $0 == "+" }
+        return digits.isEmpty ? nil : URL(string: "tel:\(digits)")
+    }
+
+    @ViewBuilder
+    private var contactRows: some View {
+        if let address = trimmedAddress {
+            Label(address, systemImage: "mappin.and.ellipse")
+                .font(.subheadline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .textSelection(.enabled)
+        }
+        if let phoneURL, let phone = placemark.phoneNumber {
+            Link(destination: phoneURL) {
+                Label(phone, systemImage: "phone")
+                    .font(.subheadline)
+            }
+            .padding(.horizontal)
+        }
     }
 
     // MARK: - Coordinates row
@@ -183,7 +218,7 @@ struct PlacemarkDetailView: View {
                 .padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(placemark.extendedData, id: \.name) { item in
+                    ForEach(placemark.extendedData) { item in
                         extendedDataChip(item)
                     }
                 }
@@ -194,7 +229,7 @@ struct PlacemarkDetailView: View {
 
     private func extendedDataChip(_ item: KMLDataItem) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(item.name)
+            Text(item.displayName ?? item.name)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(item.value)
