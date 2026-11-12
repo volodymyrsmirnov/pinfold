@@ -7,17 +7,19 @@ enum GeoJSONGeometry {
         "GeometryCollection",
     ]
 
-    /// Appends the primitive geometries of `geometry` in file order. `spent` counts positions
-    /// (for the complexity budget).
+    /// Appends the primitive geometries of `geometry` in file order. `spent` meters the
+    /// complexity budget: every geometry node and every position is charged to it.
     static func collect(_ geometry: [String: Any], depth: Int, into out: inout [KMLGeometry],
-                        spent: inout Int) throws
+                        spent: inout WorkMeter) throws
     // swiftlint:disable:next opening_brace
     {
         guard depth <= GeoJSONReader.maxGeometryDepth else { throw KMLReadError.geoJSONTooComplex }
         try Task.checkCancellation()
+        try spent.charge(1)
         let coordinates = geometry["coordinates"]
         switch geometry["type"] as? String {
         case "Point":
+            try spent.charge(1)
             if let point = position(coordinates) {
                 out.append(.point(point))
             }
@@ -29,12 +31,14 @@ enum GeoJSONGeometry {
             try out.append(.lineString(positions(coordinates, spent: &spent)))
         case "MultiLineString":
             for line in coordinates as? [Any] ?? [] {
+                try spent.charge(1)
                 try out.append(.lineString(positions(line, spent: &spent)))
             }
         case "Polygon":
             try appendPolygon(coordinates, into: &out, spent: &spent)
         case "MultiPolygon":
             for polygon in coordinates as? [Any] ?? [] {
+                try spent.charge(1)
                 try appendPolygon(polygon, into: &out, spent: &spent)
             }
         case "GeometryCollection":
@@ -82,19 +86,19 @@ enum GeoJSONGeometry {
         }
     }
 
-    private static func appendPolygon(_ rings: Any?, into out: inout [KMLGeometry], spent: inout Int) throws {
+    private static func appendPolygon(_ rings: Any?, into out: inout [KMLGeometry], spent: inout WorkMeter) throws {
         var parsed: [[Coordinate]] = []
         for ring in rings as? [Any] ?? [] {
+            try spent.charge(1)
             try parsed.append(positions(ring, spent: &spent))
         }
         guard let outer = parsed.first, !outer.isEmpty else { return }
         out.append(.polygon(outer: outer, inners: Array(parsed.dropFirst().filter { !$0.isEmpty })))
     }
 
-    private static func positions(_ raw: Any?, spent: inout Int) throws -> [Coordinate] {
+    private static func positions(_ raw: Any?, spent: inout WorkMeter) throws -> [Coordinate] {
         guard let list = raw as? [Any] else { return [] }
-        spent += list.count
-        guard spent <= GeoJSONReader.maxWork else { throw KMLReadError.geoJSONTooComplex }
+        try spent.charge(list.count)
         var result: [Coordinate] = []
         result.reserveCapacity(list.count)
         for (index, item) in list.enumerated() {
