@@ -203,7 +203,7 @@ extension HomeView {
     /// Active entries whose display name matches the query — the "Files" results section.
     /// Same `localizedCaseInsensitiveContains` primitive as the placemark search.
     private var matchingFiles: [CatalogEntry] {
-        sortedActive.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+        sortedActive.filter { SearchText.contains($0.displayName, query: trimmedQuery) }
     }
 
     /// Place hits grouped by the entry that contains them, in catalogue order, so the results

@@ -103,6 +103,11 @@ struct StorageLocations {
         folder(for: entry).appendingPathComponent(entry.sourceFilename)
     }
 
+    /// Writes the original KML/KMZ bytes to `originalFile(for:)` as a plain atomic write.
+    func writeOriginal(_ data: Data, for entry: CatalogEntry) throws {
+        try data.write(to: originalFile(for: entry), options: .atomic)
+    }
+
     /// The sidecar metadata file: `folder/metadata.json`.
     func metadataFile(for entry: CatalogEntry) -> URL {
         folder(for: entry).appendingPathComponent("metadata.json")
@@ -138,7 +143,10 @@ struct StorageLocations {
             options: [.skipsHiddenFiles]
         ) else { return nil }
         return contents
-            .filter { ["kml", "kmz"].contains($0.pathExtension.lowercased()) }
+            .filter {
+                ImportFormats.originalExtensions.contains($0.pathExtension.lowercased())
+                    && !ImportFormats.reservedNames.contains($0.lastPathComponent)
+            }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .first
     }
@@ -159,8 +167,12 @@ struct StorageLocations {
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
             do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
         }
-        if let coordinationError { throw coordinationError }
-        if let accessorError { throw accessorError }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let accessorError {
+            throw accessorError
+        }
         // `result` is non-nil whenever neither error fired.
         return result ?? Data()
     }
@@ -176,8 +188,12 @@ struct StorageLocations {
         ) { writeURL in
             do { try data.write(to: writeURL, options: .atomic) } catch { accessorError = error }
         }
-        if let coordinationError { throw coordinationError }
-        if let accessorError { throw accessorError }
+        if let coordinationError {
+            throw coordinationError
+        }
+        if let accessorError {
+            throw accessorError
+        }
     }
 
     // MARK: - Sidecar I/O
@@ -358,7 +374,9 @@ struct StorageLocations {
             guard isDir else { continue }
             let name = source.lastPathComponent
             let dest = newRoot.appendingPathComponent(name, isDirectory: true)
-            if fm.fileExists(atPath: dest.path) { continue }
+            if fm.fileExists(atPath: dest.path) {
+                continue
+            }
 
             do {
                 if toUbiquitous, !fromUbiquitous {
@@ -399,8 +417,12 @@ struct StorageLocations {
     func removeFolder(named name: String) throws {
         let fm = FileManager.default
         let synced = root.appendingPathComponent(name, isDirectory: true)
-        if fm.fileExists(atPath: synced.path) { try fm.removeItem(at: synced) }
+        if fm.fileExists(atPath: synced.path) {
+            try fm.removeItem(at: synced)
+        }
         let cache = cacheRoot.appendingPathComponent(name, isDirectory: true)
-        if fm.fileExists(atPath: cache.path) { try fm.removeItem(at: cache) }
+        if fm.fileExists(atPath: cache.path) {
+            try fm.removeItem(at: cache)
+        }
     }
 }

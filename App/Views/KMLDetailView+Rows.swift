@@ -1,0 +1,208 @@
+import CoreLocation
+import PinfoldCore
+import SwiftUI
+
+extension KMLDetailView {
+    // MARK: - Content list
+
+    /// A single inset-grouped list: the search field row, then the flattened placemark
+    /// outline. Rendering a flat `[PlacemarkOutline.Row]` (instead of nested `Section`/
+    /// `DisclosureGroup` trees built via `AnyView`) lets `List` lazily realize and diff
+    /// rows, and confines per-keystroke work to one memoized, debounced tree walk.
+    @ViewBuilder
+    func contentList(_ document: KMLDocument) -> some View {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        // Snapshot the user's location ONCE per list build so every row shares one fix instead
+        // of re-reading `locationAuth` per row. `nil` → rows show no distance.
+        let location = locationAuth.lastLocation
+        ScrollViewReader { proxy in
+            List {
+                searchSection
+                if let outline {
+                    if outline.rows.isEmpty, !query.isEmpty {
+                        Section {
+                            Text("No placemarks match \u{201C}\(query)\u{201D}.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                    } else {
+                        Section {
+                            ForEach(outline.rows) { row in
+                                outlineRow(row, document: document, location: location)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .onGeometryChange(for: CGRect.self) { geometry in
+                geometry.frame(in: .global)
+            } action: { frame in
+                rowFrames.listFrame = frame
+            }
+            // Appearance-bound AND change-bound: fires on appear (covers pop-back — the
+            // "one more attempt when the list becomes visible again" case) and on every
+            // completed outline rebuild via the generation counter (covers the fast-launch
+            // race where rows land before the List attaches, and re-sorts that keep the
+            // row count constant, like the nearest-first re-sort when the location fix
+            // arrives on a folderless file).
+            .task(id: outlineGeneration) {
+                await applyPendingScroll(using: proxy)
+            }
+        }
+    }
+
+    // MARK: - Outline row
+
+    /// Renders a single flattened outline row by kind, indented by its depth. Folder rows
+    /// toggle their membership in `collapsedFolderIDs` (and rotate a chevron like a
+    /// `DisclosureGroup`); while searching the outline ignores that set, so the chevron is
+    /// shown expanded and tapping it has no visible effect until the query is cleared.
+    @ViewBuilder
+    func outlineRow(
+        _ row: PlacemarkOutline.Row, document: KMLDocument, location: CLLocation?
+    ) -> some View {
+        switch row.kind {
+        case let .folder(name, id):
+            folderRow(name: name, id: id)
+                .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
+        case let .placemark(placemark):
+            placemarkLink(placemark, document: document, location: location)
+                .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+                .onGeometryChange(for: CGRect.self) { geometry in
+                    geometry.frame(in: .global)
+                } action: { frame in
+                    rowFrames.frames[row.id] = frame
+                }
+                .onDisappear { rowFrames.frames[row.id] = nil }
+        }
+    }
+
+    /// Base list-row leading inset plus the per-depth indent.
+    func leadingInset(_ depth: Int) -> CGFloat {
+        16 + CGFloat(depth) * 16
+    }
+
+    /// A tappable folder header row with a disclosure chevron that rotates with the
+    /// collapsed state. A non-empty search ignores the collapsed set, so the chevron is
+    /// pinned open while searching.
+    func folderRow(name: String, id: String) -> some View {
+        let searching = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+        let collapsed = !searching && collapsedFolderIDs.contains(id)
+        return Button {
+            if collapsedFolderIDs.contains(id) {
+                collapsedFolderIDs.remove(id)
+            } else {
+                collapsedFolderIDs.insert(id)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    // Purely decorative; the Button's label/value/hint carry the semantics.
+                    .accessibilityHidden(true)
+                Text(name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(searching)
+        .accessibilityLabel(name)
+        .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+        // String literal resolves as a LocalizedStringKey, so it localizes like Text.
+        .accessibilityHint("Expands or collapses this folder.")
+    }
+
+    // MARK: - Search field row
+
+    /// The search field, rendered as the first list group with the same card styling as
+    /// the others. It scrolls with the content (non-sticky) and never enters the navigation
+    /// bar's search mode, so the back and map buttons stay visible while searching.
+    var searchSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search placemarks", text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
+            }
+        }
+    }
+
+    // MARK: - Placemark navigation link
+
+    /// Known accepted edge: two occurrences of the same POI share a `stableKey` (it hashes
+    /// `name|lat|lon`), so both rows now push the FIRST occurrence's page — the same
+    /// first-match semantics every existing deep link (Spotlight, favorites) already has.
+    func placemarkLink(
+        _ placemark: KMLPlacemark, document: KMLDocument, location: CLLocation?
+    ) -> some View {
+        NavigationLink(value: EntryRoute.placemark(stableKey: placemark.stableKey)) {
+            PlacemarkRow(
+                placemark: placemark,
+                document: document,
+                entry: entry,
+                distance: PlacemarkDistance.format(from: location, to: placemark.coordinate)
+            )
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if let annotations {
+                Button {
+                    annotations.toggleFavorite(placemark)
+                } label: {
+                    let on = annotations.isFavorite(placemark)
+                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
+                }
+                .tint(.yellow)
+
+                Button {
+                    annotations.toggleVisited(placemark)
+                } label: {
+                    let on = annotations.isVisited(placemark)
+                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
+                }
+                .tint(.blue)
+            }
+        }
+        .contextMenu {
+            if let annotations {
+                Button {
+                    annotations.toggleFavorite(placemark)
+                } label: {
+                    let on = annotations.isFavorite(placemark)
+                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
+                }
+
+                Button {
+                    annotations.toggleVisited(placemark)
+                } label: {
+                    let on = annotations.isVisited(placemark)
+                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
+                }
+            }
+        }
+    }
+}

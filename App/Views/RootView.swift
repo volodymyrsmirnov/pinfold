@@ -17,40 +17,40 @@ import SwiftUI
 /// toggle + map prefs) is UserDefaults-backed.
 struct RootView: View {
     /// Diagnostics for the storage-root migration (no app-wide logging facility exists yet).
-    private static let migrationLogger = Logger(
+    static let migrationLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
         category: "migration"
     )
 
     /// Diagnostics for "Open in Pinfold" import failures. The user-facing failure banner
     /// carries only friendly reasons; the underlying errors go here.
-    private static let importLogger = Logger(
+    static let importLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
         category: "import"
     )
 
     /// Diagnostics for deep-link routing (App Intents + Spotlight taps) that resolve to a
     /// missing/trashed entry — surfaced here rather than to the user (a no-op is fine).
-    private static let routingLogger = Logger(
+    static let routingLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
         category: "spotlight"
     )
 
-    @State private var settings: AppSettings
-    @State private var catalog: Catalog
-    @State private var mapAppService: MapAppService
-    @State private var resourceCache: ResourceCache
-    @State private var watcher: CatalogWatcher?
+    @State var settings: AppSettings
+    @State var catalog: Catalog
+    @State var mapAppService: MapAppService
+    @State var resourceCache: ResourceCache
+    @State var watcher: CatalogWatcher?
     /// Deep-link sink for App Intents (and any future programmatic navigation). Published to
     /// `AppDependencies` at bootstrap so the out-of-tree `OpenEntryIntent` can drive selection.
-    @State private var router = NavigationRouter()
+    @State var router = NavigationRouter()
     /// Surfaces partial-migration failures to the Settings flow as an alert.
-    @State private var migrationAlert = MigrationAlertState()
+    @State var migrationAlert = MigrationAlertState()
     /// Surfaces import failures (parse or I/O) from every arrival path to `HomeView`.
-    @State private var importFailureLog = ImportFailureLog()
+    @State var importFailureLog = ImportFailureLog()
     /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
-    @State private var rootIsUbiquitous = false
+    @State var rootIsUbiquitous = false
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
@@ -58,7 +58,7 @@ struct RootView: View {
     /// the stable `UUID` and resolving it against `catalog.entries` keeps the selection alive
     /// across reloads, and naturally clears it when the entry disappears (deleted) or is
     /// trashed (the sidebar only exposes active entries for selection).
-    @State private var selectedEntryID: CatalogEntry.ID?
+    @State var selectedEntryID: CatalogEntry.ID?
 
     /// A one-shot deep-link target handed to the detail view when a selection is triggered by a
     /// catalogue-wide placemark hit (a "Places" search result, a favorite, or a Spotlight
@@ -69,36 +69,36 @@ struct RootView: View {
     /// tapped; `activeRestore` wraps it into a `RestoreBundle` passed to
     /// `KMLDetailView(initialRestore:)`, which clears it via `onConsumeRestore`. A normal row
     /// tap only changes `selectedEntryID` (leaving this nil), so it does not push.
-    @State private var pendingPlacemarkKey: String?
+    @State var pendingPlacemarkKey: String?
 
     /// A one-shot session-restore payload built by `restoreSessionIfNeeded()` (Task 6) and
     /// handed to `KMLDetailView` when the restored entry's view is created. `entryFolderName`
     /// guards the hand-off: only the matching entry receives it (a user could out-race a slow
     /// parse by selecting another file). Deep links win: `activeRestore` prefers
     /// `pendingPlacemarkKey`, and every deep-link site clears this.
-    @State private var pendingRestore: RestoreBundle?
+    @State var pendingRestore: RestoreBundle?
 
     /// Set when the app is (re)activated by a URL ("Open in Pinfold" / share-extension
     /// launch). An import doesn't drive a selection, so the selection-based restore guards
     /// can't see it — this flag keeps session restore from reopening the previous file on
     /// top of a fresh import.
-    @State private var suppressRestore = false
+    @State var suppressRestore = false
 
     /// A deep-link target (Spotlight tap or App Intent) that arrived before `bootstrap()`
     /// had loaded the catalogue, stashed for replay right after the first reload. Without
     /// this, a cold-launch tap resolves against an empty catalogue, gets dropped, and
     /// session restore then opens the PREVIOUS file instead of the tapped one.
-    @State private var pendingColdLaunchTarget: (folderName: String, placemarkKey: String?)?
+    @State var pendingColdLaunchTarget: (folderName: String, placemarkKey: String?)?
 
     /// Whether `bootstrap()` has completed its first catalogue load. Gates the stash above:
     /// a post-bootstrap resolution miss is a genuinely missing entry, not a launch race.
-    @State private var didBootstrap = false
+    @State var didBootstrap = false
 
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase
 
     /// The active (non-trashed) entry matching the current selection, or `nil` when nothing is
     /// selected or the selected entry is no longer active. The detail column keys off this.
-    private var selectedEntry: CatalogEntry? {
+    var selectedEntry: CatalogEntry? {
         guard let selectedEntryID else { return nil }
         return catalog.active.first { $0.id == selectedEntryID }
     }
@@ -107,7 +107,7 @@ struct RootView: View {
     /// App Intent, a Places/favorites hit — all funnelled through `pendingPlacemarkKey`)
     /// outranks session restore; a restore bundle is only handed to the entry it was saved
     /// for (folder-name match).
-    private var activeRestore: RestoreBundle? {
+    var activeRestore: RestoreBundle? {
         if let pendingPlacemarkKey {
             return RestoreBundle(routes: [.placemark(stableKey: pendingPlacemarkKey)])
         }
@@ -236,320 +236,6 @@ struct RootView: View {
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             handleSpotlightActivity(activity)
         }
-    }
-
-    // MARK: - Deep-link routing (App Intents + Spotlight)
-
-    /// Selects the active entry with `folderName`, or logs and no-ops when it's missing/trashed.
-    private func openEntry(folderName: String) {
-        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
-            if !didBootstrap {
-                pendingColdLaunchTarget = (folderName, nil)
-            } else {
-                Self.routingLogger.info(
-                    "Deep link to missing/trashed entry '\(folderName, privacy: .public)' — ignored."
-                )
-            }
-            return
-        }
-        pendingPlacemarkKey = nil
-        pendingRestore = nil
-        selectedEntryID = entry.id
-    }
-
-    /// Handles a Core Spotlight result tap. The identifier is the tapped item's `SpotlightID`:
-    /// an entry item selects its file; a placemark item selects the file AND deep-links directly
-    /// to the placemark by passing its stableKey as `pendingPlacemarkKey`.
-    private func handleSpotlightActivity(_ activity: NSUserActivity) {
-        guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-              let parsed = SpotlightID.parse(raw)
-        else { return }
-
-        guard let entry = catalog.active.first(where: { $0.storageFolderName == parsed.folderName }) else {
-            if !didBootstrap {
-                pendingColdLaunchTarget = (parsed.folderName, parsed.placemarkKey)
-            } else {
-                Self.routingLogger.info(
-                    "Spotlight tap on missing/trashed entry '\(parsed.folderName, privacy: .public)' — ignored."
-                )
-            }
-            return
-        }
-
-        // A placemark item carries its stableKey directly in the Spotlight identifier — pass it
-        // straight through as the deep-link target (no name lookup needed). An entry item has no
-        // placemark key, so the file just opens.
-        pendingPlacemarkKey = parsed.placemarkKey
-        pendingRestore = nil
-        selectedEntryID = entry.id
-    }
-
-    /// One-time startup: resolve the active root, drain the inbox, reload, start watching.
-    private func bootstrap() async {
-        // Publish the live services so out-of-tree App Intents can resolve entities and route.
-        AppDependencies.shared.catalog = catalog
-        AppDependencies.shared.router = router
-        await applyStorage(migrate: false)
-        await drainInbox()
-        await drainDocumentsInbox()
-        await catalog.reload()
-        didBootstrap = true
-        // Replay a deep link that raced bootstrap (see `pendingColdLaunchTarget`) — it must
-        // win over session restore, which `restoreSessionIfNeeded`'s selection guard then
-        // enforces automatically.
-        if let target = pendingColdLaunchTarget {
-            pendingColdLaunchTarget = nil
-            if let entry = catalog.active.first(where: { $0.storageFolderName == target.folderName }) {
-                pendingPlacemarkKey = target.placemarkKey
-                pendingRestore = nil
-                selectedEntryID = entry.id
-            } else {
-                Self.routingLogger.info(
-                    "Cold-launch deep link to missing entry '\(target.folderName, privacy: .public)' — ignored."
-                )
-            }
-        }
-        restoreSessionIfNeeded()
-        // Camera-store hygiene: drop cameras for files no longer anywhere in the catalogue
-        // (active OR trashed — restoring from the trash keeps the camera). Only kicks in
-        // past the cap; below it stale entries are harmless bytes.
-        MapCameraStore().pruneIfNeeded(keeping: Set(catalog.entries.map(\.storageFolderName)))
-    }
-
-    // MARK: - Session restoration
-
-    /// Writes the selection + route-stack half of the resume snapshot. `KMLDetailView`
-    /// owns the other half (transient list state + scroll anchor — only it can read live
-    /// row geometry); both fire on the same `.inactive` transition, and the same-folder
-    /// preserve rule in `AppSettings` makes their order irrelevant.
-    private func saveResumeState() {
-        guard settings.restoreSessionEnabled else { return }
-        settings.resumeEntryFolderName = selectedEntry?.storageFolderName
-        // While a restore bundle is still unconsumed (the restore parse is in flight), the
-        // live path is still empty — overwriting the saved routes with it would lose the
-        // stack a kill in this window was supposed to preserve.
-        if let pending = pendingRestore, pending.entryFolderName == selectedEntry?.storageFolderName {
-            return
-        }
-        settings.resumeRoutes = EntryRoute.encodeForResume(router.path)
-    }
-
-    /// Rebuilds the last session's selection at launch. Restore only when nothing else has
-    /// routed yet — a live deep link (Spotlight tap, App Intent, "Open in Pinfold") that
-    /// already drove a selection or set a pending key wins over restore. A saved folder
-    /// that no longer resolves (deleted, trashed, storage root switched) clears the stale
-    /// state and lands on the catalogue — silent, like every deep-link miss.
-    private func restoreSessionIfNeeded() {
-        guard settings.restoreSessionEnabled,
-              !suppressRestore,
-              selectedEntryID == nil,
-              pendingPlacemarkKey == nil,
-              let folderName = settings.resumeEntryFolderName
-        else { return }
-        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else {
-            settings.resumeEntryFolderName = nil
-            return
-        }
-        pendingRestore = RestoreBundle(
-            entryFolderName: folderName,
-            routes: EntryRoute.decodeForResume(settings.resumeRoutes),
-            searchText: settings.resumeSearchText ?? "",
-            collapsedFolderIDs: Set(settings.resumeCollapsedFolderIDs ?? []),
-            nearestFirst: settings.resumeNearestFirst,
-            scrollAnchorRowID: settings.resumeScrollAnchorRowID
-        )
-        selectedEntryID = entry.id
-    }
-
-    /// Resolves the active root from the current sync preference, points the catalogue at
-    /// it, and (re)starts the watcher.
-    ///
-    /// - Parameter migrate: `true` for the toggle path (move existing files into the new
-    ///   root, choosing the iCloud-aware file API); `false` for launch (the files are
-    ///   already where the resolved root expects them).
-    private func applyStorage(migrate: Bool) async {
-        let (storage, ubiquitous) = await resolveStorage()
-        if migrate {
-            let from = catalog.storage.root
-            let wasUbiquitous = rootIsUbiquitous
-            // Run the move off-main, then surface any per-folder failures. We do NOT swallow
-            // the report: a folder that fails to move stays in the old root and would silently
-            // vanish from the catalogue otherwise. Enumeration/setup errors (the only thrown
-            // path) leave `report` nil and are best-effort ignored — the repoint below still
-            // happens so the app keeps working against the resolved root.
-            let report = try? await Task.detached {
-                try StorageLocations.migrateEntryFolders(
-                    from: from,
-                    to: storage.root,
-                    fromUbiquitous: wasUbiquitous,
-                    toUbiquitous: ubiquitous
-                )
-            }.value
-            if let report, !report.failed.isEmpty {
-                // Log each underlying error so failed folders are diagnosable from the
-                // console; the user-facing alert below only carries the entry names.
-                for failure in report.failed {
-                    Self.migrationLogger.error(
-                        """
-                        Failed to migrate entry folder \
-                        '\(failure.folderName, privacy: .public)': \
-                        \(failure.error.localizedDescription, privacy: .public)
-                        """
-                    )
-                }
-                // Map failed folder names to display names via the still-current (pre-repoint)
-                // catalogue; fall back to the raw folder name when no entry is loaded for it.
-                let byFolder = Dictionary(
-                    catalog.entries.map { ($0.storageFolderName, $0.displayName) },
-                    uniquingKeysWith: { first, _ in first }
-                )
-                let names = report.failed.map { byFolder[$0.folderName] ?? $0.folderName }
-                migrationAlert.report(failedNames: names)
-            }
-        }
-        await catalog.setStorage(storage)
-        rootIsUbiquitous = ubiquitous
-        startWatcher(root: storage.root, ubiquitous: ubiquitous)
-    }
-
-    /// Returns the storage layout for the current preference, plus whether it is the iCloud
-    /// (ubiquitous) container. Falls back to local storage when sync is off or iCloud is
-    /// unavailable.
-    private func resolveStorage() async -> (StorageLocations, Bool) {
-        guard settings.syncEnabled else { return (.applicationSupport, false) }
-        let documentsURL = await Task.detached { UbiquityContainer.documentsURL() }.value
-        guard let documentsURL else { return (.applicationSupport, false) }
-        return (.synced(root: documentsURL), true)
-    }
-
-    /// Starts a fresh watcher on `root`, replacing any previous one.
-    private func startWatcher(root: URL, ubiquitous: Bool) {
-        let watcher = CatalogWatcher { [catalog] in
-            Task { await catalog.reload() }
-        }
-        watcher.start(root: root, ubiquitous: ubiquitous)
-        self.watcher = watcher
-    }
-
-    /// Drains the share-extension inbox into the active root, if the App Group is available.
-    private func drainInbox() async {
-        guard let inboxURL = AppGroup.inboxURL else { return }
-        let inbox = PendingImportInbox(
-            inboxURL: inboxURL,
-            catalog: catalog,
-            storage: catalog.storage,
-            cache: resourceCache,
-            failureLog: importFailureLog
-        )
-        await inbox.drain()
-    }
-
-    // MARK: - Document open ("Open in Pinfold")
-
-    /// The app-sandbox `Documents/Inbox` directory that iOS copies opened documents into
-    /// (the app declares the KML/KMZ types with open-in-place disabled). Distinct from the
-    /// App Group inbox the share extension uses.
-    private var documentsInboxURL: URL? {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Inbox", isDirectory: true)
-    }
-
-    /// Handles a URL handed to the app via the file-type association or a custom scheme.
-    /// A file URL is imported directly — it is authoritative and already in our sandbox, so
-    /// relying only on a directory scan could silently drop it — then both inboxes are
-    /// drained for any stragglers.
-    private func handleOpenURL(_ url: URL) async {
-        suppressRestore = true
-        pendingRestore = nil
-        if url.isFileURL {
-            await importFile(at: url)
-        }
-        await drainDocumentsInbox()
-        await drainInbox()
-    }
-
-    /// Imports a single opened file, deduping by content hash, reporting failures to the log.
-    ///
-    /// Failure handling mirrors `PendingImportInbox.drain`:
-    /// - **Read / parse failure** is permanent (bad bytes), so the sandbox copy is deleted and
-    ///   the failure recorded — retrying never helps.
-    /// - **Commit (I/O) failure** is potentially transient, so the sandbox copy is KEPT. The
-    ///   opened document is a copy iOS placed in `Documents/Inbox` (open-in-place is disabled
-    ///   for our KML/KMZ types), and `handleOpenURL` always drains that inbox afterwards, so a
-    ///   kept file is retried by `drainDocumentsInbox`. If a future caller ever passes a URL
-    ///   from outside `Documents/Inbox`, the kept file simply isn't retried automatically — but
-    ///   the failure is still surfaced to the user, so nothing is lost silently.
-    /// On success the sandbox copy is deleted.
-    private func importFile(at url: URL) async {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-
-        let data: Data
-        let result: ImportResult
-        do {
-            data = try Data(contentsOf: url)
-            result = try ImportService.prepare(data: data, sourceFilename: url.lastPathComponent)
-        } catch {
-            // Read or parse failure — permanent. Record and delete the copy; the underlying
-            // cause goes to the console log.
-            Self.importLogger.error(
-                """
-                Failed to read or parse opened file \
-                '\(url.lastPathComponent, privacy: .public)': \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            importFailureLog.record(
-                filename: url.lastPathComponent,
-                reason: String(
-                    localized: "Not a valid KML or KMZ file.",
-                    comment: "Import failure reason: the file could not be read or parsed."
-                )
-            )
-            try? FileManager.default.removeItem(at: url)
-            return
-        }
-
-        if catalog.entry(withSHA256: result.contentSHA256) == nil {
-            do {
-                try ImportService.commit(result, storage: catalog.storage, cache: resourceCache)
-                await catalog.reload()
-            } catch {
-                // Commit (I/O) failure — potentially transient. Record a friendly reason (the
-                // raw error is developer-speak) but KEEP the copy so the Documents-inbox drain
-                // can retry it; the underlying error goes to the console log.
-                Self.importLogger.error(
-                    """
-                    Transient failure importing opened file \
-                    '\(url.lastPathComponent, privacy: .public)': \
-                    \(error.localizedDescription, privacy: .public)
-                    """
-                )
-                importFailureLog.record(
-                    filename: url.lastPathComponent,
-                    reason: String(
-                        localized: "Couldn't save the file. It will be retried automatically.",
-                        comment: "Import failure reason: a transient I/O error; the import will be retried."
-                    )
-                )
-                return
-            }
-        }
-        // Imported or deduped — the sandbox copy is safe to delete.
-        try? FileManager.default.removeItem(at: url)
-    }
-
-    /// Drains the app's `Documents/Inbox` (files opened via the KML/KMZ file-type association).
-    private func drainDocumentsInbox() async {
-        guard let documentsInboxURL else { return }
-        let inbox = PendingImportInbox(
-            inboxURL: documentsInboxURL,
-            catalog: catalog,
-            storage: catalog.storage,
-            cache: resourceCache,
-            failureLog: importFailureLog
-        )
-        await inbox.drain()
     }
 }
 

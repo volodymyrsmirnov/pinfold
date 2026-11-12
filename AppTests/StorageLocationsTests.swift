@@ -52,6 +52,22 @@ struct StorageLocationsTests {
         #expect(file == root.appendingPathComponent("my-folder/data.kml"))
     }
 
+    @Test func originalFileURL_ignoresReservedSidecarName() throws {
+        let root = makeTempRoot()
+        let locations = StorageLocations(root: root)
+        let folder = root.appendingPathComponent("my-folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("{}".utf8).write(to: folder.appendingPathComponent("metadata.json"))
+        try Data("<kml/>".utf8).write(to: folder.appendingPathComponent("a.kml"))
+        try Data("x".utf8).write(to: folder.appendingPathComponent("notes.txt"))
+
+        #expect(locations.originalFileURL(inFolderNamed: "my-folder")?.lastPathComponent == "a.kml")
+
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("a.kml"))
+        #expect(locations.originalFileURL(inFolderNamed: "my-folder") == nil)
+    }
+
     @Test func resourcesDirectoryURL_isInsideFolder() {
         let root = makeTempRoot()
         let locations = StorageLocations(root: root)

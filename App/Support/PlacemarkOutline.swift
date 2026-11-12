@@ -64,7 +64,9 @@ struct PlacemarkOutline {
         let id: String
 
         var isFolder: Bool {
-            if case .folder = kind { return true }
+            if case .folder = kind {
+                return true
+            }
             return false
         }
 
@@ -101,7 +103,7 @@ struct PlacemarkOutline {
         func matches(_ placemark: KMLPlacemark) -> Bool {
             guard isSearching else { return true }
             guard let name = placemark.name else { return false }
-            return name.localizedCaseInsensitiveContains(trimmed)
+            return SearchText.contains(name, query: trimmed)
         }
 
         /// Walks a container, appending rows for its matching placemarks and surviving
@@ -117,7 +119,9 @@ struct PlacemarkOutline {
             for (index, placemark) in container.placemarks.enumerated() where matches(placemark) {
                 // `mappable` is independent of collapse/visibility: a collapsed folder
                 // still plots on the map.
-                if placemark.coordinate != nil { mappable.append(placemark) }
+                if placemark.coordinate != nil {
+                    mappable.append(placemark)
+                }
                 if !hidden {
                     // Per-occurrence id (container path + placemark index), NOT `stableKey`: a
                     // repeated POI shares a stableKey, and duplicate ForEach ids corrupt scrolling.
@@ -176,7 +180,7 @@ struct PlacemarkOutline {
         func matches(_ placemark: KMLPlacemark) -> Bool {
             guard isSearching else { return true }
             guard let name = placemark.name else { return false }
-            return name.localizedCaseInsensitiveContains(trimmed)
+            return SearchText.contains(name, query: trimmed)
         }
 
         // Flatten the whole tree into document-order placemarks (folders ignored).

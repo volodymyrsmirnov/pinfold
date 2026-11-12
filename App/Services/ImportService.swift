@@ -177,7 +177,7 @@ enum ImportService {
         try storage.writeMetadata(entry.metadata, for: entry)
 
         // Write the original file bytes.
-        try result.originalData.write(to: storage.originalFile(for: entry), options: .atomic)
+        try storage.writeOriginal(result.originalData, for: entry)
 
         // Write KMZ-embedded resources synchronously (no network needed).
         let resourcesDir = storage.resourcesDirectory(for: entry)
