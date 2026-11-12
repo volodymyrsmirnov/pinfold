@@ -19,10 +19,16 @@ struct PlacemarkNoteBlock: View {
                     .font(.body)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Button(hasNote ? "Edit Note" : "Add Note", systemImage: "square.and.pencil") {
-                editing = true
+            if annotations.canEditNotes {
+                Button(hasNote ? "Edit Note" : "Add Note", systemImage: "square.and.pencil") {
+                    editing = true
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Text("Notes can't be edited right now: this file is read-only or still syncing.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.bordered)
         }
         .padding(.horizontal)
         .sheet(isPresented: $editing) {
@@ -38,9 +44,11 @@ struct PlacemarkNoteBlock: View {
         annotations.note(for: placemark) != nil
     }
 
-    private func save(_ text: String) {
-        annotations.setNote(text, for: placemark)
-        guard let catalog else { return }
-        Task { await catalog.reload() }
+    private func save(_ text: String) -> Bool {
+        guard annotations.setNote(text, for: placemark) else { return false }
+        if let catalog {
+            Task { await catalog.reload() }
+        }
+        return true
     }
 }

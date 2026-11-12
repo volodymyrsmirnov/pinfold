@@ -183,4 +183,30 @@ import Testing
         store.setNote("hi", for: point("q"))
         #expect(try Data(contentsOf: metaURL) == corruptBytes)
     }
+
+    @Test func setNote_reportsSuccess() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        #expect(store.canEditNotes)
+        #expect(store.setNote("ok", for: point("s")))
+    }
+
+    @Test func setNote_failsOnReadOnlyEntryAndKeepsMemoryClean() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        var readOnly = entry
+        readOnly.sidecarState = .notDownloaded
+        let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
+        #expect(!store.canEditNotes)
+        #expect(!store.setNote("lost", for: point("ro")))
+        #expect(store.note(for: point("ro")) == nil)
+    }
+
+    @Test func setNote_failsWhenSidecarCannotBeWritten() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        // Removing the folder makes the write fail.
+        try FileManager.default.removeItem(at: storage.root.appendingPathComponent(entry.storageFolderName))
+        #expect(!store.setNote("lost", for: point("w")))
+        #expect(store.note(for: point("w")) == nil)
+    }
 }
