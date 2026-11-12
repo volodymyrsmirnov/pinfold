@@ -10,7 +10,8 @@ import SwiftUI
 /// 2. Plain-text description (HTML tags stripped, entities decoded, line breaks kept).
 /// 3. Coordinates.
 /// 4. Extended data as chip rows.
-/// 5. "Open in Maps" primary action button.
+/// 5. "My Notes" block.
+/// 6. "Open in Maps" primary action button.
 ///
 /// Toolbar menu provides secondary actions: Copy Coordinates, Share, Copy Name.
 struct PlacemarkDetailView: View {
@@ -26,6 +27,7 @@ struct PlacemarkDetailView: View {
     @Environment(AppSettings.self) private var environmentSettings: AppSettings?
     @Environment(\.resourceCache) private var resourceCache
     @Environment(PlacemarkAnnotations.self) private var annotations: PlacemarkAnnotations?
+    @Environment(Catalog.self) private var catalog: Catalog?
     @Environment(NavigationRouter.self) private var router: NavigationRouter?
 
     // MARK: - State
@@ -150,6 +152,11 @@ struct PlacemarkDetailView: View {
             // Extended data chips
             if !placemark.extendedData.isEmpty {
                 extendedDataSection
+            }
+
+            // Personal note
+            if let annotations {
+                PlacemarkNoteBlock(placemark: placemark, annotations: annotations, catalog: catalog)
             }
 
             // Open in Maps button
