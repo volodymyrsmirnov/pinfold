@@ -45,8 +45,12 @@ extension RootView {
     ///   root, choosing the iCloud-aware file API); `false` for launch (the files are
     ///   already where the resolved root expects them).
     func applyStorage(migrate: Bool) async {
-        isApplyingStorage = true
-        defer { isApplyingStorage = false }
+        // Serialised with every other application (launch, toggle, re-resolve).
+        await storageQueue.run { await applyStorageNow(migrate: migrate) }
+    }
+
+    /// The body of `applyStorage`; only ever runs inside `storageQueue`.
+    private func applyStorageNow(migrate: Bool) async {
         let resolution = await resolveStorage()
         let storage = resolution.storage
         let ubiquitous = resolution.isUbiquitous
@@ -74,11 +78,16 @@ extension RootView {
     /// Re-resolves the root when the iCloud situation may have changed (account switch, scene
     /// becoming active) and repoints only if the outcome differs from what is running.
     func reresolveStorageIfNeeded() async {
-        guard didBootstrap, !isApplyingStorage, settings.syncEnabled else { return }
-        let resolution = await resolveStorage()
-        guard resolution.status != syncStatus.state
-            || resolution.identityToken != syncStatus.identityToken else { return }
-        await applyStorage(migrate: false)
+        guard didBootstrap, settings.syncEnabled else { return }
+        // Queued behind any in-flight application; state is re-checked once it is our turn
+        // (a toggle may have run and already repointed the root meanwhile).
+        await storageQueue.run {
+            guard settings.syncEnabled else { return }
+            let resolution = await resolveStorage()
+            guard resolution.status != syncStatus.state
+                || resolution.identityToken != syncStatus.identityToken else { return }
+            await applyStorageNow(migrate: false)
+        }
     }
 
     /// Moves the existing entries from the current root into `storage` (the toggle path).
@@ -164,7 +173,9 @@ extension RootView {
     /// Reconciles the Spotlight index and the local cache with the catalogue after the first
     /// load. Safe to skip: every step is a no-op when the catalogue could not be read.
     func reconcileDerivedState() async {
-        await LaunchReconciler().reconcileSpotlight(entries: catalog.entries, storage: catalog.storage)
+        await LaunchReconciler().reconcileSpotlight(
+            entries: catalog.entries, storage: catalog.storage, status: syncStatus.state
+        )
         await pruneOrphanedCache(storage: catalog.storage, status: syncStatus.state)
     }
 

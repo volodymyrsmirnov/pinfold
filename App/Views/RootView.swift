@@ -49,8 +49,8 @@ struct RootView: View {
     @State var rootIsUbiquitous = false
     /// Whether iCloud sync is doing what the user asked; shared through the environment.
     @State var syncStatus = SyncStatus()
-    /// `true` while `applyStorage` runs, so a re-resolve cannot interleave with it.
-    @State var isApplyingStorage = false
+    /// Serialises every storage application so a re-resolve cannot interleave with a toggle.
+    @State var storageQueue = StorageApplyQueue()
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
