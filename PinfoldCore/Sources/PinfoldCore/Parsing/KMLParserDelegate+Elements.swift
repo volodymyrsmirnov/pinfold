@@ -23,7 +23,9 @@ extension KMLParserDelegate {
                 polygonInners = []
             }
         case "outerBoundaryIs":
-            if inPolygon { inOuterBoundary = true }
+            if inPolygon {
+                inOuterBoundary = true
+            }
         case "innerBoundaryIs":
             if inPolygon {
                 inInnerBoundary = true
@@ -37,7 +39,9 @@ extension KMLParserDelegate {
         case "Model", "MultiTrack":
             // Geometry types we don't capture; flag so a point-less placemark whose only
             // geometry is one of these is still dropped (pre-Task-7 behavior).
-            if placemark != nil { placemark?.hasUncapturedGeometry = true }
+            if placemark != nil {
+                placemark?.hasUncapturedGeometry = true
+            }
         default:
             return false
         }
@@ -53,7 +57,9 @@ extension KMLParserDelegate {
             handleCoordinatesEnd()
         case "coord":
             // gx:coord — one space-separated "lon lat [alt]" triple appended to the track.
-            if inTrack, let c = Self.parseTrackCoord(text) { trackCoords.append(c) }
+            if inTrack, let c = Self.parseTrackCoord(text) {
+                trackCoords.append(c)
+            }
         case "LineString":
             if inLineString {
                 placemark?.geometries.append(.lineString(lineStringCoords))
@@ -99,13 +105,21 @@ extension KMLParserDelegate {
                 styleBuilder?.polyColor = trimmed
             }
         case "width":
-            if styleBuilder?.inLineStyle == true { styleBuilder?.lineWidth = Double(trimmed) }
+            if styleBuilder?.inLineStyle == true {
+                styleBuilder?.lineWidth = Double(trimmed)
+            }
         case "fill":
-            if styleBuilder?.inPolyStyle == true { styleBuilder?.polyFill = (trimmed == "1" || trimmed == "true") }
+            if styleBuilder?.inPolyStyle == true {
+                styleBuilder?.polyFill = (trimmed == "1" || trimmed == "true")
+            }
         case "scale":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconScale = Double(trimmed) }
+            if styleBuilder?.inIconStyle == true {
+                styleBuilder?.iconScale = Double(trimmed)
+            }
         case "href":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconHref = trimmed }
+            if styleBuilder?.inIconStyle == true {
+                styleBuilder?.iconHref = trimmed
+            }
         case "IconStyle":
             styleBuilder?.inIconStyle = false
         case "LineStyle":
@@ -130,21 +144,25 @@ extension KMLParserDelegate {
                                     polyColor: b.polyColor, polyFill: b.polyFill)
             // An inline <Style> inside a StyleMap <Pair> acts as that pair's style reference,
             // equivalent to a <styleUrl> pointing at its (possibly synthesized) id.
-            if inPair { pairStyleURL = "#\(b.id)" }
+            if inPair {
+                pairStyleURL = "#\(b.id)"
+            }
         }
         styleBuilder = nil
     }
 
     /// Closes StyleMap-related elements (key/styleUrl/Pair/StyleMap). `styleUrl` inside a
     /// placemark is handled here too since it shares the element name.
-    func endStyleMapElement(_ local: String, trimmed: String) -> Bool {
+    func endStyleMapElement(_ local: String, trimmed: String, parent: String?) -> Bool {
         switch local {
         case "key":
-            if inPair { pairKey = trimmed }
+            if inPair {
+                pairKey = trimmed
+            }
         case "styleUrl":
-            if placemark != nil {
+            if parent == "Placemark" {
                 placemark?.styleUrl = trimmed
-            } else if inPair {
+            } else if parent == "Pair", inPair {
                 pairStyleURL = trimmed
             }
         case "Pair":
@@ -173,7 +191,9 @@ extension KMLParserDelegate {
         case "value":
             // Only meaningful inside an open <Data>; a stray <value> elsewhere in
             // <ExtendedData> must not leak into the next data item.
-            if inExtendedData, inDataElement { currentDataValue = text }
+            if inExtendedData, inDataElement {
+                currentDataValue = text
+            }
         case "SimpleData":
             if let name = currentSimpleDataName {
                 placemark?.extendedData.append(

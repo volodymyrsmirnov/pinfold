@@ -35,6 +35,18 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// Current text accumulation for the open element.
     var text = ""
 
+    /// Local names of the currently open elements, outermost first. Pushed in
+    /// `didStartElement` and popped in `didEndElement` on the normal path only (description
+    /// capture runs its own depth counter and bypasses both). Lets `name`, `description` and
+    /// `styleUrl` check their parent so stray elements (`atom:name`, overlay names, ...) are
+    /// not mistaken for the document, folder or placemark ones.
+    var elementStack: [String] = []
+
+    /// Parents under which `<name>` is meaningful.
+    static let nameParents: Set<String> = ["Placemark", "Document", "Folder", "NetworkLink"]
+    /// Parents under which `<description>` is stored; elsewhere it is swallowed and discarded.
+    static let descriptionParents: Set<String> = ["Placemark", "Document", "Folder"]
+
     /// True only while inside an element whose character data is actually consumed on close
     /// (name, coordinates, gx:coord, style fields, key, styleUrl, value, SimpleData). When
     /// false, `foundCharacters`/`foundCDATA` skip accumulation entirely — most elements
@@ -143,6 +155,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// whether to trim: markup-bearing descriptions are trimmed, while plain-text/CDATA
     /// descriptions pass through byte-identically to the pre-capture behavior.
     private var descriptionSawMarkup = false
+    /// True when the open `<description>` sits under a parent whose description we do not
+    /// keep (overlay, NetworkLink, ...): the content is still swallowed, then dropped.
+    private var descriptionDiscard = false
 
     func makeDocument() -> KMLDocument {
         // Collapse a single top-level <Document>/<Folder> into the document's root.
@@ -166,6 +181,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         text = ""
         let local = Self.localName(elementName)
+        let parent = elementStack.last
+        elementStack.append(local)
         // Arm text accumulation only for elements whose close actually reads it.
         wantsText = Self.textBearingElements.contains(local)
         if startGeometryElement(local) {
@@ -184,6 +201,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             descriptionDepth = 1
             descriptionBuffer = ""
             descriptionSawMarkup = false
+            descriptionDiscard = !(parent.map(Self.descriptionParents.contains) ?? false)
         case "Style":
             // Inline per-placemark styles (Style inside a Placemark) are intentionally not
             // captured in Phase 1 — only document-level styles are indexed. Phase 2 will
@@ -247,19 +265,24 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let local = Self.localName(elementName)
+        if !elementStack.isEmpty {
+            elementStack.removeLast()
+        }
+        let parent = elementStack.last
         defer { text = "" }
         // Delegate cohesive element groups to helpers to keep this dispatcher's complexity low.
         guard !endGeometryElement(local),
               !endStyleElement(local, trimmed: trimmed),
-              !endStyleMapElement(local, trimmed: trimmed),
+              !endStyleMapElement(local, trimmed: trimmed, parent: parent),
               !endExtendedDataElement(local) else { return }
         switch local {
         case "Document", "Folder":
             containerStack.removeLast()
         case "name":
-            if placemark != nil {
+            guard let parent, Self.nameParents.contains(parent) else { break }
+            if parent == "Placemark" {
                 placemark?.name = trimmed
-            } else if let c = containerStack.last, c !== rootBuilder {
+            } else if parent != "NetworkLink", let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
             }
         case "Placemark":
@@ -340,11 +363,17 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             let html = descriptionSawMarkup
                 ? descriptionBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 : descriptionBuffer
-            if placemark != nil {
+            if descriptionDiscard {
+                // Swallowed: not stored anywhere.
+            } else if placemark != nil {
                 placemark?.descriptionHTML = html
             } else if let c = containerStack.last, c !== rootBuilder {
                 c.description = html
             }
+            if !elementStack.isEmpty {
+                elementStack.removeLast()
+            }
+            descriptionDiscard = false
             descriptionBuffer = ""
             descriptionSawMarkup = false
             text = ""
