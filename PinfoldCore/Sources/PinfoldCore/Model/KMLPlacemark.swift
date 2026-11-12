@@ -38,12 +38,19 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// The author-supplied `id` attribute from `<Placemark id="...">` in the source KML, if present.
     /// `nil` when the attribute was absent; empty string when the attribute was explicitly empty.
     public let sourceID: String?
+    /// The `<Snippet>` (or legacy `<snippet>`) teaser text, if any.
+    public let snippet: String?
+    /// The `<address>` text, if any.
+    public let address: String?
+    /// The `<phoneNumber>` text, if any.
+    public let phoneNumber: String?
 
     public init(id: String, name: String?, descriptionHTML: String?, styleUrl: String?,
                 coordinate: Coordinate?, hasPoint: Bool = true,
                 geometries: [KMLGeometry] = [],
                 extendedData: [KMLDataItem], photoLinks: [String],
-                sourceID: String? = nil)
+                sourceID: String? = nil,
+                snippet: String? = nil, address: String? = nil, phoneNumber: String? = nil)
     // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
     // swiftlint:disable:next opening_brace
     {
@@ -57,6 +64,9 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
         self.extendedData = extendedData
         self.photoLinks = photoLinks
         self.sourceID = sourceID
+        self.snippet = snippet
+        self.address = address
+        self.phoneNumber = phoneNumber
     }
 
     /// A durable identity for this placemark, safe to persist across re-parses.
@@ -89,6 +99,7 @@ extension KMLPlacemark {
     func withStyleUrl(_ styleUrl: String?) -> KMLPlacemark {
         KMLPlacemark(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
                      coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
-                     extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID)
+                     extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID,
+                     snippet: snippet, address: address, phoneNumber: phoneNumber)
     }
 }

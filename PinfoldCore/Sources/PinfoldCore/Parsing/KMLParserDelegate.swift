@@ -64,7 +64,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// `wantsText` in `didStartElement`.
     static let textBearingElements: Set<String> = [
         "name", "coordinates", "coord", "color", "width", "fill", "scale", "href",
-        "key", "styleUrl", "value", "SimpleData",
+        "key", "styleUrl", "value", "SimpleData", "Snippet", "snippet", "address", "phoneNumber",
+        "displayName",
     ]
 
     /// Current placemark being assembled.
@@ -88,6 +89,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var fallbackCoordinate: Coordinate?
         /// An inline `<Style>` (or the normal pair of an inline `<StyleMap>`).
         var inlineStyle: StyleFields?
+        var snippet: String?
+        var address: String?
+        var phoneNumber: String?
     }
 
     var placemark: PlacemarkBuilder?
@@ -153,6 +157,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     var inDataElement = false
     var currentDataName: String?
     var currentDataValue: String?
+    var currentDataDisplayName: String?
     /// `name` attribute of the currently open <SimpleData> (SchemaData child).
     var currentSimpleDataName: String?
 
@@ -249,6 +254,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             inDataElement = true
             currentDataName = attributeDict["name"]
             currentDataValue = nil
+            currentDataDisplayName = nil
         case "SimpleData":
             currentSimpleDataName = attributeDict["name"]
         default:
@@ -303,6 +309,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             } else if parent != "NetworkLink", let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
             }
+        case "Snippet", "snippet", "address", "phoneNumber":
+            if parent == "Placemark" {
+                storePlacemarkText(local, trimmed)
+            }
         case "Placemark":
             if let pm = placemark {
                 appendPlacemark(pm)
@@ -339,7 +349,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                                  geometries: pm.geometries,
                                  extendedData: pm.extendedData,
                                  photoLinks: pm.photoLinks,
-                                 sourceID: pm.sourceID)
+                                 sourceID: pm.sourceID,
+                                 snippet: pm.snippet, address: pm.address,
+                                 phoneNumber: pm.phoneNumber)
         containerStack.last?.placemarks.append(built)
     }
 

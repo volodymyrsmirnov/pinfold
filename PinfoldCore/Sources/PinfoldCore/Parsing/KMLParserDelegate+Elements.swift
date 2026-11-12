@@ -237,11 +237,15 @@ extension KMLParserDelegate {
             }
         case "SimpleData":
             if let name = currentSimpleDataName {
-                placemark?.extendedData.append(
-                    KMLDataItem(name: name, value: text.trimmingCharacters(in: .whitespacesAndNewlines))
-                )
+                appendDataItem(name: name, value: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                               displayName: nil)
             }
             currentSimpleDataName = nil
+        case "displayName":
+            if inDataElement {
+                let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                currentDataDisplayName = name.isEmpty ? nil : name
+            }
         case "Data":
             closeDataElement()
         default:
@@ -261,14 +265,36 @@ extension KMLParserDelegate {
                     .map(String.init)
                 placemark?.photoLinks.append(contentsOf: links)
             } else {
-                placemark?.extendedData.append(
-                    KMLDataItem(name: name,
-                                value: value.trimmingCharacters(in: .whitespacesAndNewlines))
-                )
+                appendDataItem(name: name, value: value.trimmingCharacters(in: .whitespacesAndNewlines),
+                               displayName: currentDataDisplayName)
             }
         }
         inDataElement = false
-        currentDataName = nil; currentDataValue = nil
+        currentDataName = nil; currentDataValue = nil; currentDataDisplayName = nil
+    }
+
+    /// Appends an item with an id unique within the placemark (`name`, `name#2`, ...).
+    private func appendDataItem(name: String, value: String, displayName: String?) {
+        guard let existing = placemark?.extendedData else { return }
+        let taken = Set(existing.map(\.id))
+        var id = name
+        var n = 1
+        while taken.contains(id) {
+            n += 1
+            id = "\(name)#\(n)"
+        }
+        placemark?.extendedData.append(KMLDataItem(name: name, value: value,
+                                                   displayName: displayName, id: id))
+    }
+
+    /// Stores a `Snippet`/`address`/`phoneNumber` text on the open placemark; empty is nil.
+    func storePlacemarkText(_ local: String, _ value: String) {
+        let text = value.isEmpty ? nil : value
+        switch local {
+        case "address": placemark?.address = text
+        case "phoneNumber": placemark?.phoneNumber = text
+        default: placemark?.snippet = text
+        }
     }
 
     /// Routes a closing `<coordinates>` element's text to the active geometry buffer, or to
