@@ -67,16 +67,23 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
         self.snippet = snippet
         self.address = address
         self.phoneNumber = phoneNumber
+        stableKey = Self.makeStableKey(id: id, name: name, coordinate: coordinate, sourceID: sourceID)
     }
 
-    /// A durable identity for this placemark, safe to persist across re-parses.
+    /// A durable identity for this placemark, safe to persist across re-parses. Computed once
+    /// in `init`.
     ///
     /// Fallback chain:
     /// 1. `"id:<sourceID>"` when the author supplied a non-empty `<Placemark id>`.
     /// 2. `"h:<hash>"` — a SHA-256 (16 hex chars) of `"<name>|<lat>|<lon>"`. Survives
     ///    folder reordering; only changes if this placemark's own name/coordinate change.
     /// 3. `"p:<id>"` — parse-order id, last resort for a placeless, nameless placemark.
-    public var stableKey: String {
+    public let stableKey: String
+
+    private static func makeStableKey(id: String, name: String?, coordinate: Coordinate?,
+                                      sourceID: String?) -> String
+    // swiftlint:disable:next opening_brace
+    {
         if let sourceID, !sourceID.trimmingCharacters(in: .whitespaces).isEmpty {
             return "id:\(sourceID.trimmingCharacters(in: .whitespaces))"
         }

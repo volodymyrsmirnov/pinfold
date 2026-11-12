@@ -21,7 +21,17 @@ public struct KMLContainer: Equatable, Sendable, Identifiable {
 
     /// All placemarks in this container and its descendants, in document order.
     public var allPlacemarks: [KMLPlacemark] {
-        placemarks + children.flatMap(\.allPlacemarks)
+        var result: [KMLPlacemark] = []
+        result.reserveCapacity(placemarkCount)
+        appendPlacemarks(to: &result)
+        return result
+    }
+
+    private func appendPlacemarks(to result: inout [KMLPlacemark]) {
+        result.append(contentsOf: placemarks)
+        for child in children {
+            child.appendPlacemarks(to: &result)
+        }
     }
 
     /// The first placemark anywhere in this container subtree whose `stableKey` equals
