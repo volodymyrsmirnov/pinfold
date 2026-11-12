@@ -33,7 +33,9 @@ struct OverlayBuilderTests {
     /// A document with a single line/poly style keyed by `id` (no leading '#').
     private func document(style: KMLStyle?) -> KMLDocument {
         var styles: [String: KMLStyle] = [:]
-        if let style { styles[style.id] = style }
+        if let style {
+            styles[style.id] = style
+        }
         let root = KMLContainer(id: "root", name: nil, children: [], placemarks: [])
         return KMLDocument(
             name: nil, descriptionHTML: nil, root: root, styles: styles, styleMaps: [:]
@@ -181,5 +183,30 @@ struct OverlayBuilderTests {
         #expect(overlays.allSatisfy { $0.stableKey == "id:M" })
         #expect(overlays.contains { $0.overlay is MKPolyline && !($0.overlay is MKPolygon) })
         #expect(overlays.contains { $0.overlay is MKPolygon })
+    }
+
+    /// D6: a huge track is thinned to the vertex cap in the pure spec step.
+    @Test func hugeTrackIsCappedInSpecStep() throws {
+        let coords = (0 ..< 9000).map {
+            Coordinate(longitude: Double($0) * 0.0001, latitude: sin(Double($0) * 0.1) * 0.001)
+        }
+        let pm = placemark(id: "t", geometries: [.track(coords)])
+        let specs = OverlayBuilder.specs(for: [pm], document: document(style: nil))
+        let spec = try #require(specs.first)
+        guard case let .line(capped) = spec.shape else {
+            Issue.record("expected a line")
+            return
+        }
+        #expect(capped.count == PolylineSimplifier.maxVertices)
+        #expect(capped.first == coords.first && capped.last == coords.last)
+    }
+
+    /// Extra MultiGeometry points are pins, never overlays.
+    @Test func pointGeometryProducesNoOverlay() {
+        let pm = placemark(
+            id: "mp", hasPoint: true,
+            geometries: [.point(Coordinate(longitude: 5, latitude: 5))]
+        )
+        #expect(OverlayBuilder.overlays(for: [pm], document: document(style: nil)).isEmpty)
     }
 }

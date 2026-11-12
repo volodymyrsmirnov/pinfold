@@ -29,6 +29,13 @@ extension PlacemarkMapRepresentable {
         /// The fit-all BUTTON deliberately does not set it: its settle callback saving the
         /// fit-all framing is what makes the button a natural "reset".
         var suppressCameraSave = false
+        /// Pins waiting to be added in batches (D6); see `addPinsInBatches`.
+        var pendingPins = PendingPins()
+        var isDrainingPins = false
+        /// Memoized decorated pin images keyed by style + favourite + visited (D6).
+        let decorationCache = PinDecorationCache()
+        /// The `stableKey` whose overlays are currently drawn highlighted (D2).
+        var highlightedOverlayKey: String?
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
@@ -53,6 +60,12 @@ extension PlacemarkMapRepresentable {
         /// changes — and that cannot happen within a single parse, where each id appears
         /// once. The diff therefore never needs to compare content under a stable key.
         var annotationsByKey: [String: PlacemarkAnnotation] = [:]
+        /// The extra pins of multi-point placemarks (the 2nd+ `<Point>` of a MultiGeometry),
+        /// keyed by the owning placemark's `stableKey` — the same key as the primary pin in
+        /// `annotationsByKey`. Same **Registry invariant**: this is the sole mutator of
+        /// those annotations; they are added, removed and re-decorated as a group with the
+        /// placemark, and selecting any of them selects the placemark.
+        var extraAnnotationsByKey: [String: [PlacemarkAnnotation]] = [:]
         /// Live index of the geometry overlays on the map, keyed by the owning placemark's
         /// `stableKey`. A multi-geometry placemark maps to several `StyledOverlay`s under one
         /// key (added/removed as a group). Mirrors `annotationsByKey`; see that property's
@@ -114,7 +127,7 @@ extension PlacemarkMapRepresentable {
             mapView.setUserTrackingMode(.none, animated: false)
             let overlays = overlaysByKey.values.flatMap(\.self)
             PlacemarkMapRepresentable.fit(
-                coordinates: parent.placemarks.compactMap(\.coordinate),
+                coordinates: PlacemarkMapRepresentable.fitCoordinates(for: parent.placemarks),
                 overlays: overlays, in: mapView, animated: true
             )
         }
@@ -218,16 +231,20 @@ extension PlacemarkMapRepresentable {
                 let renderer = MKPolygonRenderer(polygon: polygon)
                 renderer.strokeColor = polygon.stroke
                 renderer.fillColor = polygon.fill
-                renderer.lineWidth = polygon.lineWidth
+                renderer.lineWidth = polygon.lineWidth * highlightFactor(for: polygon.stableKey)
                 return renderer
             }
             if let polyline = overlay as? StyledPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = polyline.stroke
-                renderer.lineWidth = polyline.lineWidth
+                renderer.lineWidth = polyline.lineWidth * highlightFactor(for: polyline.stableKey)
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+
+        private func highlightFactor(for key: String) -> CGFloat {
+            key == highlightedOverlayKey ? Self.highlightWidthFactor : 1
         }
 
         // MARK: Selection
@@ -253,13 +270,16 @@ extension PlacemarkMapRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, didDeselect annotation: MKAnnotation) {
-            guard annotation is PlacemarkAnnotation else { return }
+            guard let pin = annotation as? PlacemarkAnnotation else { return }
+            let key = pin.stableKey
             setHighlighted(false, for: annotation, in: mapView)
             // Defer: on a pin-to-pin tap, MapKit fires didDeselect(old) before
             // didSelect(new); checking now would momentarily clear and flicker the card.
             // After the runloop turn, selectedAnnotations reflects the new selection.
             DispatchQueue.main.async {
-                if mapView.selectedAnnotations.isEmpty {
+                // Only clear what this pin owned: a tap on a line/polygon sets
+                // `selectedKey` to the overlay's key while it deselects the pin.
+                if mapView.selectedAnnotations.isEmpty, self.parent.selectedKey == key {
                     self.parent.selectedKey = nil
                 }
             }

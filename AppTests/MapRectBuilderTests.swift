@@ -97,4 +97,20 @@ struct MapRectBuilderTests {
         // whole world.
         #expect(rect.size.width < worldWidth * 0.05)
     }
+
+    /// The fit set is the representative point plus every extra MultiGeometry point.
+    @Test func fitIncludesExtraPoints() throws {
+        let placemark = KMLPlacemark(
+            id: "p", name: "N", descriptionHTML: nil, styleUrl: nil,
+            coordinate: Coordinate(longitude: 0, latitude: 0), hasPoint: true,
+            geometries: [.point(Coordinate(longitude: 10, latitude: 10))],
+            extendedData: [], photoLinks: [], sourceID: "p"
+        )
+        let coords = PlacemarkMapRepresentable.fitCoordinates(for: [placemark])
+        #expect(coords.count == 2)
+        let rect = try #require(MapRectBuilder.boundingRect(for: coords))
+        let extra = MKMapPoint(CLLocationCoordinate2D(latitude: 10, longitude: 10))
+        #expect(rect.contains(extra) || (extra.x >= rect.minX && extra.x <= rect.maxX
+                && extra.y >= rect.minY && extra.y <= rect.maxY))
+    }
 }

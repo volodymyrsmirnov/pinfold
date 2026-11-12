@@ -18,6 +18,21 @@ struct PlacemarkPinImageTests {
         #expect(image.size.height > image.size.width)
     }
 
+    /// D6: the same (style, favourite, visited) state decorates once; other states differ.
+    @Test func decorationCacheReturnsSameImageForSameState() {
+        let cache = PinDecorationCache()
+        let base = PlacemarkPinImage.fallbackImage(tint: .systemRed)
+        let first = cache.image(for: base, isFavorite: true, isVisited: false, anchor: .bottomTip)
+        let second = cache.image(for: base, isFavorite: true, isVisited: false, anchor: .bottomTip)
+        #expect(first === second)
+        let visited = cache.image(for: base, isFavorite: false, isVisited: true, anchor: .bottomTip)
+        #expect(visited !== first)
+        #expect(cache.image(for: base, isFavorite: false, isVisited: false, anchor: .bottomTip) === base)
+        #expect(cache.count == 2)
+        let otherBase = PlacemarkPinImage.fallbackImage(tint: .systemBlue)
+        #expect(cache.image(for: otherBase, isFavorite: true, isVisited: false, anchor: .bottomTip) !== first)
+    }
+
     @Test func pinAnchorCenterOffset() {
         #expect(PinAnchor.center.centerOffset(forImageOfHeight: 40) == .zero)
         // bottomTip lifts the view up by half the image height so the bottom edge (the tip)
