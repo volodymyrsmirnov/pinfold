@@ -73,7 +73,9 @@ struct OriginalResolverTests {
         """.utf8)
         let prepared = try ImportService.prepare(data: kml, sourceFilename: "t.kml")
         try ImportService.commit(prepared, storage: storage, cache: ResourceCache { _ in Data() })
-        let entryFolder = try #require(storage.entryFolderNames().first)
+        // The committed entry's own folder; `makeRoot` also creates an empty "f", and directory
+        // listing order is not guaranteed, so don't take "the first" folder.
+        let entryFolder = prepared.storageFolderName
         _ = folder
         let dir = storage.root.appendingPathComponent(entryFolder)
         let stale = dir.appendingPathComponent(".snapshot-STALE.tmp")
