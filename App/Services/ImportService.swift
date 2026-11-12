@@ -79,7 +79,7 @@ enum ImportService {
         // three import paths flow through. A crafted name like "images/evil.kml" would
         // otherwise create nested paths under the per-entry folder and break the top-level
         // original-file lookup. The sanitized name is what we store and surface.
-        let sourceFilename = SafeFilename.sanitize(rawSourceFilename)
+        let sourceFilename = ImportFormats.storedFilename(for: SafeFilename.sanitize(rawSourceFilename), data: data)
 
         let sha256 = sha256Hex(data)
 

@@ -344,4 +344,30 @@ import Testing
         #expect(ranOnMain.withLock { $0 } == false)
         #expect(FileManager.default.fileExists(atPath: storage.originalFile(for: entry).path))
     }
+
+    // MARK: - Stored filename (G1)
+
+    @Test func storedFilename_keepsSupportedExtensions() {
+        #expect(ImportFormats.storedFilename(for: "a.kml", data: Data()) == "a.kml")
+        #expect(ImportFormats.storedFilename(for: "A.KMZ", data: Data()) == "A.KMZ")
+    }
+
+    @Test func storedFilename_appendsExtensionByContent() {
+        let zip = Data([0x50, 0x4B, 0x03, 0x04, 0x00])
+        #expect(ImportFormats.storedFilename(for: "trip", data: zip) == "trip.kmz")
+        #expect(ImportFormats.storedFilename(for: "trip.txt", data: Data("<kml/>".utf8)) == "trip.txt.kml")
+    }
+
+    @Test func storedFilename_renamesReservedSidecarName() {
+        #expect(ImportFormats.storedFilename(for: "metadata.json", data: Data("<kml/>".utf8)) == "metadata.kml")
+        #expect(ImportFormats.storedFilename(for: "Metadata.JSON", data: Data("x".utf8)) == "Metadata.kml")
+    }
+
+    @Test func prepare_fileWithoutExtension_isStoredWithSupportedExtension() throws {
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "shared-file")
+        #expect(result.sourceFilename == "shared-file.kml")
+        let sidecarNamed = try ImportService.prepare(data: data, sourceFilename: "metadata.json")
+        #expect(sidecarNamed.sourceFilename == "metadata.kml")
+    }
 }
