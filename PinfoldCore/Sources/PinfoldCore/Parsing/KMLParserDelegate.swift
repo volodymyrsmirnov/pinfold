@@ -84,6 +84,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var geometries: [KMLGeometry] = []
         /// What 1.7 derived the placemark's `stableKey` and keep decision from.
         var legacy = LegacyKeyInputs()
+        /// Allocates the unique ids of `extendedData` items.
+        var dataIDs = DataIDAllocator()
         var sourceID: String?
         /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that
         /// has no point and no kept geometry.

@@ -286,14 +286,7 @@ extension KMLParserDelegate {
 
     /// Appends an item with an id unique within the placemark (`name`, `name#2`, ...).
     private func appendDataItem(name: String, value: String, displayName: String?) {
-        guard let existing = placemark?.extendedData else { return }
-        let taken = Set(existing.map(\.id))
-        var id = name
-        var n = 1
-        while taken.contains(id) {
-            n += 1
-            id = "\(name)#\(n)"
-        }
+        guard let id = placemark?.dataIDs.next(for: name) else { return }
         placemark?.extendedData.append(KMLDataItem(name: name, value: value,
                                                    displayName: displayName, id: id))
     }
