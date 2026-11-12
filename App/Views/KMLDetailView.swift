@@ -70,6 +70,9 @@ struct KMLDetailView: View {
     /// restore, consumed by the verified-retry scroll task (see `applyPendingScroll`).
     @State var pendingScrollRowID: String?
 
+    /// The folder or document description currently shown in a sheet.
+    @State var infoSheet: DescriptionSheetContent?
+
     /// Live row geometry for scroll-anchor capture/restore. A plain class (not @Observable):
     /// per-frame writes must not invalidate the view tree. See `RowFrameBox`.
     @State var rowFrames = RowFrameBox()
@@ -112,6 +115,16 @@ struct KMLDetailView: View {
                 }
                 .accessibilityLabel("Sort")
             }
+            if let info = documentInfo {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        infoSheet = info
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityLabel("File description")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink(value: EntryRoute.map(focusKey: nil)) {
                     Image(systemName: "map")
@@ -119,6 +132,9 @@ struct KMLDetailView: View {
                 .accessibilityLabel("Map")
                 .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
             }
+        }
+        .sheet(item: $infoSheet) { content in
+            DescriptionSheet(content: content, entry: entry)
         }
         .task(id: entry.id) {
             // `.task` is appearance-bound: pushing `PlacemarkDetailView` makes this view disappear,

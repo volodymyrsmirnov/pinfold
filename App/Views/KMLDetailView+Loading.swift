@@ -3,6 +3,13 @@ import PinfoldCore
 import SwiftUI
 
 extension KMLDetailView {
+    /// The document's own description as sheet content, when it has visible text or images.
+    var documentInfo: DescriptionSheetContent? {
+        guard let html = document?.descriptionHTML, !html.isEmpty else { return nil }
+        guard Self.folderPreview(html) != nil || html.contains("<img") else { return nil }
+        return DescriptionSheetContent(id: "document", title: document?.name ?? entry.displayName, html: html)
+    }
+
     // MARK: - Load document
 
     func loadDocument() async {
