@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Image Sample (online)</name>
+  <description><![CDATA[
+    <p><b>Pinfold image sample with web photos.</b> The photos are links to Wikimedia Commons. Pinfold downloads them once, depending on the "Download Images" setting, and then shows them offline.</p>
+    <p>Photos: Wikimedia Commons, credited on each place.</p>
+  ]]></description>
+
+  <Placemark>
+    <name>Skógafoss</name>
+    <description><![CDATA[
+      <img src="https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Sk%C3%B3gafoss_July_2014.JPG/960px-Sk%C3%B3gafoss_July_2014.JPG">
+      <p><b>Skógafoss</b>, 60 m high, on the south coast.</p>
+      <p><i>Photo: Martin Falbisoner, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Sk%C3%B3gafoss_July_2014.JPG">Wikimedia Commons</a></i></p>
+    ]]></description>
+    <ExtendedData>
+      <Data name="gx_media_links"><value>https://thumb.wikimedia.org/wikipedia/commons/thumb/9/98/Sk%C3%B3gafoss_July_2014.JPG/960px-Sk%C3%B3gafoss_July_2014.JPG</value></Data>
+    </ExtendedData>
+    <Point><coordinates>-19.5113,63.5321,0</coordinates></Point>
+  </Placemark>
+
+  <Placemark>
+    <name>Seljalandsfoss</name>
+    <description><![CDATA[
+      <p>A path leads <b>behind</b> the waterfall.</p>
+      <p><i>Photo: Jakub Hałun, CC BY 4.0, <a href="https://commons.wikimedia.org/wiki/File:Seljalandsfoss_Waterfall,_Iceland,_20240720_1500_3096.jpg">Wikimedia Commons</a></i></p>
+    ]]></description>
+    <ExtendedData>
+      <Data name="gx_media_links"><value>https://thumb.wikimedia.org/wikipedia/commons/thumb/8/84/Seljalandsfoss_Waterfall%2C_Iceland%2C_20240720_1500_3096.jpg/960px-Seljalandsfoss_Waterfall%2C_Iceland%2C_20240720_1500_3096.jpg</value></Data>
+    </ExtendedData>
+    <Point><coordinates>-19.9886,63.6156,0</coordinates></Point>
+  </Placemark>
+
+  <Placemark>
+    <name>Hallgrímskirkja</name>
+    <description><![CDATA[
+      <p>Reykjavík's landmark church.</p>
+      <p><i>Photo: Andreas Tille, CC BY-SA 4.0, <a href="https://commons.wikimedia.org/wiki/File:Hallgr%C3%ADmskirkja.jpeg">Wikimedia Commons</a></i></p>
+    ]]></description>
+    <ExtendedData>
+      <Data name="gx_media_links"><value>https://thumb.wikimedia.org/wikipedia/commons/thumb/d/da/Hallgr%C3%ADmskirkja.jpeg/960px-Hallgr%C3%ADmskirkja.jpeg</value></Data>
+    </ExtendedData>
+    <Point><coordinates>-21.9266,64.1417,0</coordinates></Point>
+  </Placemark>
+
+  <Placemark>
+    <name>Jökulsárlón</name>
+    <description><![CDATA[
+      <p><b>Glacier lagoon.</b> Two photos open as a gallery.</p>
+      <p><i>Photos: Giles Laurent, CC BY-SA 4.0; Jakub Hałun, CC BY 4.0 (Kirkjufell). Both from <a href="https://commons.wikimedia.org">Wikimedia Commons</a>.</i></p>
+    ]]></description>
+    <ExtendedData>
+      <Data name="gx_media_links"><value>https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/021_Wild_smiling_harbor_seal_at_J%C3%B6kuls%C3%A1rl%C3%B3n_%28Iceland%29_Photo_by_Giles_Laurent.jpg/960px-021_Wild_smiling_harbor_seal_at_J%C3%B6kuls%C3%A1rl%C3%B3n_%28Iceland%29_Photo_by_Giles_Laurent.jpg https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ea/Kirkjufell%2C_Iceland%2C_20240714_1631_0713.jpg/960px-Kirkjufell%2C_Iceland%2C_20240714_1631_0713.jpg</value></Data>
+    </ExtendedData>
+    <Point><coordinates>-16.2306,64.0784,0</coordinates></Point>
+  </Placemark>
+</Document>
+</kml>
