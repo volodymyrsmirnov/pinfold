@@ -58,10 +58,22 @@ enum SpotlightID {
 /// failure rather than surfacing it — a missing search index is non-fatal and self-heals on the
 /// next import/materialization pass.
 enum SpotlightIndexer {
-    /// Domain identifier for entry items (one per catalogue file).
-    static let entryDomain = "entries"
-    /// Domain identifier for placemark items (one per named placemark).
-    static let placemarkDomain = "placemarks"
+    /// The two app-wide domains 1.x indexed everything under. Kept only so the first 2.0
+    /// launch can clear them (`clearLegacyDomains`) before reindexing under per-folder domains.
+    static let legacyDomains = ["entries", "placemarks"]
+
+    /// Prefix of every per-folder domain identifier.
+    static let domainPrefix = "entry"
+
+    /// The domain identifier shared by an entry's item and all of its placemark items.
+    ///
+    /// Apple documents `domainIdentifier` as a grouping key for deleting items in bulk, with
+    /// dot-separated hierarchy (`deleteSearchableItems(withDomainIdentifiers:)` on `a.b` removes
+    /// that domain; on `a` it removes every `a.*`). Folder names are UUIDs (no periods), but any
+    /// period is replaced so a stray name can never widen a delete into a different hierarchy level.
+    static func domain(forFolderName folderName: String) -> String {
+        "\(domainPrefix).\(folderName.replacingOccurrences(of: ".", with: "_"))"
+    }
 
     fileprivate static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
@@ -73,14 +85,15 @@ enum SpotlightIndexer {
     /// Builds the searchable items for one entry: one item per **named** placemark (nameless
     /// placemarks are skipped — there's nothing to match on) plus one item for the entry itself.
     ///
-    /// - Placemark items: `domainIdentifier == "placemarks"`, `title` = placemark name,
+    /// - Placemark items: `domainIdentifier == domain(forFolderName:)`, `title` = placemark name,
     ///   `contentDescription` = the entry's display name (so a hit reads "Colosseum — Rome
     ///   Trip"), `latitude`/`longitude` set when the placemark has a coordinate, and
     ///   `supportsNavigation` flagged so Spotlight can offer directions.
-    /// - Entry item: `domainIdentifier == "entries"`, `title` = display name,
+    /// - Entry item: the same per-folder `domainIdentifier`, `title` = display name,
     ///   `contentDescription` = a simple "<pointCount> places" string.
     static func items(for entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) -> [CSSearchableItem] {
         var items: [CSSearchableItem] = []
+        let domain = domain(forFolderName: entry.storageFolderName)
 
         for placemark in indexEntries where !placemark.name.isEmpty {
             let attributes = CSSearchableItemAttributeSet(contentType: .content)
@@ -96,7 +109,7 @@ enum SpotlightIndexer {
                     folderName: entry.storageFolderName,
                     placemarkKey: placemark.key
                 ),
-                domainIdentifier: placemarkDomain,
+                domainIdentifier: domain,
                 attributeSet: attributes
             )
             items.append(item)
@@ -107,7 +120,7 @@ enum SpotlightIndexer {
         entryAttributes.contentDescription = "\(entry.pointCount) places"
         let entryItem = CSSearchableItem(
             uniqueIdentifier: SpotlightID.entry(folderName: entry.storageFolderName),
-            domainIdentifier: entryDomain,
+            domainIdentifier: domain,
             attributeSet: entryAttributes
         )
         items.append(entryItem)
@@ -124,17 +137,23 @@ enum SpotlightIndexer {
         spotlightIndex(entry: entry, indexEntries: indexEntries)
     }
 
-    /// Removes every Spotlight item belonging to `folderName`: its entry item plus all of its
-    /// placemark items. The placemark ids are reconstructed from `indexEntries` (the same
-    /// `placemarks-index.json` rows used to index them), so the full id list is deleted in one
-    /// call. Pass `indexEntries: []` when the index can't be read (e.g. the folder is already
-    /// gone) — at minimum the entry item is removed. Fire-and-forget.
+    /// Removes every Spotlight item belonging to `folderName`: everything in its per-folder
+    /// domain, plus the entry item and the placemark ids reconstructed from `indexEntries`
+    /// (which also covers items a 1.x build indexed under the old shared domains). Pass
+    /// `indexEntries: []` when the index can't be read (e.g. the folder is already gone): the
+    /// domain delete still removes every item indexed by this version. Fire-and-forget.
     static func deindex(folderName: String, indexEntries: [PlacemarkIndex.Entry]) {
         var ids = [SpotlightID.entry(folderName: folderName)]
         for placemark in indexEntries where !placemark.name.isEmpty {
             ids.append(SpotlightID.placemark(folderName: folderName, placemarkKey: placemark.key))
         }
-        spotlightDeindex(identifiers: ids)
+        spotlightDeindex(identifiers: ids, domains: [domain(forFolderName: folderName)])
+    }
+
+    /// Deletes the two shared domains 1.x used. Run once, on the first 2.0 launch, before the
+    /// full reindex. Fire-and-forget.
+    static func clearLegacyDomains() {
+        spotlightDeindex(identifiers: [], domains: legacyDomains)
     }
 }
 
@@ -159,18 +178,24 @@ private func spotlightIndex(entry: CatalogEntry, indexEntries: [PlacemarkIndex.E
     }
 }
 
-/// Deletes the given Spotlight item identifiers off-main, logging any failure. A `nonisolated`
-/// free function so the `Task.detached` closure stays out of any `@MainActor` caller's SIL.
-private func spotlightDeindex(identifiers: [String]) {
-    guard !identifiers.isEmpty else { return }
+/// Deletes the given Spotlight item identifiers and domains off-main, logging any failure. A
+/// `nonisolated` free function so the `Task.detached` closure stays out of any `@MainActor`
+/// caller's SIL.
+private func spotlightDeindex(identifiers: [String], domains: [String]) {
+    guard !identifiers.isEmpty || !domains.isEmpty else { return }
     Task.detached(priority: .utility) {
+        let index = CSSearchableIndex.default()
         do {
-            try await CSSearchableIndex.default()
-                .deleteSearchableItems(withIdentifiers: identifiers)
+            if !identifiers.isEmpty {
+                try await index.deleteSearchableItems(withIdentifiers: identifiers)
+            }
+            if !domains.isEmpty {
+                try await index.deleteSearchableItems(withDomainIdentifiers: domains)
+            }
         } catch {
             SpotlightIndexer.logger.error(
                 """
-                Failed to deindex \(identifiers.count) Spotlight item(s): \
+                Failed to deindex \(identifiers.count) item(s) / \(domains.count) domain(s): \
                 \(error.localizedDescription, privacy: .public)
                 """
             )
