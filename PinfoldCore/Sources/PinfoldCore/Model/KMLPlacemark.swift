@@ -54,6 +54,22 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
     // swiftlint:disable:next opening_brace
     {
+        self.init(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
+                  coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
+                  extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID,
+                  snippet: snippet, address: address, phoneNumber: phoneNumber,
+                  stableKey: nil)
+    }
+
+    /// Designated init. A non-nil `stableKey` is stored as is (the parser derives it from
+    /// legacy-compatible inputs, see `LegacyKeyInputs`); nil computes it from the display
+    /// name and coordinate.
+    init(id: String, name: String?, descriptionHTML: String?, styleUrl: String?,
+         coordinate: Coordinate?, hasPoint: Bool, geometries: [KMLGeometry],
+         extendedData: [KMLDataItem], photoLinks: [String], sourceID: String?,
+         snippet: String?, address: String?, phoneNumber: String?, stableKey: String?)
+    // swiftlint:disable:next opening_brace
+    {
         self.id = id
         self.name = name
         self.descriptionHTML = descriptionHTML
@@ -67,7 +83,8 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
         self.snippet = snippet
         self.address = address
         self.phoneNumber = phoneNumber
-        stableKey = Self.makeStableKey(id: id, name: name, coordinate: coordinate, sourceID: sourceID)
+        self.stableKey = stableKey
+            ?? Self.makeStableKey(id: id, name: name, coordinate: coordinate, sourceID: sourceID)
     }
 
     /// A durable identity for this placemark, safe to persist across re-parses. Computed once
@@ -80,8 +97,8 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// 3. `"p:<id>"` — parse-order id, last resort for a placeless, nameless placemark.
     public let stableKey: String
 
-    private static func makeStableKey(id: String, name: String?, coordinate: Coordinate?,
-                                      sourceID: String?) -> String
+    static func makeStableKey(id: String, name: String?, coordinate: Coordinate?,
+                              sourceID: String?) -> String
     // swiftlint:disable:next opening_brace
     {
         if let sourceID, !sourceID.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -107,6 +124,7 @@ extension KMLPlacemark {
         KMLPlacemark(id: id, name: name, descriptionHTML: descriptionHTML, styleUrl: styleUrl,
                      coordinate: coordinate, hasPoint: hasPoint, geometries: geometries,
                      extendedData: extendedData, photoLinks: photoLinks, sourceID: sourceID,
-                     snippet: snippet, address: address, phoneNumber: phoneNumber)
+                     snippet: snippet, address: address, phoneNumber: phoneNumber,
+                     stableKey: stableKey)
     }
 }

@@ -9,17 +9,20 @@ extension KMLParserDelegate {
     func startGeometryElement(_ local: String) -> Bool {
         switch local {
         case "Point":
+            placemark?.legacy.hasPoint = true
             inPoint = true
         case "LineString":
             if placemark != nil {
                 inLineString = true
                 lineStringCoords = []
+                placemark?.legacy.lineFirst = nil
             }
         case "Polygon":
             if placemark != nil {
                 inPolygon = true
                 polygonOuter = []
                 polygonInners = []
+                placemark?.legacy.outerFirst = nil
             }
         case "outerBoundaryIs":
             if inPolygon {
@@ -35,13 +38,10 @@ extension KMLParserDelegate {
                 inTrack = true
                 trackCoords = []
             }
-        case "Model":
-            // A geometry type we don't capture; flag so a point-less placemark whose only
-            // geometry is a Model is still dropped. (gx:MultiTrack is not flagged: its inner
-            // `Track`s are captured individually.)
-            if placemark != nil {
-                placemark?.hasUncapturedGeometry = true
-            }
+        case "Model", "MultiTrack":
+            // Geometry types we don't capture themselves; 1.7 dropped a point-less placemark
+            // whose only geometry was one (gx:MultiTrack's inner Tracks are still captured).
+            placemark?.legacy.hasUncapturedGeometry = true
         default:
             return false
         }
@@ -62,6 +62,7 @@ extension KMLParserDelegate {
             }
         case "LineString":
             if inLineString {
+                closeLegacyGeometry(first: placemark?.legacy.lineFirst)
                 appendLine(lineStringCoords, asTrack: false)
                 inLineString = false
                 lineStringCoords = []
@@ -79,8 +80,12 @@ extension KMLParserDelegate {
             }
         case "Polygon":
             if inPolygon {
+                closeLegacyGeometry(first: placemark?.legacy.outerFirst)
                 if polygonOuter.count >= Self.minRingVertices {
                     placemark?.geometries.append(.polygon(outer: polygonOuter, inners: polygonInners))
+                } else if let first = polygonOuter.first, placemark?.fallbackCoordinate == nil {
+                    // A degenerate polygon is dropped but still locates the placemark.
+                    placemark?.fallbackCoordinate = first
                 }
                 inPolygon = false
                 polygonOuter = []
@@ -88,6 +93,7 @@ extension KMLParserDelegate {
             }
         case "Track":
             if inTrack {
+                closeLegacyGeometry(first: trackCoords.first)
                 appendLine(trackCoords, asTrack: true)
                 inTrack = false
                 trackCoords = []
@@ -96,6 +102,10 @@ extension KMLParserDelegate {
             return false
         }
         return true
+    }
+
+    private func closeLegacyGeometry(first: Coordinate?) {
+        placemark?.legacy.closeGeometry(first: first)
     }
 
     /// Fewest vertices of a line or track worth keeping.
@@ -305,6 +315,7 @@ extension KMLParserDelegate {
         if inPoint {
             // Only capture coordinates while inside a <Point> so that LineString/Polygon
             // vertices in the same placemark don't clobber the Point coordinate.
+            placemark?.legacy.pointCoordinate = LegacyCoordinate.firstTuple(text)
             // A Point whose coordinates do not parse is not a point: it must neither set
             // `hasPoint` nor displace a valid one.
             if let point = Coordinate(parsingFirstTuple: text) {
@@ -318,10 +329,12 @@ extension KMLParserDelegate {
             }
         } else if inLineString {
             lineStringCoords = Coordinate.parseList(text)
+            placemark?.legacy.lineFirst = LegacyCoordinate.list(text).first
         } else if inInnerBoundary {
             currentInnerRing = Coordinate.parseList(text)
         } else if inOuterBoundary {
             polygonOuter = Coordinate.parseList(text)
+            placemark?.legacy.outerFirst = LegacyCoordinate.list(text).first
         }
     }
 
