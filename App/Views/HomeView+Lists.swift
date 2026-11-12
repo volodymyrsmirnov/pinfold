@@ -14,6 +14,8 @@ extension HomeView {
                 } description: {
                     Text(ImportFormats.emptyCatalogueHint)
                 }
+            } else if isSelecting {
+                selectionList
             } else {
                 // `List(selection:)` drives the detail column on regular width and pushes the
                 // detail on compact width (collapsed split view) — replacing the old explicit
@@ -28,6 +30,7 @@ extension HomeView {
                                 } label: {
                                     Label("Trash", systemImage: "trash")
                                 }
+                                .disabled(entry.isReadOnly)
                             }
                             .contextMenu { activeRowMenu(for: entry) }
                     }

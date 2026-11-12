@@ -19,6 +19,8 @@ extension HomeView {
             // the stalled state (queued URLs are kept either way).
             .disabled(importCoordinator.isImporting || importCoordinator.pendingDuplicate != nil)
         }
+        selectToolbarItem
+        selectBottomBar
         // Import progress: a spinner plus the current filename, shown only while the
         // coordinator is draining its queue (e.g. a large KMZ that takes a moment).
         // Placed in the bottom bar (`.bottomBar`) rather than `.principal`: a principal
@@ -64,6 +66,20 @@ extension HomeView {
                 Label("Settings", systemImage: "gear")
             }
         }
+    }
+
+    /// This window's menu-command actions, published as a focused-scene value (E7). Acts on the
+    /// sidebar's selected file; the pure model decides what is enabled.
+    var windowCommands: WindowCommands {
+        WindowCommands(
+            selectedEntry: selection.flatMap { id in active.first { $0.id == id } },
+            canImport: !importCoordinator.isImporting && importCoordinator.pendingDuplicate == nil,
+            importFiles: { isFileImporterPresented = true },
+            focusSearch: { isSearchFocused = true },
+            rename: { beginRename($0) },
+            editTags: { beginEditTags($0) },
+            trash: { entry in Task { await catalog.moveToTrash(entry) } }
+        )
     }
 
     /// A `Binding` to the persisted sort preference for the toolbar `Picker`. Built manually

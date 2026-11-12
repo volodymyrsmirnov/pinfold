@@ -39,7 +39,6 @@ struct HomeView: View {
     @Environment(AppSettings.self) var settings
     // Not `private`: read from the `HomeViewBanner` extension (a separate file).
     @Environment(ImportFailureLog.self) var importFailureLog
-    @Environment(AppCommands.self) var appCommands
     @Environment(\.resourceCache) var resourceCache
     /// The shared import queue, owned by `RootView`.
     @Environment(ImportCoordinator.self) var importCoordinator
@@ -73,6 +72,16 @@ struct HomeView: View {
     /// by joining the entry's current tags with ", ". Parsed back by comma on Save.
     @State var tagsText = ""
 
+    /// Whether the Files list is in explicit multi-select mode (C8). The list then binds
+    /// `bulkSelection` instead of `selection`, so picking rows never drives the detail column.
+    @State var isSelecting = false
+    /// The ids ticked in select mode.
+    @State var bulkSelection: Set<CatalogEntry.ID> = []
+    /// The entries a bulk "Tag" is about to be applied to (drives the shared tags alert).
+    @State var bulkTagTargets: [CatalogEntry]?
+    /// The editable text for the bulk tags alert.
+    @State var bulkTagsText = ""
+
     /// The currently-selected filter chip tag (Files segment), or `nil` for "All". Hidden while
     /// searching (chips are not shown during search to keep filter state simple).
     /// Not `private`: read/written from the `HomeViewTags` extension (a separate file).
@@ -80,7 +89,7 @@ struct HomeView: View {
 
     /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
     @State var searchQuery = ""
-    /// Keyboard focus for the search field, driven by the ⌘F command (see `AppCommands`).
+    /// Keyboard focus for the search field, driven by the ⌘F command (see `WindowCommands`).
     @FocusState var isSearchFocused: Bool
     /// "Places" hits for the current query, read off-main from each active entry's local
     /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
@@ -177,10 +186,8 @@ struct HomeView: View {
             }
             placeHits = hits
         }
-        // ⌘F (Search command) → focus the search field. Counter bump fires on every press.
-        .onChange(of: appCommands.searchFocusRequested) { _, _ in
-            isSearchFocused = true
-        }
+        // Menu commands act on THIS window only: published as a focused-scene value.
+        .focusedSceneValue(\.windowCommands, windowCommands)
         // Reset a stale tag filter when its tag vanishes. MUST hang off the always-mounted
         // body, not `tagChipsBar` (which unmounts when the last tag goes — see HomeViewTags).
         .onChange(of: allTags) { _, tags in
@@ -221,6 +228,14 @@ struct HomeView: View {
         // Edit Tags alert — the full alert tree lives in `EditTagsAlertModifier`
         // (HomeViewTags.swift) so this body chain stays inside the type-checker's budget.
         .modifier(EditTagsAlertModifier(target: $tagsTarget, text: $tagsText, save: saveTags))
+        .modifier(EditTagsAlertModifier(
+            target: $bulkTagTargets, text: $bulkTagsText, title: "Add Tags", save: saveBulkTags
+        ))
+        .onChange(of: canSelect) { _, allowed in
+            if !allowed {
+                endSelecting()
+            }
+        }
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.
@@ -239,11 +254,6 @@ struct HomeView: View {
         // `pendingPlacemarkKey` deep-link the catalogue "Places" search hits use.
         .sheet(isPresented: $isFavoritesPresented) {
             FavoritesView(selection: $selection, pendingPlacemarkKey: $pendingPlacemarkKey)
-        }
-        // The "Import…" menu command (⌘I) flips a counter on AppCommands; presenting the
-        // fileImporter here keeps that transient UI state owned by the view, not the scene.
-        .onChange(of: appCommands.importRequested) { _, _ in
-            isFileImporterPresented = true
         }
         // Inbox draining (share-extension handoff) is performed once in RootView's
         // .task on launch; it is intentionally NOT duplicated here.

@@ -85,6 +85,8 @@ struct PlacemarkDetailView: View {
         .navigationTitle(placemark.name ?? "Untitled")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
+        // Favourite / Open in Maps menu commands act on the place open in THIS window.
+        .focusedSceneValue(\.placeCommands, placeCommands)
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -95,6 +97,15 @@ struct PlacemarkDetailView: View {
                 .environment(settings)
             }
         }
+    }
+
+    /// The menu-bar actions for this place (⌘D, ⇧⌘O); each is `nil` (menu item disabled) when
+    /// it cannot apply.
+    private var placeCommands: PlaceCommands {
+        PlaceCommands(
+            toggleFavorite: annotations.map { store in { store.toggleFavorite(placemark) } },
+            openInMaps: hasCoordinate ? { openInMaps() } : nil
+        )
     }
 
     // MARK: - Content stack

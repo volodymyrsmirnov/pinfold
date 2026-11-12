@@ -301,4 +301,57 @@ import Testing
         // so only the reported error is asserted.
         #expect(catalog.actionError != nil)
     }
+
+    // MARK: - Bulk actions (C8)
+
+    @Test func bulkTrash_trashesAllSelectedWithOneReload() async throws {
+        let (catalog, storage) = makeCatalog()
+        for name in ["a", "b", "c"] {
+            try seedFolder(storage, folder: name)
+        }
+        await catalog.reload()
+        let picked = catalog.active.filter { $0.storageFolderName != "c" }
+
+        await catalog.moveToTrash(picked)
+
+        #expect(catalog.active.map(\.storageFolderName) == ["c"])
+        #expect(Set(catalog.trashed.map(\.storageFolderName)) == ["a", "b"])
+        #expect(try storage.readMetadata(forFolderNamed: "a")?.trashedAt != nil)
+        #expect(catalog.actionError == nil)
+    }
+
+    @Test func bulkAddTags_mergesWithExistingTags() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "a")
+        try seedFolder(storage, folder: "b")
+        try storage.updateMetadata(forFolderNamed: "a") { $0.tags = ["Hiking", "zoo"] }
+        await catalog.reload()
+
+        await catalog.addTags(["hiking", " Food ", ""], to: catalog.active)
+
+        let byName = Dictionary(uniqueKeysWithValues: catalog.active.map { ($0.storageFolderName, $0.tags) })
+        #expect(byName["a"] == ["Food", "Hiking", "zoo"])
+        #expect(byName["b"] == ["Food", "hiking"])
+        #expect(catalog.actionError == nil)
+    }
+
+    @Test func bulkActionsSkipReadOnlyEntries() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "ok")
+        let garbage = try seedUnreadable(storage, folder: "bad")
+        await catalog.reload()
+        let all = catalog.active
+
+        await catalog.addTags(["t"], to: all)
+        #expect(catalog.actionError != nil)
+        #expect(catalog.active.first { $0.storageFolderName == "ok" }?.tags == ["t"])
+        catalog.actionError = nil
+
+        await catalog.moveToTrash(all)
+
+        #expect(catalog.actionError != nil)
+        #expect(catalog.trashed.map(\.storageFolderName) == ["ok"])
+        #expect(catalog.active.map(\.storageFolderName) == ["bad"])
+        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
+    }
 }
