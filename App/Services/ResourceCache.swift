@@ -248,8 +248,28 @@ final class ResourceCache: Sendable {
             Self.logger.warning("Rejecting resource over size cap; skipping permanently")
             markSkipped(href, to: resourcesDir)
         } catch {
-            // HTTP errors, offline, timeouts: retry later with backoff.
+            if Self.isConnectivityFailure(error) {
+                // The device is offline (not the host's fault): don't burn an attempt or grow the
+                // backoff, so the image is fetched as soon as the connection is back.
+                Self.logger.debug("Offline; leaving resource pending without penalty")
+                return
+            }
+            // HTTP errors, timeouts, dead hosts: retry later with backoff.
             recordFailure(href, in: resourcesDir, isNonImage: false)
+        }
+    }
+
+    /// `true` for errors that say the *device* has no usable connection right now. Deliberately
+    /// excludes `.cannotFindHost` / `.timedOut` / `.cannotConnectToHost`, which a dead or
+    /// blocked host also produces and which must still back off.
+    static func isConnectivityFailure(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+             .internationalRoamingOff, .callIsActive:
+            return true
+        default:
+            return false
         }
     }
 

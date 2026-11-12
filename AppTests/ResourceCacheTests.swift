@@ -504,6 +504,29 @@ extension ResourceCacheTests {
         #expect(ResourceCache.backoff(afterAttempts: 30) == 24 * 60 * 60)
     }
 
+    @Test func offlineErrors_doNotCountAsAttempts() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let clock = Mutable(Date(timeIntervalSince1970: 1_000_000))
+        let offline = ResourceCache(downloader: { _ in throw URLError(.notConnectedToInternet) }, now: { clock.value })
+        for _ in 0 ..< 5 {
+            await offline.retryOrDownload(href, in: dir)
+        }
+        #expect(state(dir).hrefs[href] == nil, "offline failures leave no attempts or backoff")
+
+        let online = ResourceCache(downloader: { _ in Self.png }, now: { clock.value })
+        await online.retryOrDownload(href, in: dir)
+        #expect(online.localURL(forHref: href, in: dir) != nil)
+    }
+
+    @Test func deadHostStillBacksOff() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/a.png"
+        let cache = ResourceCache(downloader: { _ in throw URLError(.cannotFindHost) })
+        await cache.retryOrDownload(href, in: dir)
+        #expect(state(dir).hrefs[href]?.attempts == 1)
+    }
+
     @Test func successClearsDownloadState() async throws {
         let dir = try makeTempDir()
         let href = "https://example.com/a.png"
