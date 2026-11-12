@@ -22,6 +22,6 @@ func placemarksMatching(_ query: String, in document: KMLDocument) -> [KMLPlacem
     guard !trimmed.isEmpty else { return all }
     return all.filter { placemark in
         guard let name = placemark.name else { return false }
-        return name.localizedCaseInsensitiveContains(trimmed)
+        return SearchText.contains(name, query: trimmed)
     }
 }

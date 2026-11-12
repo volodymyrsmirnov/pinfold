@@ -18,13 +18,14 @@ struct SettingsView: View {
     // MARK: - Body
 
     var body: some View {
-        @Bindable var settings = settings
         Form {
             defaultMapAppSection
             mapAppsSection
             mapViewSection
             sessionSection
-            iCloudSection(settings: $settings)
+            SettingsDownloadsSection()
+            SettingsStorageSection()
+            SettingsSyncSection()
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
@@ -34,27 +35,17 @@ struct SettingsView: View {
             Text("Some Items Didn't Move", comment: "Title of the partial-migration alert"),
             isPresented: Binding(
                 get: { migrationAlert.message != nil },
-                set: { if !$0 { migrationAlert.message = nil } }
+                set: {
+                    if !$0 {
+                        migrationAlert.message = nil
+                    }
+                }
             ),
             presenting: migrationAlert.message
         ) { _ in
             Button("OK", role: .cancel) { migrationAlert.message = nil }
         } message: { message in
             Text(message)
-        }
-    }
-
-    // MARK: - iCloud section
-
-    private func iCloudSection(settings: Bindable<AppSettings>) -> some View {
-        Section {
-            Toggle("Sync with iCloud", isOn: settings.syncEnabled)
-        } header: {
-            Text("iCloud")
-        } footer: {
-            Text("Keeps your imported files on every device signed in to the same iCloud "
-                + "account. Off by default; turn it on to start syncing. Your existing files "
-                + "move into iCloud when you turn it on.")
         }
     }
 

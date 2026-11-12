@@ -12,7 +12,7 @@ extension HomeView {
                 ContentUnavailableView {
                     Label("No Files", systemImage: "map")
                 } description: {
-                    Text("Import a KML or KMZ file using the + button.")
+                    Text(ImportFormats.emptyCatalogueHint)
                 }
             } else {
                 // `List(selection:)` drives the detail column on regular width and pushes the

@@ -85,6 +85,11 @@ enum PlacemarkIndex {
 
     // MARK: - Read
 
+    /// Whether a readable index exists in `resourcesDir`.
+    static func exists(in resourcesDir: URL) -> Bool {
+        read(from: resourcesDir) != nil
+    }
+
     /// Reads the index from `resourcesDir`, or `nil` when the file is absent or cannot be
     /// decoded. A `nil` result is non-fatal: the index is derivable and silently
     /// rebuildable, so callers simply skip the entry until it is rematerialized.
@@ -112,7 +117,7 @@ enum PlacemarkIndex {
         var hits: [Hit] = []
         for dir in dirs {
             guard let entries = read(from: dir.resourcesDir) else { continue }
-            for entry in entries where entry.name.localizedCaseInsensitiveContains(trimmed) {
+            for entry in entries where SearchText.contains(entry.name, query: trimmed) {
                 hits.append(Hit(
                     folderName: dir.folderName,
                     key: entry.key,

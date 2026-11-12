@@ -76,10 +76,7 @@ extension RootView {
             )
             importFailureLog.record(
                 filename: url.lastPathComponent,
-                reason: String(
-                    localized: "Not a valid KML or KMZ file.",
-                    comment: "Import failure reason: the file could not be read or parsed."
-                )
+                reason: ImportFormats.invalidFileReason
             )
             try? FileManager.default.removeItem(at: url)
             return

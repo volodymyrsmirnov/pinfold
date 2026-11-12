@@ -133,7 +133,7 @@ struct CatalogScanner {
                 // Self-heal: a folder materialized before the search feature shipped has a
                 // resource cache but no `placemarks-index.json`. Backfill it once by parsing
                 // the original (the only re-parse here, gated on the index being absent).
-                if PlacemarkIndex.read(from: resourcesDir) == nil {
+                if !PlacemarkIndex.exists(in: resourcesDir) {
                     backfillIndex(forFolderNamed: name, to: resourcesDir)
                 }
                 continue

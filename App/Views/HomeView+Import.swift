@@ -1,16 +1,7 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 extension HomeView {
     // MARK: - Import helpers
-
-    var allowedUTTypes: [UTType] {
-        // Prefer UTType(filenameExtension:) for exact KML/KMZ match.
-        // Fall back to .xml / .zip if the extension-derived type is unavailable.
-        let kml = UTType(filenameExtension: "kml") ?? .xml
-        let kmz = UTType(filenameExtension: "kmz") ?? .zip
-        return [kml, kmz]
-    }
 
     func handleFileImporterResult(_ result: Result<[URL], Error>) {
         switch result {

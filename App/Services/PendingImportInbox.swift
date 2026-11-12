@@ -148,10 +148,7 @@ struct PendingImportInbox {
                 )
                 failureLog?.record(
                     filename: file.lastPathComponent,
-                    reason: String(
-                        localized: "Not a valid KML or KMZ file.",
-                        comment: "Import failure reason: the file could not be parsed."
-                    )
+                    reason: ImportFormats.invalidFileReason
                 )
                 try? fm.removeItem(at: file)
             } catch {
@@ -175,7 +172,9 @@ struct PendingImportInbox {
         }
 
         // Reload so freshly-imported folders appear in the catalogue.
-        if imported > 0 { await catalog.reload() }
+        if imported > 0 {
+            await catalog.reload()
+        }
         return imported
     }
 }

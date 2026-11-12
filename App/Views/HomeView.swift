@@ -183,7 +183,7 @@ struct HomeView: View {
         .toolbar { toolbarContent }
         .fileImporter(
             isPresented: $isFileImporterPresented,
-            allowedContentTypes: allowedUTTypes,
+            allowedContentTypes: ImportFormats.allowedContentTypes,
             allowsMultipleSelection: true
         ) { result in
             handleFileImporterResult(result)
