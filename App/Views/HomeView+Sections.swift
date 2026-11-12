@@ -154,11 +154,13 @@ extension HomeView {
         } label: {
             Label("Rename", systemImage: "pencil")
         }
+        .disabled(entry.isReadOnly)
         Button {
             beginEditTags(entry)
         } label: {
             Label("Edit Tags\u{2026}", systemImage: "tag")
         }
+        .disabled(entry.isReadOnly)
         // Share the original .kml/.kmz back out. `ShareLink` with a file URL shares the file
         // itself. Shown only when the original actually exists on disk: in iCloud mode an entry
         // can be a not-yet-downloaded placeholder, and ShareLink would otherwise render a
@@ -174,6 +176,7 @@ extension HomeView {
         } label: {
             Label("Trash", systemImage: "trash")
         }
+        .disabled(entry.isReadOnly)
     }
 
     /// The entry's original KML/KMZ file URL, but only if it currently exists on disk (so the
@@ -186,14 +189,14 @@ extension HomeView {
     }
 
     /// Opens the rename alert for `entry`, prefilling the field with its current name.
-    private func beginRename(_ entry: CatalogEntry) {
+    func beginRename(_ entry: CatalogEntry) {
         renameText = entry.displayName
         renameTarget = entry
     }
 
     /// Opens the Edit Tags alert for `entry`, prefilling the field with its current tags joined
     /// by ", " (the same separator the Save action parses back on).
-    private func beginEditTags(_ entry: CatalogEntry) {
+    func beginEditTags(_ entry: CatalogEntry) {
         tagsText = entry.tags.joined(separator: ", ")
         tagsTarget = entry
     }
@@ -303,18 +306,21 @@ extension HomeView {
 /// entry's current tags (see `beginEditTags` above). Packaged as a `ViewModifier` so
 /// `HomeView.body`'s already-long modifier chain carries one `.modifier(...)` line instead of
 /// the full alert closure tree, which pushed the expression past the type-checker's budget.
-struct EditTagsAlertModifier: ViewModifier {
-    /// The entry being edited; non-nil presents the alert, dismissal nils it.
-    @Binding var target: CatalogEntry?
+struct EditTagsAlertModifier<Target>: ViewModifier {
+    /// What is being edited (one entry, or the entries of a bulk action); non-nil presents the
+    /// alert, dismissal nils it.
+    @Binding var target: Target?
     /// The comma-separated tags text bound to the alert's TextField.
     @Binding var text: String
-    /// Commit callback: the entry plus the raw comma-split parts (normalization is the
+    /// The alert title ("Edit Tags" for one file, "Add Tags" for a bulk action).
+    var title: LocalizedStringKey = "Edit Tags"
+    /// Commit callback: the target plus the raw comma-split parts (normalization is the
     /// callee's job — see `HomeView.saveTags`).
-    let save: (CatalogEntry, [String]) -> Void
+    let save: (Target, [String]) -> Void
 
     func body(content: Content) -> some View {
         content.alert(
-            "Edit Tags",
+            title,
             isPresented: Binding(
                 get: { target != nil },
                 set: {
@@ -324,13 +330,13 @@ struct EditTagsAlertModifier: ViewModifier {
                 }
             ),
             presenting: target
-        ) { entry in
+        ) { target in
             TextField("Tags, comma-separated", text: $text)
             Button("Save") {
-                save(entry, text.split(separator: ",").map(String.init))
-                target = nil
+                save(target, text.split(separator: ",").map(String.init))
+                self.target = nil
             }
-            Button("Cancel", role: .cancel) { target = nil }
+            Button("Cancel", role: .cancel) { self.target = nil }
         } message: { _ in
             Text("Separate tags with commas.")
         }
