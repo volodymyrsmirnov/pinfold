@@ -37,6 +37,7 @@
 		27B507F1EF8CAB6D35C164A7 /* MapUserLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1DB26A303C33B89F485D65 /* MapUserLocationTests.swift */; };
 		2B9F4EDACAC3C9A16A04D805 /* iceland-trip-2026.kml in Resources */ = {isa = PBXBuildFile; fileRef = 8DBF1290AB7553E804667519 /* iceland-trip-2026.kml */; };
 		2D6E99FA9875BFA3407D7174 /* FakeUbiquityProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60CA6ED80BAF5FB2D9E1081 /* FakeUbiquityProbe.swift */; };
+		2DA043423824660A7D083671 /* RemoteHref.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A761956D2D4BFBB2DFFEE7 /* RemoteHref.swift */; };
 		2FCE6CFF43FC1EE38B37AF8E /* ImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0717B915EAD9D7C75DF73F14 /* ImportCoordinator.swift */; };
 		313498C96A1D35514168C8B6 /* SearchText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281644FDCFC58CFE0B8B7A2D /* SearchText.swift */; };
 		313D823219D46788FAB1B1A1 /* HomeView+Lists.swift in Sources */ = {isa = PBXBuildFile; fileRef = B667CE6D8EFB886150CE14F0 /* HomeView+Lists.swift */; };
@@ -283,6 +284,7 @@
 		3370FBA22166F4ED3C01B980 /* HomeView+Import.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeView+Import.swift"; sourceTree = "<group>"; };
 		33DA2BFA84ADDF1D720F5E0B /* Rome.kml */ = {isa = PBXFileReference; path = Rome.kml; sourceTree = "<group>"; };
 		340D73405F9B9FD0FD9557A4 /* BoundedDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundedDownloader.swift; sourceTree = "<group>"; };
+		37A761956D2D4BFBB2DFFEE7 /* RemoteHref.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHref.swift; sourceTree = "<group>"; };
 		38B03DAFB9182A76BACA30F1 /* MapAppService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapAppService.swift; sourceTree = "<group>"; };
 		3A05D164DD8DF502D9BABDDD /* ImportCoordinator+OffMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ImportCoordinator+OffMain.swift"; sourceTree = "<group>"; };
 		3BD65708229AACE02DC570D5 /* SearchTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTextTests.swift; sourceTree = "<group>"; };
@@ -602,6 +604,7 @@
 				0747FDCDBC6B5EE0094147AC /* PlacemarkPinImage.swift */,
 				796376A6E3A337DA5374C8F8 /* PlacemarkSearch.swift */,
 				572076095F3585D4172CE3B0 /* PolylineSimplifier.swift */,
+				37A761956D2D4BFBB2DFFEE7 /* RemoteHref.swift */,
 				9EDE2BDC286791DAABC117FC /* RowFrameBox.swift */,
 				8EC1255B1BAB6BFE548108EC /* SafeFilename.swift */,
 				F15BABBB78CF2D224716CAA8 /* SearchCorpus.swift */,
@@ -1023,6 +1026,7 @@
 				0A7D11AFA4ED76E8100F1BE5 /* PlacemarkRow.swift in Sources */,
 				89516814407A6572DEEBA0B2 /* PlacemarkSearch.swift in Sources */,
 				E7A6D54232E3393F5714E71D /* PolylineSimplifier.swift in Sources */,
+				2DA043423824660A7D083671 /* RemoteHref.swift in Sources */,
 				C55DE1571A226FBA419C98D5 /* RemoteImagesConsentBanner.swift in Sources */,
 				C3B1C0715FD9F386E5F9469C /* ResourceCache+Archive.swift in Sources */,
 				9B23A0ADCA6981EBDDD692E2 /* ResourceCache.swift in Sources */,
