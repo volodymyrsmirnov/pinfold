@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import os
 
 // MARK: - ImportCoordinator
 
@@ -36,7 +35,7 @@ final class ImportCoordinator {
         let kind: DuplicateKind
         let result: ImportResult
         let existingEntry: CatalogEntry
-        fileprivate let context: ItemContext
+        let context: ItemContext
     }
 
     // MARK: - Queue items
@@ -56,7 +55,7 @@ final class ImportCoordinator {
         }
     }
 
-    private enum Source {
+    enum Source {
         /// A security-scoped URL from the file picker. Never deleted.
         case picker(URL)
         /// An app-owned copy of a file (opened file or inbox file).
@@ -65,7 +64,7 @@ final class ImportCoordinator {
         case prepared(data: Data, filename: String)
     }
 
-    private struct PendingImport {
+    struct PendingImport {
         let source: Source
         /// `true` when a person is looking at the result (picker): failures raise the error
         /// alert and an active duplicate prompts. Opened and inbox files are non-interactive.
@@ -73,7 +72,7 @@ final class ImportCoordinator {
     }
 
     /// What the coordinator must clean up when an item is finished.
-    fileprivate struct ItemContext {
+    struct ItemContext {
         let filename: String
         let interactive: Bool
         let ownedURL: URL?
@@ -93,14 +92,14 @@ final class ImportCoordinator {
     private(set) var isImporting = false
 
     /// The display filename of the item currently being imported, for the progress label.
-    private(set) var currentFilename: String?
+    var currentFilename: String?
 
     /// Items in the current batch (queued + finished). Reset when a new batch starts.
     private(set) var totalCount = 0
 
     /// Items of the current batch that are done (imported, skipped, failed or resolved from a
     /// duplicate prompt).
-    private(set) var completedCount = 0
+    var completedCount = 0
 
     /// The 1-based position of the item being imported, for "Importing 2 of 5".
     var currentPosition: Int {
@@ -115,12 +114,14 @@ final class ImportCoordinator {
     private var queue: [PendingImport] = []
     /// The single in-flight drain Task, if any. `drainForTesting` awaits it.
     private var processingTask: Task<Void, Never>?
+    /// The read-and-parse of the item in flight, so `cancel()` can abort it.
+    private var currentPrepare: Task<ImportResult, Error>?
     /// Normalised paths of files that are queued, being imported, or stalled on a prompt. A
     /// path is accepted once, so the opened file and the inbox scan that later lists the same
     /// file cannot both import it.
-    private var trackedPaths: Set<String> = []
+    var trackedPaths: Set<String> = []
     /// Hashes whose commit (and the reload that follows) has not finished yet.
-    private var inFlightHashes: Set<String> = []
+    var inFlightHashes: Set<String> = []
     /// Hashes committed this session that `catalog.entries` may not show yet (a newer reload can
     /// overtake the one awaited after the commit, so it returns without publishing). Kept until
     /// the catalogue contains them, so an identical later item is still seen as a duplicate (B16).
@@ -133,11 +134,6 @@ final class ImportCoordinator {
     init(failureLog: ImportFailureLog? = nil) {
         self.failureLog = failureLog
     }
-
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
-        category: "import"
-    )
 
     // MARK: - Hold / release
 
@@ -212,9 +208,11 @@ final class ImportCoordinator {
 
     // MARK: - Cancel
 
-    /// Drops every item that has not started yet and deletes the app-owned copies among them.
-    /// The item currently in flight finishes (aborting it mid-parse is a later task).
+    /// Drops every item that has not started yet and deletes the app-owned copies among them,
+    /// and aborts the item currently being read and parsed (nothing is committed for it). An
+    /// item already past prepare (committing, or stalled on a duplicate prompt) completes.
     func cancel() {
+        currentPrepare?.cancel()
         let dropped = queue
         queue.removeAll()
         totalCount -= dropped.count
@@ -229,40 +227,6 @@ final class ImportCoordinator {
                 break
             }
         }
-    }
-
-    // MARK: - Duplicate resolution
-
-    /// "Import Anyway" (active duplicate) / "Import as New" (trashed duplicate): commits the
-    /// copy and **awaits** `catalog.reload()` before resuming the queue, so the next item's
-    /// duplicate check runs against the post-commit catalogue, never a stale snapshot.
-    func importAnyway(catalog: Catalog, cache: ResourceCache) {
-        guard let dup = pendingDuplicate else { return }
-        pendingDuplicate = nil
-        startProcessing(catalog: catalog, cache: cache) { [weak self] in
-            await self?.commitAndFinish(dup.result, dup.context, catalog: catalog, cache: cache)
-        }
-    }
-
-    /// "Restore from Trash": brings the trashed copy back instead of importing a second one.
-    func restoreTrashedDuplicate(catalog: Catalog, cache: ResourceCache) {
-        guard let dup = pendingDuplicate, dup.kind == .trashed else { return }
-        pendingDuplicate = nil
-        startProcessing(catalog: catalog, cache: cache) { [weak self] in
-            // Keep the inbox copy when the restore failed (read-only entry, write error): the
-            // user's file must not vanish without being imported or restored.
-            let restored = await catalog.restore(dup.existingEntry)
-            self?.finish(dup.context, deleteOwned: restored)
-        }
-    }
-
-    /// "Skip" on the duplicate alert, or the alert dismissed by any other means. Idempotent: if
-    /// the alert was already resolved this is a no-op so the queue is never advanced twice.
-    func skipDuplicate(catalog: Catalog, cache: ResourceCache) {
-        guard let dup = pendingDuplicate else { return }
-        pendingDuplicate = nil
-        finish(dup.context, deleteOwned: true)
-        startProcessing(catalog: catalog, cache: cache, leading: nil)
     }
 
     // MARK: - Testing
@@ -283,7 +247,7 @@ final class ImportCoordinator {
     /// Starts a single drain Task that optionally runs `leading` first (the resolution of a
     /// duplicate), then processes the queue until it empties or stalls on a duplicate.
     /// `isImporting` is held `true` for the lifetime of the drain.
-    private func startProcessing(
+    func startProcessing(
         catalog: Catalog,
         cache: ResourceCache,
         leading: (@MainActor () async -> Void)?
@@ -318,9 +282,17 @@ final class ImportCoordinator {
         let context = makeContext(for: item)
         currentFilename = context.filename
 
+        // The prepare runs in its own task so `cancel()` can abort just this item's read and
+        // parse (the cancellation reaches the detached work through its cancellation handler).
+        let source = item.source
+        let filename = context.filename
+        let prepareTask = Task { try await prepare(source, filename: filename) }
+        currentPrepare = prepareTask
+        defer { currentPrepare = nil }
+
         let result: ImportResult
         do {
-            result = try await prepare(item.source, filename: context.filename)
+            result = try await prepareTask.value
         } catch {
             reportPrepareFailure(error, context)
             return
@@ -353,179 +325,4 @@ final class ImportCoordinator {
         }
     }
 
-    /// Hands a prepared result to the duplicate check, then commits or stalls.
-    private func processPrepared(
-        _ result: ImportResult,
-        _ context: ItemContext,
-        catalog: Catalog,
-        cache: ResourceCache
-    ) async {
-        if inFlightHashes.contains(result.contentSHA256) {
-            // The same bytes are already being committed: never start a second commit.
-            finish(context, deleteOwned: true)
-            return
-        }
-        recentlyCommittedHashes.subtract(catalog.entries.map(\.contentSHA256))
-        guard let existing = duplicate(of: result, in: catalog) else {
-            if recentlyCommittedHashes.contains(result.contentSHA256) {
-                // Committed a moment ago but not published to the catalogue yet.
-                finish(context, deleteOwned: true)
-                return
-            }
-            await commitAndFinish(result, context, catalog: catalog, cache: cache)
-            return
-        }
-        if existing.isTrashed || context.interactive {
-            // Stall the queue on the prompt; the drain loop exits and a fresh drain starts once
-            // the user resolves it. A trashed duplicate always prompts (B9), from every source.
-            currentFilename = nil
-            pendingDuplicate = DuplicateAlert(
-                kind: existing.isTrashed ? .trashed : .active,
-                result: result,
-                existingEntry: existing,
-                context: context
-            )
-        } else {
-            // Non-interactive active duplicate: skip silently and drop the copy.
-            finish(context, deleteOwned: true)
-        }
-    }
-
-    /// The catalogue entry with the same bytes, preferring an active one over a trashed one.
-    private func duplicate(of result: ImportResult, in catalog: Catalog) -> CatalogEntry? {
-        let matches = catalog.entries.filter { $0.contentSHA256 == result.contentSHA256 }
-        return matches.first { !$0.isTrashed } ?? matches.first
-    }
-
-    /// Commits `result` off-main, awaits the catalog reload so the next item's duplicate check
-    /// sees this commit, then finishes the item. A commit failure is reported (see
-    /// `reportCommitFailure`) and leaves a non-interactive copy in place for a retry.
-    private func commitAndFinish(
-        _ result: ImportResult,
-        _ context: ItemContext,
-        catalog: Catalog,
-        cache: ResourceCache
-    ) async {
-        inFlightHashes.insert(result.contentSHA256)
-        defer { inFlightHashes.remove(result.contentSHA256) }
-        do {
-            // Resolved now, not captured at enqueue time: the active root can change (iCloud
-            // switch at launch) while an item waits in the queue.
-            _ = try await ImportService.commitOffMain(result, storage: catalog.storage, cache: cache)
-            recentlyCommittedHashes.insert(result.contentSHA256)
-            await catalog.reload()
-            // A newer reload may have overtaken ours without publishing; retry a few times so
-            // the entry is visible, then forget the hash. If it still is not, it stays in
-            // `recentlyCommittedHashes` and duplicate checks keep honouring it.
-            var retries = 0
-            while catalog.entry(withSHA256: result.contentSHA256) == nil, retries < 3 {
-                retries += 1
-                await catalog.reload()
-            }
-            if catalog.entry(withSHA256: result.contentSHA256) != nil {
-                recentlyCommittedHashes.remove(result.contentSHA256)
-            }
-            finish(context, deleteOwned: true)
-        } catch {
-            reportCommitFailure(error, context)
-        }
-    }
-
-    // MARK: - Finishing and failures
-
-    private func makeContext(for item: PendingImport) -> ItemContext {
-        switch item.source {
-        case let .picker(url):
-            ItemContext(filename: url.lastPathComponent, interactive: true, ownedURL: nil, pathKey: Self.key(url))
-        case let .owned(file):
-            ItemContext(filename: file.filename, interactive: false, ownedURL: file.url, pathKey: Self.key(file.url))
-        case let .prepared(_, name):
-            ItemContext(filename: name, interactive: item.interactive, ownedURL: nil, pathKey: nil)
-        }
-    }
-
-    /// Marks an item done: optionally deletes its app-owned copy, releases its path, and
-    /// advances the progress count.
-    private func finish(_ context: ItemContext, deleteOwned: Bool) {
-        if deleteOwned, let url = context.ownedURL {
-            try? FileManager.default.removeItem(at: url)
-        }
-        if let key = context.pathKey {
-            trackedPaths.remove(key)
-        }
-        completedCount += 1
-    }
-
-    /// A read or parse failure. A parse failure is permanent (the bytes are not valid
-    /// KML/KMZ), so the owned copy is deleted; a read error is potentially transient, so the
-    /// copy is kept for the next drain. A vanished file is simply gone.
-    private func reportPrepareFailure(_ error: Error, _ context: ItemContext) {
-        if context.interactive {
-            importError = error
-            finish(context, deleteOwned: false)
-            return
-        }
-        let permanent = Self.isParseFailure(error)
-        let vanished = (error as? CocoaError)?.code == .fileReadNoSuchFile
-        if !vanished {
-            Self.logger.error(
-                """
-                \(permanent ? "Parse" : "Read") failure importing '\(context.filename, privacy: .public)': \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            failureLog?.record(
-                filename: context.filename,
-                reason: permanent ? ImportFormats.invalidFileReason : Self.retryReason
-            )
-        }
-        finish(context, deleteOwned: permanent || vanished)
-    }
-
-    private static func isParseFailure(_ error: Error) -> Bool {
-        guard let importError = error as? ImportError else { return false }
-        if case .parseFailure = importError {
-            return true
-        }
-        return false
-    }
-
-    /// A commit (I/O) failure: potentially transient, so a non-interactive copy is KEPT for a
-    /// later drain and the failure is recorded with a friendly reason; an interactive import
-    /// raises the error alert.
-    private func reportCommitFailure(_ error: Error, _ context: ItemContext) {
-        if context.interactive {
-            importError = error
-        } else {
-            Self.logger.error(
-                """
-                Transient failure importing '\(context.filename, privacy: .public)': \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-            failureLog?.record(filename: context.filename, reason: Self.retryReason)
-        }
-        finish(context, deleteOwned: false)
-    }
-
-    private static let retryReason = String(
-        localized: "Couldn't save the file. It will be retried automatically.",
-        comment: "Import failure reason: a transient I/O error; the import will be retried."
-    )
-
-    // MARK: - Path tracking
-
-    /// Normalised key for a file URL (symlinks such as `/var` vs `/private/var` resolved).
-    private static func key(_ url: URL) -> String {
-        url.resolvingSymlinksInPath().standardizedFileURL.path
-    }
-
-    /// Registers `url`; `false` when it is already queued, in flight or stalled.
-    private func track(_ url: URL) -> Bool {
-        trackedPaths.insert(Self.key(url)).inserted
-    }
-
-    private func untrack(_ url: URL) {
-        trackedPaths.remove(Self.key(url))
-    }
 }

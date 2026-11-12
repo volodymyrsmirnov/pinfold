@@ -22,22 +22,22 @@ extension KMLDetailView {
         annotations = PlacemarkAnnotations(entry: target, storage: storage)
         let fileURL = storage.originalFile(for: target)
         do {
-            let parsedKML = try await Task.detached(priority: .userInitiated) {
-                // Materialize the original from iCloud first if it is a not-yet-downloaded
-                // placeholder (no-op for local files). Off-main; a spinner shows meanwhile.
-                let data = try UbiquityContainer.readDownloadingIfNeeded(fileURL)
-                return try KMLReader.read(data: data)
-            }.value
+            // Materializes an iCloud placeholder first (no-op for local files), then parses the
+            // document only. Off-main; a spinner shows meanwhile.
+            let parsed = try await loadDocumentOffMain(fileURL)
             if Task.isCancelled {
                 return
             }
-            document = parsedKML.document
+            document = parsed
             consentDismissed = false
+            // "Clear Downloaded Images" promises the images return the next time the entry is
+            // opened; this also lets the consent banner's Allow fetch again after a clear.
+            resumeDeferredDownloads(resourceCache, in: storage.resourcesDirectory(for: target))
         } catch {
             if Task.isCancelled {
                 return
             }
-            loadError = error
+            loadError = DocumentLoad.reportableError(error)
         }
     }
 }

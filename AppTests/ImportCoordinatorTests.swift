@@ -390,6 +390,42 @@ import Testing
         #expect(coordinator.isImporting == false)
     }
 
+    @Test func cancelDuringPrepare_abortsCurrentItemAndCommitsNothing() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let log = ImportFailureLog()
+        coordinator.failureLog = log
+        let dir = try makeInbox()
+        let big = dir.appendingPathComponent("big.kml")
+        try LargeKML.data(placemarks: 150_000).write(to: big)
+        coordinator.enqueueOwned([.init(url: big)], catalog: catalog, cache: cache)
+        await waitUntilFirstItemStarts(coordinator)
+
+        coordinator.cancel()
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.isEmpty, "nothing is committed for a cancelled item")
+        #expect((try? storage.entryFolderNames()) ?? [] == [])
+        #expect(!exists(big), "the app-owned copy is dropped like a cancelled queued item")
+        #expect(log.failures.isEmpty && coordinator.importError == nil, "a cancel is not a failure")
+        #expect(coordinator.isImporting == false)
+        #expect(coordinator.completedCount == 1)
+    }
+
+    @Test func permanentFailureReason_isNotARawParserError() async throws {
+        let (coordinator, catalog, _, cache) = makeEnvironment()
+        let log = ImportFailureLog()
+        coordinator.failureLog = log
+        let dir = try makeInbox()
+        let bad = dir.appendingPathComponent("bad.kml")
+        try Data("<kml><Document>".utf8).write(to: bad)
+        coordinator.enqueueOwned([.init(url: bad)], catalog: catalog, cache: cache)
+        await coordinator.drainForTesting()
+
+        let reason = try #require(log.failures.first?.reason)
+        #expect(!reason.contains("NSXMLParserErrorDomain"))
+        #expect(!reason.isEmpty)
+    }
+
     @Test func cancel_deletesPendingInboxCopies() async throws {
         let (coordinator, catalog, storage, cache) = makeEnvironment()
         let dir = try makeInbox()
