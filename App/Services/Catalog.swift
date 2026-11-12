@@ -12,6 +12,10 @@ import Observation
     /// All entries (active and trashed), newest first.
     private(set) var entries: [CatalogEntry] = []
 
+    /// Bumps after every published scan; part of the search task identity so cross-file
+    /// results refresh after a note save or any other on-disk change.
+    private(set) var searchDataRevision = 0
+
     /// The active storage root. Changes (live) when the iCloud sync toggle flips.
     private(set) var storage: StorageLocations
 
@@ -62,6 +66,7 @@ import Observation
         // and the newest result wins — the catalogue settles to the final state.
         guard generation == scanGeneration else { return }
         entries = scanned
+        searchDataRevision &+= 1
         pruneIndexStore()
         scheduleResourceMaterialization()
     }

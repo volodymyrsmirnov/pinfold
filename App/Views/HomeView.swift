@@ -105,6 +105,8 @@ struct HomeView: View {
     private struct SearchTrigger: Equatable {
         let query: String
         let segment: Segment
+        /// `Catalog.searchDataRevision`: re-search after notes/sidecars change on disk.
+        let dataRevision: Int
     }
 
     // MARK: - Computed partitions
@@ -159,7 +161,7 @@ struct HomeView: View {
         // the query AND the segment so returning to Files with a live query recomputes the hits
         // (Trash isn't searched). Single trigger — simpler than KMLDetailView's two-trigger
         // split, which existed only to handle un-debounced collapse toggles.
-        .task(id: SearchTrigger(query: searchQuery, segment: segment)) {
+        .task(id: SearchTrigger(query: searchQuery, segment: segment, dataRevision: catalog.searchDataRevision)) {
             let query = trimmedQuery
             guard segment == .files, !query.isEmpty else {
                 placeHits = []
