@@ -87,6 +87,9 @@ enum OverlayBuilder {
                         overlay: polygon, stroke: stroke, fill: fill,
                         lineWidth: lineWidth, stableKey: placemark.stableKey
                     ))
+                case .point:
+                    // Extra MultiGeometry points are pins (annotations), not overlays.
+                    continue
                 }
             }
         }

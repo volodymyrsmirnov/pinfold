@@ -70,6 +70,9 @@ struct StyleIcon: View {
             return "pentagon"
         case .lineString, .track:
             return "point.topleft.down.curvedto.point.bottomright.up"
+        case .point:
+            // An extra MultiGeometry point renders like a pin, so it has no geometry glyph.
+            return nil
         }
     }
 
