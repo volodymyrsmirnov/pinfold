@@ -1,10 +1,11 @@
 import Foundation
+import PinfoldCore
 import UniformTypeIdentifiers
 
 /// What Pinfold accepts as an importable original, and the user-facing wording about it.
 enum ImportFormats {
-    /// Lower-cased file extensions treated as the original KML/KMZ inside an entry folder.
-    static let originalExtensions: Set<String> = ["kml", "kmz"]
+    /// Lower-cased file extensions treated as the original inside an entry folder.
+    static let originalExtensions: Set<String> = ["kml", "kmz", "gpx", "geojson", "json"]
 
     /// File names inside an entry folder that are never the original (synced sidecars).
     static let reservedNames: Set<String> = ["metadata.json"]
@@ -13,9 +14,10 @@ enum ImportFormats {
     ///
     /// The catalogue scanner finds an entry's original by extension, so a shared file that
     /// arrives without a supported extension (or with the reserved sidecar name) would be written
-    /// but never found. This keeps a supported extension as is and otherwise appends one chosen
-    /// by content: a ZIP signature means `.kmz`, anything else `.kml`. A reserved name (the
-    /// `metadata.json` sidecar) is renamed so the original can never overwrite it.
+    /// but never found. A supported extension is kept as is; otherwise one is appended by the
+    /// detected content: `.kmz`, `.gpx`, `.geojson`, and `.kml` for anything else. A reserved
+    /// name (the `metadata.json` sidecar) is renamed so the original can never overwrite it;
+    /// since only GeoJSON can arrive under that name, it becomes `metadata.geojson`.
     ///
     /// - Parameters:
     ///   - sanitized: The already-sanitized source filename (see `SafeFilename.sanitize`).
@@ -26,27 +28,45 @@ enum ImportFormats {
         if !reserved, originalExtensions.contains(ext) {
             return sanitized
         }
-        let zipMagic: [UInt8] = [0x50, 0x4B, 0x03, 0x04]
-        let newExtension = data.starts(with: zipMagic) ? "kmz" : "kml"
+        let newExtension = switch try? KMLReader.detectFormat(of: data) {
+        case .kmz: "kmz"
+        case .gpx: "gpx"
+        case .geoJSON: "geojson"
+        case .kml, .none: "kml"
+        }
         let stem = reserved ? (sanitized as NSString).deletingPathExtension : sanitized
         return "\(stem).\(newExtension)"
     }
 
-    /// Content types offered by the file importer. Prefers the extension-derived type for an
-    /// exact KML/KMZ match and falls back to `.xml` / `.zip` when it is unavailable.
+    /// Content types offered by the in-app file importer: KML, KMZ, GPX, GeoJSON, and plain
+    /// JSON (content-sniffed on import; not claimed as a document type or in the share sheet).
     static var allowedContentTypes: [UTType] {
-        let kml = UTType(filenameExtension: "kml") ?? .xml
-        let kmz = UTType(filenameExtension: "kmz") ?? .zip
-        return [kml, kmz]
+        [
+            UTType(filenameExtension: "kml") ?? .xml,
+            UTType(filenameExtension: "kmz") ?? .zip,
+            gpxType,
+            geoJSONType,
+            .json,
+        ]
+    }
+
+    /// GPX has no system constant; it is declared as an imported type in `App/Info.plist`.
+    private static var gpxType: UTType {
+        UTType("com.topografix.gpx") ?? UTType(filenameExtension: "gpx") ?? .xml
+    }
+
+    /// `public.geojson` is system-declared (`UTType.geoJSON`).
+    private static var geoJSONType: UTType {
+        UTType("public.geojson") ?? UTType(filenameExtension: "geojson") ?? .json
     }
 
     /// Empty-state hint shown when the catalogue has no files.
-    static let emptyCatalogueHint = "Import a KML or KMZ file using the + button."
+    static let emptyCatalogueHint = "Import a KML, KMZ, GPX or GeoJSON file using the + button."
 
-    /// Failure reason recorded when a file cannot be read or parsed as KML/KMZ.
+    /// Failure reason recorded when a file cannot be read or parsed as KML, KMZ, GPX or GeoJSON.
     static var invalidFileReason: String {
         String(
-            localized: "Not a valid KML or KMZ file.",
+            localized: "Not a valid KML, KMZ, GPX or GeoJSON file.",
             comment: "Import failure reason: the file could not be read or parsed."
         )
     }

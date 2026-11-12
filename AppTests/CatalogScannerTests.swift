@@ -155,6 +155,20 @@ import Testing
                 "a missing sidecar must be backfilled on scan")
     }
 
+    @Test func bareGPXOriginalIsBackfilled() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("gpx-bare", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FormatFixture.gpx().write(to: dir.appendingPathComponent("sample.gpx"))
+
+        let entries = scanner.scan()
+
+        let meta = try #require(try storage.readMetadata(forFolderNamed: "gpx-bare"))
+        #expect(meta.sourceFilename == "sample.gpx")
+        #expect(meta.pointCount > 0)
+        #expect(entries.contains { $0.storageFolderName == "gpx-bare" })
+    }
+
     /// A corrupt sidecar with NO original file: nothing to derive an entry from, so the folder
     /// is skipped and left entirely untouched (no writes, no deletes).
     @Test func scan_corruptSidecarNoOriginal_folderUntouchedAndSkipped() throws {

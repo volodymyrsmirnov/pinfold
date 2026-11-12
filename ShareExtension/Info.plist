@@ -28,7 +28,7 @@
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Activate only when every attachment in the share is a KML/KMZ file (max 10).
+			<!-- Activate only when every attachment in the share is a KML/KMZ/GPX/GeoJSON file (max 10).
 			     This keeps Pinfold out of the share sheet for PDFs, photos, and other
 			     non-KML payloads. The inner SUBQUERY counts attachments whose UTI conforms
 			     to our KML/KMZ types; requiring that count to equal the total attachment
@@ -42,6 +42,8 @@
         $attachment,
         ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.google.earth.kml"
         OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.google.earth.kmz"
+        OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.topografix.gpx"
+        OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.geojson"
     ).@count == $extensionItem.attachments.@count
     AND $extensionItem.attachments.@count &lt;= 10
 ).@count == 1</string>
