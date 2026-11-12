@@ -16,6 +16,8 @@ import PinfoldCore
 @MainActor @Observable final class PlacemarkAnnotations {
     private(set) var favoriteKeys: Set<String>
     private(set) var visitedKeys: Set<String>
+    /// All notes for this entry keyed by stable key, including tombstones (empty text).
+    private(set) var notes: [String: PlacemarkNote]
 
     @ObservationIgnored private let storage: StorageLocations
     @ObservationIgnored private let folderName: String
@@ -23,29 +25,40 @@ import PinfoldCore
 
     init(entry: CatalogEntry, storage: StorageLocations) {
         self.storage = storage
-        self.folderName = entry.storageFolderName
+        folderName = entry.storageFolderName
         do {
             let meta = try storage.readMetadata(forFolderNamed: entry.storageFolderName)
-            self.favoriteKeys = meta?.favoriteKeys ?? []
-            self.visitedKeys = meta?.visitedKeys ?? []
+            favoriteKeys = meta?.favoriteKeys ?? []
+            visitedKeys = meta?.visitedKeys ?? []
+            notes = meta?.notes ?? [:]
         } catch {
             // Sidecar exists but failed to decode (corrupt/truncated). Start empty but
             // refuse to persist, so a toggle never overwrites recoverable data.
-            self.favoriteKeys = []
-            self.visitedKeys = []
-            self.canPersist = false
+            favoriteKeys = []
+            visitedKeys = []
+            notes = [:]
+            canPersist = false
         }
     }
 
-    func isFavorite(_ placemark: KMLPlacemark) -> Bool { favoriteKeys.contains(placemark.stableKey) }
-    func isVisited(_ placemark: KMLPlacemark) -> Bool { visitedKeys.contains(placemark.stableKey) }
+    func isFavorite(_ placemark: KMLPlacemark) -> Bool {
+        favoriteKeys.contains(placemark.stableKey)
+    }
+
+    func isVisited(_ placemark: KMLPlacemark) -> Bool {
+        visitedKeys.contains(placemark.stableKey)
+    }
 
     /// A VoiceOver-friendly description combining the placemark name with its
     /// favorite/visited state, e.g. "Mount Everest, Favorite, Visited".
     func accessibilityDescription(for placemark: KMLPlacemark) -> String {
         var parts = [placemark.name ?? "Untitled"]
-        if isFavorite(placemark) { parts.append("Favorite") }
-        if isVisited(placemark) { parts.append("Visited") }
+        if isFavorite(placemark) {
+            parts.append("Favorite")
+        }
+        if isVisited(placemark) {
+            parts.append("Visited")
+        }
         return parts.joined(separator: ", ")
     }
 
@@ -59,8 +72,45 @@ import PinfoldCore
         persist()
     }
 
+    /// The live (non-tombstone) note for a placemark, if any.
+    func note(for placemark: KMLPlacemark) -> PlacemarkNote? {
+        guard let note = notes[placemark.stableKey], !note.isTombstone else { return nil }
+        return note
+    }
+
+    /// Live note text by stable key (tombstones omitted), for search indexing.
+    var noteTextsByKey: [String: String] {
+        notes.compactMapValues { $0.isTombstone ? nil : $0.text }
+    }
+
+    /// Saves a note, stamping `modifiedAt` and a snapshot of the placemark's name. Blank text
+    /// (after trimming) writes a tombstone so the deletion wins a later sync merge.
+    func setNote(_ text: String, for placemark: KMLPlacemark, now: Date = Date()) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty, notes[placemark.stableKey] == nil {
+            return
+        }
+        notes[placemark.stableKey] = PlacemarkNote(
+            text: trimmed, modifiedAt: now, placemarkName: placemark.name
+        )
+        persist()
+    }
+
+    /// Live notes whose key is not in `validKeys` (the placemark vanished from the file),
+    /// sorted by key for a stable order.
+    func orphanedNotes(validKeys: Set<String>) -> [(key: String, note: PlacemarkNote)] {
+        notes
+            .filter { !$0.value.isTombstone && !validKeys.contains($0.key) }
+            .sorted { $0.key < $1.key }
+            .map { (key: $0.key, note: $0.value) }
+    }
+
     private func toggle(_ set: inout Set<String>, key: String) {
-        if set.contains(key) { set.remove(key) } else { set.insert(key) }
+        if set.contains(key) {
+            set.remove(key)
+        } else {
+            set.insert(key)
+        }
     }
 
     private func persist() {
@@ -71,6 +121,11 @@ import PinfoldCore
         try? storage.updateMetadata(forFolderNamed: folderName) { meta in
             meta.favoriteKeys = favoriteKeys
             meta.visitedKeys = visitedKeys
+            // Merge rather than replace so a note synced from another device while this
+            // file was open is not clobbered by this session's snapshot.
+            for (key, note) in notes {
+                meta.notes[key] = meta.notes[key].map { PlacemarkNote.winner($0, note) } ?? note
+            }
         }
     }
 }
