@@ -40,6 +40,7 @@ struct CatalogScanner {
             // crash mid-commit between the sidecar and the original): skip silently and leave
             // the folder. The watcher rescans once the original lands, surfacing the entry
             // with its intended identity — no self-heal under a fresh UUID.
+            storage.removeStaleSnapshotTemps(inFolderNamed: name)
             guard storage.originalFileURL(inFolderNamed: name) != nil else { return nil }
             return CatalogEntry(metadata: meta, storageFolderName: name)
         case .missing:
@@ -132,6 +133,25 @@ struct CatalogScanner {
         return try Data(contentsOf: url, options: .mappedIfSafe)
     }
 
+    /// Whether the original's bytes are on this device (always `true` for a local root).
+    private func isDownloaded(_ url: URL) -> Bool {
+        guard storage.isUbiquitous else { return FileManager.default.fileExists(atPath: url.path) }
+        if storage.probe.placeholderExists(for: url) {
+            return false
+        }
+        if storage.probe.downloadStatus(of: url) == .notDownloaded {
+            return false
+        }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Like `readOriginal`, but never waits for or requests a download.
+    private func readOriginalWithoutDownloading(_ url: URL) throws -> Data {
+        storage.isUbiquitous
+            ? try storage.coordinatedRead(at: url)
+            : try Data(contentsOf: url, options: .mappedIfSafe)
+    }
+
     /// Creates `resourcesDir` (its existence is the "materialized" marker, so it is made even
     /// when there is nothing to put in it), streams a KMZ's resources out of the original and
     /// writes the search index. Both writes are derivable, so failures are not fatal.
@@ -162,6 +182,10 @@ struct CatalogScanner {
         let folderNames = (try? storage.entryFolderNames()) ?? []
         var didWork = false
         for name in folderNames {
+            // A migration cancels this pass; stop between folders (never mid-folder).
+            if Task.isCancelled {
+                break
+            }
             let resourcesDir = storage.resourcesDirectory(forFolderNamed: name)
             if FileManager.default.fileExists(atPath: resourcesDir.path) {
                 // Already materialized once. Retry any remote downloads that failed earlier
@@ -226,8 +250,11 @@ struct CatalogScanner {
         if isKnownUnparseable(folderNamed: name, resourcesDir: resourcesDir) {
             return false
         }
+        // A background pass never triggers an iCloud download (cellular data, 20 s polling per
+        // file): an original that is not on this device is left for a later pass.
         guard let fileURL = storage.originalFileURL(inFolderNamed: name),
-              let data = try? readOriginal(fileURL)
+              isDownloaded(fileURL),
+              let data = try? readOriginalWithoutDownloading(fileURL)
         else { return false } // not downloaded yet: retried on a later pass
         guard let result = try? ImportService.prepare(data: data, sourceFilename: fileURL.lastPathComponent) else {
             // Read fine but can never parse: remember the content so it is not retried.

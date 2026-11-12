@@ -6,10 +6,26 @@ import os
 struct DownloadState: Equatable {
     /// Per-href retry state.
     struct HrefState: Codable, Equatable {
-        /// Failed attempts so far.
+        /// Failed attempts so far (drives the backoff).
         var attempts: Int
         /// Earliest time the next attempt may start; `nil` means "any time".
         var nextAttemptAt: Date?
+        /// How many 2xx responses were not images (captive portals); only these count toward
+        /// the permanent skip.
+        var nonImageResponses = 0
+
+        init(attempts: Int, nextAttemptAt: Date?, nonImageResponses: Int = 0) {
+            self.attempts = attempts
+            self.nextAttemptAt = nextAttemptAt
+            self.nonImageResponses = nonImageResponses
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            attempts = try container.decode(Int.self, forKey: .attempts)
+            nextAttemptAt = try container.decodeIfPresent(Date.self, forKey: .nextAttemptAt)
+            nonImageResponses = try container.decodeIfPresent(Int.self, forKey: .nonImageResponses) ?? 0
+        }
     }
 
     /// Failed-download state, keyed by the original href. An href that downloaded

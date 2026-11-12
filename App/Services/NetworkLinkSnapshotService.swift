@@ -251,27 +251,67 @@ nonisolated func writeSnapshot(
     let tempURL = storage.folder(for: entry).appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
 
     try storage.coordinatedWrite(result.originalData, to: tempURL)
-    let previous: EntryMetadata
-    do {
-        previous = try storage.updateExistingMetadata(forFolderNamed: entry.storageFolderName) { metadata in
-            metadata.sourceFilename = updated.sourceFilename
-            metadata.pointCount = updated.pointCount
-            metadata.contentSHA256 = updated.contentSHA256
+    if isSameFile(oldURL, newURL) {
+        // Same file slot: the sidecar can never name a missing file, so sidecar first, then
+        // the in-place replace (rolled back on failure).
+        try updateOwnedFields(of: entry, to: updated, storage: storage, discarding: tempURL)
+        do {
+            try placeSnapshot(tempURL, over: oldURL, as: newURL)
+        } catch {
+            try? fm.removeItem(at: tempURL)
+            try? updateOwnedFields(of: entry, to: entry, storage: storage, discarding: nil)
+            throw error
         }
-    } catch {
-        try? fm.removeItem(at: tempURL)
-        throw error
-    }
-    do {
-        try placeSnapshot(tempURL, over: oldURL, as: newURL)
-    } catch {
-        try? fm.removeItem(at: tempURL)
-        try? storage.writeMetadata(previous, forFolderNamed: entry.storageFolderName)
-        throw error
+    } else {
+        // New name: publish the new file first (the old one stays until the sidecar names the
+        // new one), so a crash in between never leaves a sidecar naming a missing file.
+        try placeSnapshotFile(tempURL, as: newURL)
+        do {
+            try updateOwnedFields(of: entry, to: updated, storage: storage, discarding: nil)
+        } catch {
+            try? fm.removeItem(at: newURL)
+            throw error
+        }
+        try? fm.removeItem(at: oldURL)
     }
     // Everything under `resources/` derives from the original; it rebuilds on the next reload.
     try? fm.removeItem(at: storage.resourcesDirectory(for: entry))
     return updated
+}
+
+/// Updates only the content fields a snapshot owns (`sourceFilename`, `pointCount`,
+/// `contentSHA256`) in one coordinated read-modify-write, leaving tags, favourites, trash state
+/// and everything else exactly as a concurrent edit left them. Removes `discarding` on failure.
+private nonisolated func updateOwnedFields(
+    of entry: CatalogEntry, to target: CatalogEntry, storage: StorageLocations, discarding: URL?
+) throws {
+    do {
+        try storage.updateExistingMetadata(forFolderNamed: entry.storageFolderName) { metadata in
+            metadata.sourceFilename = target.sourceFilename
+            metadata.pointCount = target.pointCount
+            metadata.contentSHA256 = target.contentSHA256
+        }
+    } catch {
+        if let discarding {
+            try? FileManager.default.removeItem(at: discarding)
+        }
+        throw error
+    }
+}
+
+/// Moves the downloaded `temp` file to the not-yet-existing `new` name (never replaces a folder).
+private nonisolated func placeSnapshotFile(_ temp: URL, as new: URL) throws {
+    var isDirectory: ObjCBool = false
+    if FileManager.default.fileExists(atPath: new.path, isDirectory: &isDirectory) {
+        try? FileManager.default.removeItem(at: temp)
+        throw CocoaError(.fileWriteFileExists)
+    }
+    do {
+        try rename(temp, to: new)
+    } catch {
+        try? FileManager.default.removeItem(at: temp)
+        throw error
+    }
 }
 
 /// Moves the downloaded `temp` file into place as `new` with an atomic `rename(2)`, then removes

@@ -34,6 +34,8 @@ import Observation
     /// a slower earlier scan can never clobber a newer one (concurrent reloads settle to the
     /// final state).
     @ObservationIgnored private var scanGeneration = 0
+    /// While `true` no materialization pass starts (a root migration is about to run).
+    @ObservationIgnored var backgroundWorkSuspended = false
 
     /// Non-trashed entries.
     var active: [CatalogEntry] {
@@ -87,12 +89,14 @@ import Observation
             materializePending = true
             return
         }
+        guard !backgroundWorkSuspended else {
+            materializePending = true
+            return
+        }
         let storage = storage
         let cache = cache
         materializeTask = Task { [weak self] in
-            _ = await Task.detached {
-                await CatalogScanner(storage: storage, cache: cache).materializeMissingResources()
-            }.value
+            await runMaterialization(storage: storage, cache: cache)
             guard let self else { return }
             materializeTask = nil
             // If a reload arrived during the pass, run one more pass to pick up what it added.
@@ -100,6 +104,28 @@ import Observation
                 materializePending = false
                 scheduleResourceMaterialization()
             }
+        }
+    }
+
+    /// Stops the background materialization/refresh pass and waits until it has fully ended, so
+    /// nothing re-creates `resources/` folders in the root a migration is about to read. New
+    /// passes are deferred (not dropped) until `resumeBackgroundWork()`.
+    func suspendBackgroundWork() async {
+        backgroundWorkSuspended = true
+        let running = materializeTask
+        if running != nil {
+            materializePending = true
+        } // restart once resumed
+        running?.cancel()
+        await running?.value
+    }
+
+    /// Lets deferred materialization run again, starting a pass if one was requested meanwhile.
+    func resumeBackgroundWork() {
+        backgroundWorkSuspended = false
+        if materializePending, materializeTask == nil {
+            materializePending = false
+            scheduleResourceMaterialization()
         }
     }
 
@@ -234,6 +260,19 @@ import Observation
             actionError = .saveFailed(entryName: live.displayName, error: error)
             return false
         }
+    }
+}
+
+/// Runs the materialization pass off-main, forwarding cancellation to the detached work so a
+/// migration can stop and await it. A `nonisolated` free function (see the note below).
+private nonisolated func runMaterialization(storage: StorageLocations, cache: ResourceCache) async {
+    let work = Task.detached {
+        await CatalogScanner(storage: storage, cache: cache).materializeMissingResources()
+    }
+    await withTaskCancellationHandler {
+        _ = await work.value
+    } onCancel: {
+        work.cancel()
     }
 }
 
