@@ -241,4 +241,14 @@ extension PlacemarkMapRepresentable {
             (placemark.coordinate.map { [$0] } ?? []) + extraPoints(of: placemark)
         }
     }
+
+    /// The placemark keys whose pin decoration must be recomputed: the symmetric difference
+    /// of the favourite sets plus that of the visited sets. Everything else keeps its image.
+    nonisolated static func decorationDiff(
+        oldFavorites: Set<String>, newFavorites: Set<String>,
+        oldVisited: Set<String>, newVisited: Set<String>
+    ) -> Set<String> {
+        oldFavorites.symmetricDifference(newFavorites)
+            .union(oldVisited.symmetricDifference(newVisited))
+    }
 }

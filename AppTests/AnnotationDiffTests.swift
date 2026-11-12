@@ -105,6 +105,33 @@ struct AnnotationDiffTests {
         #expect(remove.toRemove == ["id:m"])
     }
 
+    // MARK: - Decoration diff and pin batching (D6)
+
+    @Test func decorationDiff_isOnlyChangedKeys() {
+        let changed = PlacemarkMapRepresentable.decorationDiff(
+            oldFavorites: ["a", "b"], newFavorites: ["b", "c"],
+            oldVisited: ["x"], newVisited: ["x", "y"]
+        )
+        #expect(changed == ["a", "c", "y"])
+        let none = PlacemarkMapRepresentable.decorationDiff(
+            oldFavorites: ["a"], newFavorites: ["a"], oldVisited: ["b"], newVisited: ["b"]
+        )
+        #expect(none.isEmpty)
+    }
+
+    @Test func pendingPinsDrainInBatchesAndHonourRemoval() {
+        var pending = PendingPins()
+        let placemarks = (0 ..< 1200).map { multiPoint(source: "k\($0)", extras: []) }
+        pending.append(placemarks)
+        #expect(pending.keys.count == 1200)
+        pending.remove(key: "id:k5")
+        #expect(!pending.keys.contains("id:k5"))
+        #expect(pending.takeBatch().count == PendingPins.batchSize)
+        #expect(pending.takeBatch().count == PendingPins.batchSize)
+        #expect(pending.takeBatch().count == 1199 - 2 * PendingPins.batchSize)
+        #expect(pending.isEmpty)
+    }
+
     /// A multi-point placemark always shows its pins, even though it carries geometries.
     @Test func multiPointPlacemarkShowsPins() {
         let multi = multiPoint(source: "m", extras: [Coordinate(longitude: 3, latitude: 4)])

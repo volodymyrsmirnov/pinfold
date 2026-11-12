@@ -29,6 +29,13 @@ extension PlacemarkMapRepresentable {
         /// The fit-all BUTTON deliberately does not set it: its settle callback saving the
         /// fit-all framing is what makes the button a natural "reset".
         var suppressCameraSave = false
+        /// Pins waiting to be added in batches (D6); see `addPinsInBatches`.
+        var pendingPins = PendingPins()
+        var isDrainingPins = false
+        /// Memoized decorated pin images keyed by style + favourite + visited (D6).
+        let decorationCache = PinDecorationCache()
+        /// The `stableKey` whose overlays are currently drawn highlighted (D2).
+        var highlightedOverlayKey: String?
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
@@ -224,16 +231,20 @@ extension PlacemarkMapRepresentable {
                 let renderer = MKPolygonRenderer(polygon: polygon)
                 renderer.strokeColor = polygon.stroke
                 renderer.fillColor = polygon.fill
-                renderer.lineWidth = polygon.lineWidth
+                renderer.lineWidth = polygon.lineWidth * highlightFactor(for: polygon.stableKey)
                 return renderer
             }
             if let polyline = overlay as? StyledPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = polyline.stroke
-                renderer.lineWidth = polyline.lineWidth
+                renderer.lineWidth = polyline.lineWidth * highlightFactor(for: polyline.stableKey)
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+
+        private func highlightFactor(for key: String) -> CGFloat {
+            key == highlightedOverlayKey ? Self.highlightWidthFactor : 1
         }
 
         // MARK: Selection
@@ -259,13 +270,16 @@ extension PlacemarkMapRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, didDeselect annotation: MKAnnotation) {
-            guard annotation is PlacemarkAnnotation else { return }
+            guard let pin = annotation as? PlacemarkAnnotation else { return }
+            let key = pin.stableKey
             setHighlighted(false, for: annotation, in: mapView)
             // Defer: on a pin-to-pin tap, MapKit fires didDeselect(old) before
             // didSelect(new); checking now would momentarily clear and flicker the card.
             // After the runloop turn, selectedAnnotations reflects the new selection.
             DispatchQueue.main.async {
-                if mapView.selectedAnnotations.isEmpty {
+                // Only clear what this pin owned: a tap on a line/polygon sets
+                // `selectedKey` to the overlay's key while it deselects the pin.
+                if mapView.selectedAnnotations.isEmpty, self.parent.selectedKey == key {
                     self.parent.selectedKey = nil
                 }
             }

@@ -80,10 +80,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         // annotation per pin-bearing placemark and register it in the coordinator's index.
         // `shouldShowPin` suppresses pins for pure line/polygon placemarks (the overlay is
         // their representation); track and point placemarks keep their pin.
-        for placemark in placemarks where Self.shouldShowPin(placemark) {
-            context.coordinator.addPins(for: placemark, to: mapView)
-        }
-        context.coordinator.lastPlacemarkKeys = Set(context.coordinator.annotationsByKey.keys)
+        context.coordinator.addPinsInBatches(placemarks.filter(Self.shouldShowPin), to: mapView)
+        context.coordinator.lastPlacemarkKeys = context.coordinator.realizedPinKeys
         context.coordinator.lastDesiredKeys = Set(placemarks.map(\.stableKey))
         context.coordinator.lastFavoriteKeys = favoriteKeys
         context.coordinator.lastVisitedKeys = visitedKeys
@@ -106,7 +104,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             // Initial-focus deep link ("Show on Embedded Map"): if the carried key resolves
             // to a realized pin, zoom to it and select it (surfacing its preview card).
             // Otherwise a remembered per-file state wins over the fit-all default.
-            if let focusKey, let annotation = coordinator.annotationsByKey[focusKey] {
+            if let focusKey, let annotation = coordinator.realizedPin(forKey: focusKey, on: mapView) {
                 Self.focus(on: annotation, in: mapView)
             } else if let savedCamera {
                 if savedCamera.isTracking, userLocationVisible {
@@ -130,6 +128,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         }
 
         addControls(to: mapView, coordinator: context.coordinator)
+        context.coordinator.installOverlayTapRecognizer(on: mapView)
         return mapView
     }
 
@@ -164,10 +163,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             for key in diff.toRemove {
                 coordinator.removePins(forKey: key, from: mapView)
             }
-            for placemark in diff.toAdd where Self.shouldShowPin(placemark) {
-                coordinator.addPins(for: placemark, to: mapView)
-            }
-            coordinator.lastPlacemarkKeys = Set(coordinator.annotationsByKey.keys)
+            coordinator.addPinsInBatches(diff.toAdd.filter(Self.shouldShowPin), to: mapView)
+            coordinator.lastPlacemarkKeys = coordinator.realizedPinKeys
 
             // Mirror the diff onto overlays. Overlays are rebuilt from the desired set and
             // reconciled by the same stableKey identity, so a multi-geometry placemark's
@@ -211,28 +208,36 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         // Walk the coordinator's own index (not mapView.annotations) so we touch exactly
         // the placemark pins. `view(for:)` is nil for offscreen annotations — annotation.image
         // still lands, so viewFor(_:) picks up the correct image on next reuse.
-        let decorationChanged = coordinator.lastFavoriteKeys != favoriteKeys
-            || coordinator.lastVisitedKeys != visitedKeys
-        if decorationChanged {
-            coordinator.lastFavoriteKeys = favoriteKeys
-            coordinator.lastVisitedKeys = visitedKeys
-            for annotation in coordinator.allPinAnnotations {
-                let fresh = PlacemarkPinImage.decorated(
-                    annotation.baseImage,
-                    isFavorite: favoriteKeys.contains(annotation.stableKey),
-                    isVisited: visitedKeys.contains(annotation.stableKey),
-                    anchor: annotation.anchor
-                )
-                annotation.image = fresh
-                // The fresh image and its centerOffset move together: a tip-anchored pin's
-                // height changes when its favorite badge is added/removed, so re-derive the
-                // offset to keep the tip on the coordinate. Offscreen views are nil here;
-                // viewFor recomputes both from the (now-fresh) annotation.image on reuse.
-                if let view = mapView.view(for: annotation) {
-                    view.image = fresh
-                    view.centerOffset = annotation.anchor.centerOffset(forImageOfHeight: fresh.size.height)
-                }
+        coordinator.applyOverlayHighlight(forKey: selectedKey)
+        let changedKeys = Self.decorationDiff(
+            oldFavorites: coordinator.lastFavoriteKeys, newFavorites: favoriteKeys,
+            oldVisited: coordinator.lastVisitedKeys, newVisited: visitedKeys
+        )
+        coordinator.lastFavoriteKeys = favoriteKeys
+        coordinator.lastVisitedKeys = visitedKeys
+        for key in changedKeys {
+            for annotation in coordinator.pins(forKey: key) {
+                redecorate(annotation, on: mapView, coordinator: coordinator)
             }
+        }
+    }
+
+    /// Re-decorates one pin from the decoration cache. The fresh image and its
+    /// `centerOffset` move together: a tip-anchored pin's height changes when its favorite
+    /// badge is added/removed, so the offset is re-derived to keep the tip on the
+    /// coordinate. Offscreen views are nil here; `viewFor` recomputes both from the
+    /// (now-fresh) `annotation.image` on reuse.
+    private func redecorate(_ annotation: PlacemarkAnnotation, on mapView: MKMapView, coordinator: Coordinator) {
+        let fresh = coordinator.decorationCache.image(
+            for: annotation.baseImage,
+            isFavorite: favoriteKeys.contains(annotation.stableKey),
+            isVisited: visitedKeys.contains(annotation.stableKey),
+            anchor: annotation.anchor
+        )
+        annotation.image = fresh
+        if let view = mapView.view(for: annotation) {
+            view.image = fresh
+            view.centerOffset = annotation.anchor.centerOffset(forImageOfHeight: fresh.size.height)
         }
     }
 
@@ -264,8 +269,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             )
             coordinator.pinImageCache[key] = base
         }
-        let image = PlacemarkPinImage.decorated(
-            base.image,
+        let image = coordinator.decorationCache.image(
+            for: base.image,
             isFavorite: favoriteKeys.contains(placemark.stableKey),
             isVisited: visitedKeys.contains(placemark.stableKey),
             anchor: base.anchor
