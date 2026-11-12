@@ -118,11 +118,13 @@ enum ImportService {
 
         // Gather remote resource hrefs from icon styles and placemark photo links.
         // Deduplicate and keep only http/https URLs (KMZ paths are handled separately).
-        var hrefSet: Set<String> = []
+        var iconHrefs: Set<String> = []
+        var photoHrefs: Set<String> = []
+        var imageHrefs: Set<String> = []
         for style in document.styles.values {
             guard let href = style.iconHref else { continue }
             if ResourceCache.isRemoteHref(href) {
-                hrefSet.insert(href)
+                iconHrefs.insert(href)
             }
         }
         /// Description images are only ever rendered from the cache, so they must be fetched
@@ -131,7 +133,7 @@ enum ImportService {
         func gatherImages(from html: String?) {
             guard let html, html.contains("<") else { return }
             for src in DescriptionBlocks.imageSources(in: html) where ResourceCache.isRemoteHref(src) {
-                hrefSet.insert(src)
+                imageHrefs.insert(src)
             }
         }
         gatherImages(from: document.descriptionHTML)
@@ -142,16 +144,11 @@ enum ImportService {
         }
         for placemark in document.root.allPlacemarks {
             for link in placemark.photoLinks where ResourceCache.isRemoteHref(link) {
-                hrefSet.insert(link)
+                photoHrefs.insert(link)
             }
             gatherImages(from: placemark.descriptionHTML)
         }
-        // Cap the carried array (DoS bound): a crafted file can reference thousands of
-        // distinct remote hrefs. `ResourceCache.downloadRemote` enforces the authoritative
-        // per-entry cap for *all* callers; trimming here just avoids carrying a huge array
-        // through commit and the recorded-hrefs file. Sorted first so the prefix is
-        // deterministic (the set is unordered).
-        let remoteResourceHrefs = Array(hrefSet.sorted().prefix(500))
+        let remoteResourceHrefs = Self.cappedHrefs(icons: iconHrefs, photos: photoHrefs, images: imageHrefs)
 
         return ImportResult(
             displayName: displayName,
@@ -164,6 +161,16 @@ enum ImportService {
             remoteResourceHrefs: remoteResourceHrefs,
             indexEntries: PlacemarkIndex.entries(for: document)
         )
+    }
+
+    /// Caps the carried hrefs at 500 (DoS bound; `ResourceCache.downloadRemote` enforces the
+    /// authoritative per-entry cap for all callers). Icons come first, then photo links, then
+    /// description images, each group sorted, so a flood of description images can never push
+    /// the pin icons out.
+    static func cappedHrefs(icons: Set<String>, photos: Set<String>, images: Set<String>) -> [String] {
+        var seen: Set<String> = []
+        let ordered = (icons.sorted() + photos.sorted() + images.sorted()).filter { seen.insert($0).inserted }
+        return Array(ordered.prefix(500))
     }
 
     // MARK: - Commit
