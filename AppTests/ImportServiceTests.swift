@@ -171,6 +171,12 @@ import Testing
         #expect(result.remoteResourceHrefs == ["http://y.test/b.png", "https://x.test/a.jpg", "https://z.test/c.jpg"])
     }
 
+    @Test func upperCaseSchemesAreGatheredUnderTheirOriginalString() throws {
+        let data = kml(descriptions: [#"<img src="HTTP://X.test/a.jpg"><img src="Https://y.test/b.png">"#])
+        let result = try ImportService.prepare(data: data, sourceFilename: "d.kml")
+        #expect(result.remoteResourceHrefs == ["HTTP://X.test/a.jpg", "Https://y.test/b.png"])
+    }
+
     @Test func nonHTTPImageSourcesAreIgnored() throws {
         let data = kml(descriptions: [
             #"<img src="photo.jpg"><img src="data:image/png;base64,AAAA"><img src="javascript:alert(1)">"#

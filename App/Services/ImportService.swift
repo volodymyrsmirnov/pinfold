@@ -121,18 +121,18 @@ enum ImportService {
         var hrefSet: Set<String> = []
         for style in document.styles.values {
             guard let href = style.iconHref else { continue }
-            if href.hasPrefix("http://") || href.hasPrefix("https://") {
+            if ResourceCache.isRemoteHref(href) {
                 hrefSet.insert(href)
             }
         }
         for placemark in document.root.allPlacemarks {
-            for link in placemark.photoLinks where Self.isRemoteHref(link) {
+            for link in placemark.photoLinks where ResourceCache.isRemoteHref(link) {
                 hrefSet.insert(link)
             }
             // Description images are only ever rendered from the cache, so they must be fetched
             // here. `imageSources` trims, matching the key `DescriptionView` looks up.
             if let html = placemark.descriptionHTML, html.contains("<") {
-                for src in DescriptionBlocks.imageSources(in: html) where Self.isRemoteHref(src) {
+                for src in DescriptionBlocks.imageSources(in: html) where ResourceCache.isRemoteHref(src) {
                     hrefSet.insert(src)
                 }
             }
@@ -155,10 +155,6 @@ enum ImportService {
             remoteResourceHrefs: remoteResourceHrefs,
             indexEntries: PlacemarkIndex.entries(for: document)
         )
-    }
-
-    private static func isRemoteHref(_ href: String) -> Bool {
-        href.hasPrefix("http://") || href.hasPrefix("https://")
     }
 
     // MARK: - Commit

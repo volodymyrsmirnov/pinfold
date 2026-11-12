@@ -174,7 +174,7 @@ final class ResourceCache: Sendable {
     ///   - hrefs: Remote resource URLs to download.
     ///   - resourcesDir: Destination `resources/` directory.
     func downloadRemote(_ hrefs: [String], to resourcesDir: URL) async {
-        var remote = hrefs.filter { $0.hasPrefix("http://") || $0.hasPrefix("https://") }
+        var remote = hrefs.filter(Self.isRemoteHref)
         // Count cap (DoS bound): a crafted file can list thousands of hrefs. Keep the first N
         // in input order so the cap is deterministic, and drop the rest before recording or
         // downloading anything.
@@ -446,7 +446,7 @@ final class ResourceCache: Sendable {
     func clearDownloaded(in resourcesDir: URL) {
         let manifest = store.manifest(in: resourcesDir)
         let remoteKeys = manifest.keys.filter {
-            ($0.hasPrefix("http://") || $0.hasPrefix("https://")) && manifest[$0]?.isEmpty == false
+            Self.isRemoteHref($0) && manifest[$0]?.isEmpty == false
         }
         for key in remoteKeys {
             try? FileManager.default.removeItem(at: resourcesDir.appendingPathComponent(manifest[key] ?? ""))
