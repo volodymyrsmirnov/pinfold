@@ -1,0 +1,38 @@
+name: PR checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parser-tests:
+    name: PinfoldCore tests
+    # The package targets iOS 26 / macOS 26 with Swift tools 6.2, which needs the macOS 26 image.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: swift test
+        working-directory: PinfoldCore
+        run: swift test
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: command -v swiftlint || brew install swiftlint
+      - name: swiftlint lint
+        # No --strict: the bar is 0 errors; warnings are a tracked backlog.
+        run: swiftlint lint --reporter github-actions-logging
