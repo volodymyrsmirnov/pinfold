@@ -63,4 +63,34 @@ struct CoordinateTests {
         #expect(c?.latitude == 41.9)
         #expect(c?.altitude == nil)
     }
+
+    @Test func parseList_spacesAfterCommas() {
+        let list = Coordinate.parseList("1, 2, 0 3, 4, 0")
+        #expect(list == [Coordinate(longitude: 1, latitude: 2, altitude: 0),
+                         Coordinate(longitude: 3, latitude: 4, altitude: 0)])
+    }
+
+    @Test func parseList_spaceBeforeComma() {
+        let list = Coordinate.parseList("1 ,2 ,0 3 , 4 , 0")
+        #expect(list.count == 2)
+        #expect(list.last == Coordinate(longitude: 3, latitude: 4, altitude: 0))
+    }
+
+    @Test func parseList_newlinesAndTabsBetweenTuples() {
+        let list = Coordinate.parseList("\n\t1,\n2,0\r\n\t3,4,0\n")
+        #expect(list == [Coordinate(longitude: 1, latitude: 2, altitude: 0),
+                         Coordinate(longitude: 3, latitude: 4, altitude: 0)])
+    }
+
+    @Test func parseList_twoComponentTuples() {
+        let list = Coordinate.parseList("1,2 3,4 5, 6")
+        #expect(list.map(\.longitude) == [1, 3, 5])
+        #expect(list.map(\.latitude) == [2, 4, 6])
+        #expect(list.allSatisfy { $0.altitude == nil })
+    }
+
+    @Test func parseList_skipsUnparseableTuple() {
+        let list = Coordinate.parseList("1,2,0 abc,def 5,6,0 7")
+        #expect(list.map(\.longitude) == [1, 5])
+    }
 }
