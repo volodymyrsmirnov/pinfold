@@ -429,4 +429,80 @@ import Testing
         #expect(!entry.isReadOnly)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("metadata.json").path))
     }
+
+    // MARK: - Streamed extraction and one full refresh (A10b, B17, A11)
+
+    private func seedMaterialized(
+        _ storage: StorageLocations, folder: String, fixture: String, withIndex: Bool
+    ) throws -> URL {
+        let dir = storage.root.appendingPathComponent(folder, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data(fixture).write(to: dir.appendingPathComponent(fixture))
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: folder)
+        try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        if withIndex {
+            try PlacemarkIndex.write([], to: resourcesDir)
+        }
+        return resourcesDir
+    }
+
+    @Test func materialize_kmzManifestUsesCachedFilenameScheme() async throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("kmz", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kmz").write(to: dir.appendingPathComponent("Rome.kmz"))
+
+        _ = await scanner.materializeMissingResources()
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: "kmz")
+        let manifest = ResourceManifestStore.shared.manifest(in: resourcesDir)
+        #expect(manifest["images/icon-1.png"] == scanner.cache.cachedFilename(for: "images/icon-1.png"))
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: resourcesDir) != nil)
+    }
+
+    @Test func rebuildFromBareOriginal_extractsKmzResources() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("bareKmz", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try AppFixture.data("Rome.kmz").write(to: dir.appendingPathComponent("Rome.kmz"))
+
+        _ = scanner.scan()
+
+        let resourcesDir = storage.resourcesDirectory(forFolderNamed: "bareKmz")
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: resourcesDir) != nil)
+    }
+
+    /// A pre-2.0 folder (resources present, v2 index absent) is fully refreshed exactly once:
+    /// index rewritten, resources re-extracted, remote hrefs re-recorded.
+    @Test func materialize_missingIndexTriggersOneFullRefresh() async throws {
+        let (scanner, storage) = makeScanner()
+        let kmzDir = try seedMaterialized(storage, folder: "oldKmz", fixture: "Rome.kmz", withIndex: false)
+        let kmlDir = try seedMaterialized(storage, folder: "oldKml", fixture: "Rome.kml", withIndex: false)
+
+        _ = await scanner.materializeMissingResources()
+
+        #expect(PlacemarkIndex.exists(in: kmzDir))
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: kmzDir) != nil)
+        #expect(PlacemarkIndex.exists(in: kmlDir))
+        #expect(!ResourceManifestStore.shared.recordedHrefs(in: kmlDir).isEmpty,
+                "remote hrefs must be re-recorded for retry")
+
+        // Second pass: the index now exists, so nothing is re-extracted.
+        let icon = try #require(scanner.cache.localURL(forHref: "images/icon-1.png", in: kmzDir))
+        try FileManager.default.removeItem(at: icon)
+        _ = await scanner.materializeMissingResources()
+        #expect(!FileManager.default.fileExists(atPath: icon.path), "only one refresh pass")
+    }
+
+    /// With the index present the original must not be read or parsed (asserted by the
+    /// absence of any re-extraction).
+    @Test func materialize_existingIndexDoesNotReadOriginal() async throws {
+        let (scanner, storage) = makeScanner()
+        let dir = try seedMaterialized(storage, folder: "current", fixture: "Rome.kmz", withIndex: true)
+
+        _ = await scanner.materializeMissingResources()
+
+        #expect(ResourceManifestStore.shared.manifest(in: dir).isEmpty)
+        #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: dir) == nil)
+    }
 }
