@@ -79,9 +79,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var hasPoint = false
         var geometries: [KMLGeometry] = []
         /// True if the placemark declared a non-point geometry we do NOT capture into
-        /// `geometries` (e.g. `<Model>`, `<gx:MultiTrack>`). Such a placemark with no point
-        /// and no captured geometry is dropped, preserving the pre-Task-7 behavior; a truly
-        /// placeless placemark (description/data only, no geometry) stays kept.
+        /// `geometries` (today only `<Model>`; `<gx:MultiTrack>` is captured through its inner
+        /// `<gx:Track>`s). Such a placemark with no point and no captured geometry is dropped,
+        /// preserving the pre-Task-7 behavior; a truly placeless placemark (description/data
+        /// only, no geometry) stays kept.
         var hasUncapturedGeometry = false
         var sourceID: String?
         /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that

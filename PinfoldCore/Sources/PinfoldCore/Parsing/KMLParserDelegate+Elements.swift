@@ -35,9 +35,10 @@ extension KMLParserDelegate {
                 inTrack = true
                 trackCoords = []
             }
-        case "Model", "MultiTrack":
-            // Geometry types we don't capture; flag so a point-less placemark whose only
-            // geometry is one of these is still dropped (pre-Task-7 behavior).
+        case "Model":
+            // A geometry type we don't capture; flag so a point-less placemark whose only
+            // geometry is a Model is still dropped. (gx:MultiTrack is not flagged: its inner
+            // `Track`s are captured individually.)
             if placemark != nil {
                 placemark?.hasUncapturedGeometry = true
             }

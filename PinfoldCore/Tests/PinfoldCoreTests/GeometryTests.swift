@@ -260,4 +260,44 @@ struct GeometryTests {
         """)
         #expect(pm.geometries.isEmpty)
     }
+
+    // MARK: - CB-8 (A14): gx:MultiTrack
+
+    @Test func gxMultiTrack_innerTracksAreCaptured() throws {
+        let pm = try onlyPlacemark("""
+        <gx:MultiTrack><gx:interpolate>0</gx:interpolate>
+          <gx:Track><gx:coord>10 20 0</gx:coord><gx:coord>11 21 0</gx:coord></gx:Track>
+          <gx:Track><gx:coord>30 40 0</gx:coord><gx:coord>31 41 0</gx:coord></gx:Track>
+        </gx:MultiTrack>
+        """)
+        #expect(pm.geometries.count == 2)
+        #expect(pm.geometries.allSatisfy {
+            if case .track = $0 {
+                true
+            } else {
+                false
+            }
+        })
+        #expect(pm.hasPoint == false)
+        #expect(pm.coordinate == Coordinate(longitude: 10, latitude: 20, altitude: 0))
+    }
+
+    @Test func gxMultiTrackOnlyPlacemarkIsKept() throws {
+        let xml = """
+        <kml><Document><name>D</name><Placemark><name>Run</name>
+        <gx:MultiTrack><gx:Track><gx:coord>1 2</gx:coord><gx:coord>3 4</gx:coord></gx:Track></gx:MultiTrack>
+        </Placemark></Document></kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        #expect(doc.placemarkCount == 1)
+    }
+
+    @Test func modelOnlyPlacemarkIsStillDropped() throws {
+        let xml = """
+        <kml><Document><name>D</name><Placemark><name>3D</name>
+        <Model><Location><longitude>1</longitude><latitude>2</latitude></Location></Model>
+        </Placemark></Document></kml>
+        """
+        #expect(try KMLParser.parse(data: Data(xml.utf8)).placemarkCount == 0)
+    }
 }
