@@ -61,8 +61,12 @@ final class ShareViewController: UIViewController {
 
     /// Extracts a file URL from the loaded item value. Nonisolated and Sendable-safe.
     private nonisolated static func fileURL(from data: NSSecureCoding?) -> URL? {
-        if let url = data as? URL { return url }
-        if let data = data as? Data { return URL(dataRepresentation: data, relativeTo: nil) }
+        if let url = data as? URL {
+            return url
+        }
+        if let data = data as? Data {
+            return URL(dataRepresentation: data, relativeTo: nil)
+        }
         return nil
     }
 
@@ -82,7 +86,11 @@ final class ShareViewController: UIViewController {
         // Files vended by other apps (Files, Mail, …) may be security-scoped; without
         // claiming access first, the copy can silently fail.
         let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        defer {
+            if scoped {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         // Copy to a dot-prefixed temporary name (the app's inbox drain skips hidden files), then
         // rename into place, so a drain running mid-copy never sees a half-written file.
         let partial = inbox.appendingPathComponent(".\(UUID().uuidString).partial")

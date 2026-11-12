@@ -38,7 +38,7 @@ extension RootView {
             importCoordinator.enqueueOwned(
                 [ImportCoordinator.OwnedFile(url: url)],
                 catalog: catalog,
-                    cache: resourceCache
+                cache: resourceCache
             )
         }
         await drainDocumentsInbox()

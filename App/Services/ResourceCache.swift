@@ -358,7 +358,10 @@ final class ResourceCache: Sendable {
         }
         // WebP: "RIFF"...."WEBP"
         if b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46,
-           b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50 { return true }
+           b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50
+        {
+            return true
+        }
         // ISO-BMFF ftyp box (bytes 4-7 == "ftyp"), brand at bytes 8-11. Compare the brand as
         // raw ASCII bytes to avoid a Data→String conversion.
         if b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 {

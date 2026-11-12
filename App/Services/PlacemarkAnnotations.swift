@@ -128,10 +128,18 @@ import PinfoldCore
         // launch. Fine for a lightweight annotation store.
         try? storage.updateMetadata(forFolderNamed: folderName) { meta in
             if let favorite {
-                if favorite.added { meta.favoriteKeys.insert(favorite.key) } else { meta.favoriteKeys.remove(favorite.key) }
+                if favorite.added {
+                    meta.favoriteKeys.insert(favorite.key)
+                } else {
+                    meta.favoriteKeys.remove(favorite.key)
+                }
             }
             if let visited {
-                if visited.added { meta.visitedKeys.insert(visited.key) } else { meta.visitedKeys.remove(visited.key) }
+                if visited.added {
+                    meta.visitedKeys.insert(visited.key)
+                } else {
+                    meta.visitedKeys.remove(visited.key)
+                }
             }
             // Merge rather than replace so a note synced from another device while this
             // file was open is not clobbered by this session's snapshot.

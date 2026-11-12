@@ -265,7 +265,7 @@ import Testing
     // MARK: - Trashed duplicates (B9)
 
     private func seedTrashed(
-        _ coordinator: ImportCoordinator, _ catalog: Catalog, _ storage: StorageLocations, _ cache: ResourceCache,
+        _ coordinator: ImportCoordinator, _ catalog: Catalog, _: StorageLocations, _ cache: ResourceCache,
         content: Data
     ) async {
         coordinator.enqueuePrepared([(content, "orig.kml")], catalog: catalog, cache: cache)
