@@ -9,7 +9,6 @@ extension HomeView {
             importCoordinator.enqueue(
                 urls,
                 catalog: catalog,
-                storage: catalog.storage,
                 cache: resourceCache
             )
         case let .failure(error):
@@ -128,7 +127,7 @@ struct ImportAlertsModifier: ViewModifier {
         case .trashed:
             Button("Restore from Trash") {
                 importCoordinator.restoreTrashedDuplicate(
-                    catalog: catalog, storage: catalog.storage, cache: resourceCache
+                    catalog: catalog, cache: resourceCache
                 )
             }
             Button("Import as New") { importAnyway() }
@@ -137,10 +136,10 @@ struct ImportAlertsModifier: ViewModifier {
     }
 
     private func importAnyway() {
-        importCoordinator.importAnyway(catalog: catalog, storage: catalog.storage, cache: resourceCache)
+        importCoordinator.importAnyway(catalog: catalog, cache: resourceCache)
     }
 
     private func skip() {
-        importCoordinator.skipDuplicate(catalog: catalog, storage: catalog.storage, cache: resourceCache)
+        importCoordinator.skipDuplicate(catalog: catalog, cache: resourceCache)
     }
 }

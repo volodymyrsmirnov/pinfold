@@ -10,7 +10,6 @@ extension RootView {
             inboxURL: inboxURL,
             coordinator: importCoordinator,
             catalog: catalog,
-            storage: catalog.storage,
             cache: resourceCache
         ).drain()
     }
@@ -39,7 +38,6 @@ extension RootView {
             importCoordinator.enqueueOwned(
                 [ImportCoordinator.OwnedFile(url: url)],
                 catalog: catalog,
-                storage: catalog.storage,
                 cache: resourceCache
             )
         }
@@ -54,7 +52,6 @@ extension RootView {
             inboxURL: documentsInboxURL,
             coordinator: importCoordinator,
             catalog: catalog,
-            storage: catalog.storage,
             cache: resourceCache
         ).drain()
     }

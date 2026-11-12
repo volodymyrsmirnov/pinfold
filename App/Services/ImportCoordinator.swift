@@ -121,6 +121,14 @@ final class ImportCoordinator {
     private var trackedPaths: Set<String> = []
     /// Hashes whose commit (and the reload that follows) has not finished yet.
     private var inFlightHashes: Set<String> = []
+    /// Hashes committed this session that `catalog.entries` may not show yet (a newer reload can
+    /// overtake the one awaited after the commit, so it returns without publishing). Kept until
+    /// the catalogue contains them, so an identical later item is still seen as a duplicate (B16).
+    var recentlyCommittedHashes: Set<String> = []
+    /// While `true` nothing is drained: items queue up. Held from launch until the first storage
+    /// resolution (iCloud vs local) finishes, so no import commits into or checks against the
+    /// wrong root.
+    private(set) var isHeld = false
 
     init(failureLog: ImportFailureLog? = nil) {
         self.failureLog = failureLog
@@ -131,15 +139,30 @@ final class ImportCoordinator {
         category: "import"
     )
 
+    // MARK: - Hold / release
+
+    /// Stops draining until `release` is called; enqueued items wait in the queue.
+    func hold() {
+        isHeld = true
+    }
+
+    /// Resumes draining and starts on anything queued while held.
+    func release(catalog: Catalog, cache: ResourceCache) {
+        isHeld = false
+        if !queue.isEmpty {
+            startProcessingIfNeeded(catalog: catalog, cache: cache)
+        }
+    }
+
     // MARK: - Entry points
 
     /// Enqueues security-scoped URLs from the file picker (interactive).
-    func enqueue(_ urls: [URL], catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
+    func enqueue(_ urls: [URL], catalog: Catalog, cache: ResourceCache) {
         let items = urls.compactMap { url -> PendingImport? in
             guard track(url) else { return nil }
             return PendingImport(source: .picker(url), interactive: true)
         }
-        append(items, catalog: catalog, storage: storage, cache: cache)
+        append(items, catalog: catalog, cache: cache)
     }
 
     /// Enqueues app-owned copies (opened files, inbox files). Non-interactive. Files already
@@ -150,14 +173,13 @@ final class ImportCoordinator {
     func enqueueOwned(
         _ files: [OwnedFile],
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache
     ) -> Int {
         let items = files.compactMap { file -> PendingImport? in
             guard track(file.url) else { return nil }
             return PendingImport(source: .owned(file), interactive: false)
         }
-        append(items, catalog: catalog, storage: storage, cache: cache)
+        append(items, catalog: catalog, cache: cache)
         return items.count
     }
 
@@ -168,16 +190,15 @@ final class ImportCoordinator {
         _ items: [(Data, String)],
         interactive: Bool = true,
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache
     ) {
         let pending = items.map {
             PendingImport(source: .prepared(data: $0.0, filename: $0.1), interactive: interactive)
         }
-        append(pending, catalog: catalog, storage: storage, cache: cache)
+        append(pending, catalog: catalog, cache: cache)
     }
 
-    private func append(_ items: [PendingImport], catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
+    private func append(_ items: [PendingImport], catalog: Catalog, cache: ResourceCache) {
         guard !items.isEmpty else { return }
         // A new batch starts when nothing is queued, running or stalled: restart the counters.
         if !isImporting, queue.isEmpty, pendingDuplicate == nil {
@@ -186,7 +207,7 @@ final class ImportCoordinator {
         }
         totalCount += items.count
         queue.append(contentsOf: items)
-        startProcessingIfNeeded(catalog: catalog, storage: storage, cache: cache)
+        startProcessingIfNeeded(catalog: catalog, cache: cache)
     }
 
     // MARK: - Cancel
@@ -215,31 +236,33 @@ final class ImportCoordinator {
     /// "Import Anyway" (active duplicate) / "Import as New" (trashed duplicate): commits the
     /// copy and **awaits** `catalog.reload()` before resuming the queue, so the next item's
     /// duplicate check runs against the post-commit catalogue, never a stale snapshot.
-    func importAnyway(catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
+    func importAnyway(catalog: Catalog, cache: ResourceCache) {
         guard let dup = pendingDuplicate else { return }
         pendingDuplicate = nil
-        startProcessing(catalog: catalog, storage: storage, cache: cache) { [weak self] in
-            await self?.commitAndFinish(dup.result, dup.context, catalog: catalog, storage: storage, cache: cache)
+        startProcessing(catalog: catalog, cache: cache) { [weak self] in
+            await self?.commitAndFinish(dup.result, dup.context, catalog: catalog, cache: cache)
         }
     }
 
     /// "Restore from Trash": brings the trashed copy back instead of importing a second one.
-    func restoreTrashedDuplicate(catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
+    func restoreTrashedDuplicate(catalog: Catalog, cache: ResourceCache) {
         guard let dup = pendingDuplicate, dup.kind == .trashed else { return }
         pendingDuplicate = nil
-        startProcessing(catalog: catalog, storage: storage, cache: cache) { [weak self] in
-            await catalog.restore(dup.existingEntry)
-            self?.finish(dup.context, deleteOwned: true)
+        startProcessing(catalog: catalog, cache: cache) { [weak self] in
+            // Keep the inbox copy when the restore failed (read-only entry, write error): the
+            // user's file must not vanish without being imported or restored.
+            let restored = await catalog.restore(dup.existingEntry)
+            self?.finish(dup.context, deleteOwned: restored)
         }
     }
 
     /// "Skip" on the duplicate alert, or the alert dismissed by any other means. Idempotent: if
     /// the alert was already resolved this is a no-op so the queue is never advanced twice.
-    func skipDuplicate(catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
+    func skipDuplicate(catalog: Catalog, cache: ResourceCache) {
         guard let dup = pendingDuplicate else { return }
         pendingDuplicate = nil
         finish(dup.context, deleteOwned: true)
-        startProcessing(catalog: catalog, storage: storage, cache: cache, leading: nil)
+        startProcessing(catalog: catalog, cache: cache, leading: nil)
     }
 
     // MARK: - Testing
@@ -252,9 +275,9 @@ final class ImportCoordinator {
 
     // MARK: - Driving loop
 
-    private func startProcessingIfNeeded(catalog: Catalog, storage: StorageLocations, cache: ResourceCache) {
-        guard processingTask == nil, pendingDuplicate == nil else { return }
-        startProcessing(catalog: catalog, storage: storage, cache: cache, leading: nil)
+    private func startProcessingIfNeeded(catalog: Catalog, cache: ResourceCache) {
+        guard !isHeld, processingTask == nil, pendingDuplicate == nil else { return }
+        startProcessing(catalog: catalog, cache: cache, leading: nil)
     }
 
     /// Starts a single drain Task that optionally runs `leading` first (the resolution of a
@@ -262,7 +285,6 @@ final class ImportCoordinator {
     /// `isImporting` is held `true` for the lifetime of the drain.
     private func startProcessing(
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache,
         leading: (@MainActor () async -> Void)?
     ) {
@@ -270,7 +292,7 @@ final class ImportCoordinator {
         isImporting = true
         processingTask = Task { [weak self] in
             await leading?()
-            await self?.drainQueue(catalog: catalog, storage: storage, cache: cache)
+            await self?.drainQueue(catalog: catalog, cache: cache)
             guard let self else { return }
             isImporting = false
             currentFilename = nil
@@ -279,10 +301,10 @@ final class ImportCoordinator {
     }
 
     /// Processes queued items one at a time until the queue empties or a duplicate stalls it.
-    private func drainQueue(catalog: Catalog, storage: StorageLocations, cache: ResourceCache) async {
+    private func drainQueue(catalog: Catalog, cache: ResourceCache) async {
         while pendingDuplicate == nil, !queue.isEmpty {
             let item = queue.removeFirst()
-            await importItem(item, catalog: catalog, storage: storage, cache: cache)
+            await importItem(item, catalog: catalog, cache: cache)
         }
     }
 
@@ -291,7 +313,6 @@ final class ImportCoordinator {
     private func importItem(
         _ item: PendingImport,
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache
     ) async {
         let context = makeContext(for: item)
@@ -304,7 +325,7 @@ final class ImportCoordinator {
             reportPrepareFailure(error, context)
             return
         }
-        await processPrepared(result, context, catalog: catalog, storage: storage, cache: cache)
+        await processPrepared(result, context, catalog: catalog, cache: cache)
     }
 
     private func prepare(_ source: Source, filename: String) async throws -> ImportResult {
@@ -337,7 +358,6 @@ final class ImportCoordinator {
         _ result: ImportResult,
         _ context: ItemContext,
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache
     ) async {
         if inFlightHashes.contains(result.contentSHA256) {
@@ -345,8 +365,14 @@ final class ImportCoordinator {
             finish(context, deleteOwned: true)
             return
         }
+        recentlyCommittedHashes.subtract(catalog.entries.map(\.contentSHA256))
         guard let existing = duplicate(of: result, in: catalog) else {
-            await commitAndFinish(result, context, catalog: catalog, storage: storage, cache: cache)
+            if recentlyCommittedHashes.contains(result.contentSHA256) {
+                // Committed a moment ago but not published to the catalogue yet.
+                finish(context, deleteOwned: true)
+                return
+            }
+            await commitAndFinish(result, context, catalog: catalog, cache: cache)
             return
         }
         if existing.isTrashed || context.interactive {
@@ -378,14 +404,27 @@ final class ImportCoordinator {
         _ result: ImportResult,
         _ context: ItemContext,
         catalog: Catalog,
-        storage: StorageLocations,
         cache: ResourceCache
     ) async {
         inFlightHashes.insert(result.contentSHA256)
         defer { inFlightHashes.remove(result.contentSHA256) }
         do {
-            _ = try await ImportService.commitOffMain(result, storage: storage, cache: cache)
+            // Resolved now, not captured at enqueue time: the active root can change (iCloud
+            // switch at launch) while an item waits in the queue.
+            _ = try await ImportService.commitOffMain(result, storage: catalog.storage, cache: cache)
+            recentlyCommittedHashes.insert(result.contentSHA256)
             await catalog.reload()
+            // A newer reload may have overtaken ours without publishing; retry a few times so
+            // the entry is visible, then forget the hash. If it still is not, it stays in
+            // `recentlyCommittedHashes` and duplicate checks keep honouring it.
+            var retries = 0
+            while catalog.entry(withSHA256: result.contentSHA256) == nil, retries < 3 {
+                retries += 1
+                await catalog.reload()
+            }
+            if catalog.entry(withSHA256: result.contentSHA256) != nil {
+                recentlyCommittedHashes.remove(result.contentSHA256)
+            }
             finish(context, deleteOwned: true)
         } catch {
             reportCommitFailure(error, context)

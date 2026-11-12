@@ -24,9 +24,6 @@ struct PendingImportInbox {
     /// The catalogue, used by the coordinator for deduplication and reloaded after importing.
     let catalog: Catalog
 
-    /// On-disk path helpers for creating per-entry folders and writing files.
-    let storage: StorageLocations
-
     /// Cache for writing embedded resources and initiating remote downloads.
     let cache: ResourceCache
 
@@ -64,6 +61,8 @@ struct PendingImportInbox {
         // Only regular files; sorted so the import order is deterministic.
         let files = candidates
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
+            // The share extension copies to `.<UUID>.partial` and renames when complete.
+            .filter { !$0.lastPathComponent.hasSuffix(".partial") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map {
                 ImportCoordinator.OwnedFile(
@@ -72,6 +71,6 @@ struct PendingImportInbox {
                 )
             }
 
-        return coordinator.enqueueOwned(files, catalog: catalog, storage: storage, cache: cache)
+        return coordinator.enqueueOwned(files, catalog: catalog, cache: cache)
     }
 }

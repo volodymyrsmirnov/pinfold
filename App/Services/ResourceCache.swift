@@ -248,8 +248,28 @@ final class ResourceCache: Sendable {
             Self.logger.warning("Rejecting resource over size cap; skipping permanently")
             markSkipped(href, to: resourcesDir)
         } catch {
-            // HTTP errors, offline, timeouts: retry later with backoff.
+            if Self.isConnectivityFailure(error) {
+                // The device is offline (not the host's fault): don't burn an attempt or grow the
+                // backoff, so the image is fetched as soon as the connection is back.
+                Self.logger.debug("Offline; leaving resource pending without penalty")
+                return
+            }
+            // HTTP errors, timeouts, dead hosts: retry later with backoff.
             recordFailure(href, in: resourcesDir, isNonImage: false)
+        }
+    }
+
+    /// `true` for errors that say the *device* has no usable connection right now. Deliberately
+    /// excludes `.cannotFindHost` / `.timedOut` / `.cannotConnectToHost`, which a dead or
+    /// blocked host also produces and which must still back off.
+    static func isConnectivityFailure(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed,
+             .internationalRoamingOff, .callIsActive:
+            return true
+        default:
+            return false
         }
     }
 
@@ -338,7 +358,10 @@ final class ResourceCache: Sendable {
         }
         // WebP: "RIFF"...."WEBP"
         if b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46,
-           b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50 { return true }
+           b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50
+        {
+            return true
+        }
         // ISO-BMFF ftyp box (bytes 4-7 == "ftyp"), brand at bytes 8-11. Compare the brand as
         // raw ASCII bytes to avoid a Data→String conversion.
         if b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 {

@@ -10,8 +10,12 @@ extension Catalog {
         for entry in doomed {
             // Read the index BEFORE removing the folder so placemark Spotlight ids can be rebuilt.
             let indexEntries = await trashIndexEntries(from: storage.resourcesDirectory(for: entry))
-            try? storage.removeFolder(named: entry.storageFolderName)
-            SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries)
+            do {
+                try storage.removeFolder(named: entry.storageFolderName)
+                SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries)
+            } catch {
+                actionError = .deleteFailed(entryName: entry.displayName, error: error)
+            }
         }
         await reload()
     }

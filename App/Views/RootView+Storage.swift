@@ -8,6 +8,9 @@ extension RootView {
         AppDependencies.shared.catalog = catalog
         AppDependencies.shared.router = router
         await applyStorage(migrate: false)
+        // The active root is now resolved: let queued imports (an "Open in" that raced launch)
+        // commit into it.
+        importCoordinator.release(catalog: catalog, cache: resourceCache)
         await drainInbox()
         await drainDocumentsInbox()
         await catalog.reload()
@@ -52,18 +55,29 @@ extension RootView {
             let wasUbiquitous = rootIsUbiquitous
             // Run the move off-main, then surface any per-folder failures. We do NOT swallow
             // the report: a folder that fails to move stays in the old root and would silently
-            // vanish from the catalogue otherwise. Enumeration/setup errors (the only thrown
-            // path) leave `report` nil and are best-effort ignored — the repoint below still
-            // happens so the app keeps working against the resolved root.
-            let report = try? await Task.detached {
-                try StorageLocations.migrateEntries(
-                    from: from,
-                    to: storage,
-                    fromUbiquitous: wasUbiquitous,
-                    toUbiquitous: ubiquitous
+            // vanish from the catalogue otherwise. An enumeration/setup error (the only thrown
+            // path) aborts the switch: repointing without moving would make every entry vanish
+            // silently, so the old root and the previous sync setting are kept and the user is told.
+            let report: StorageLocations.MigrationReport
+            do {
+                report = try await Task.detached {
+                    try StorageLocations.migrateEntries(
+                        from: from,
+                        to: storage,
+                        fromUbiquitous: wasUbiquitous,
+                        toUbiquitous: ubiquitous
+                    )
+                }.value
+            } catch {
+                Self.migrationLogger.error(
+                    "Storage migration failed: \(error.localizedDescription, privacy: .public)"
                 )
-            }.value
-            if let report, !report.failed.isEmpty {
+                migrationAlert.reportFailure(error)
+                revertingSyncSetting = true
+                settings.syncEnabled.toggle()
+                return
+            }
+            if !report.failed.isEmpty {
                 // Log each underlying error so failed folders are diagnosable from the
                 // console; the user-facing alert below only carries the entry names.
                 for failure in report.failed {

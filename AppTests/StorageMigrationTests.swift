@@ -297,3 +297,11 @@ struct StorageMigrationTests {
         #expect(!StorageLocations.removeStrayCacheFolder(inSyncedRoot: none))
     }
 }
+
+@MainActor struct MigrationAlertStateTests {
+    @Test func reportFailure_setsAMessageNamingTheError() {
+        let state = MigrationAlertState()
+        state.reportFailure(CocoaError(.fileReadNoPermission))
+        #expect(state.message?.contains("stay where they are") == true)
+    }
+}
