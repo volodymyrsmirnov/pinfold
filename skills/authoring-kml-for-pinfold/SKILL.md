@@ -1,6 +1,6 @@
 ---
 name: authoring-kml-for-pinfold
-description: Use when generating, writing, authoring, converting, or exporting a .kml or .kmz file that will be imported into Pinfold (the offline KML/KMZ catalogue app for iPhone, iPad, and Mac). Covers exactly which KML elements Pinfold parses and renders — placemarks, points, lines, polygons, tracks, document-level styles, AABBGGRR colors, descriptions, photos, ExtendedData, KMZ packaging — and which it silently ignores or rejects.
+description: Use when generating, writing, authoring, converting, or exporting a .kml or .kmz file that will be imported into Pinfold (the offline KML/KMZ catalogue app for iPhone, iPad, and Mac). Covers exactly which KML elements Pinfold parses and renders — placemarks, points, lines, polygons, tracks, shared and inline styles, AABBGGRR colors, descriptions, photos, ExtendedData, KMZ packaging — which it ignores or rejects, and how GPX and GeoJSON files map onto the same model.
 ---
 
 # Authoring KML/KMZ for Pinfold
@@ -19,22 +19,31 @@ file that "validates" but renders wrong.
 
 ## The golden rules (read these first)
 
-1. **Use `<Point>` placemarks for anything you want to find, search, or favorite.** A
-   placemark's name is the *only* searchable text, and only `<Point>` placemarks get a map
-   pin and a representative location/distance.
-2. **Put all human-readable info in `<name>` and `<description>`.** `name` = a short title;
-   `description` = the body (rendered as readable text — see Descriptions).
-3. **Define styles once at the `<Document>` level and reference them with `<styleUrl>`.**
-   Inline styles inside a `<Placemark>` are **ignored**. This is the single most common
-   mistake — do not inline styles.
+1. **Use `<Point>` placemarks for anything that is a place.** Only point placemarks get a
+   regular map pin, appear on the Favorites map, and can be sorted nearest-first. Search is
+   broader: it matches the placemark's name, its description text, ExtendedData values,
+   `<Snippet>` and `<address>` (plus the user's own notes) — but the name is what lists show,
+   so make it specific.
+2. **Put human-readable info in `<name>` and `<description>`.** `name` = a short title;
+   `description` = the body (rendered natively — see Descriptions).
+3. **Prefer shared styles: define them once at the `<Document>` level and reference them
+   with `<styleUrl>`.** Inline `<Style>`/`<StyleMap>` inside a `<Placemark>` also work (they
+   are merged over the placemark's `styleUrl` style, inline fields winning), but shared
+   styles keep the file small and consistent.
 4. **Coordinates are `longitude,latitude[,altitude]`** — longitude first, comma-separated,
    tuples separated by whitespace. (Standard KML, but the #1 source of swapped pins.)
-5. **Photos come only from a `gx_media_links` ExtendedData field**, not from `<img>` tags in
-   the description. `<img>` in a description is stripped and never shown.
-6. **Do not include a `<!DOCTYPE>` declaration.** Pinfold **rejects the entire file** if one
-   is present (a security guard against entity-expansion attacks). No DTDs, ever.
-7. **Tags, favorites, and "visited" are set by the user inside the app — not in the KML.**
-   Don't try to encode them. (You *can* influence organization via `<Folder>` structure.)
+5. **Photos for the gallery go in a `gx_media_links` ExtendedData field.** `<img>` tags in a
+   description are shown inline, but only once the image is in the local cache (packaged in
+   the KMZ, or downloaded at import when the user's image setting allows it).
+6. **Do not include a `<!DOCTYPE>` declaration.** A bare one with no internal subset
+   (`<!DOCTYPE kml>`) is tolerated and never fetched, but any DOCTYPE with a `[` internal
+   subset (entity, element or attribute declarations) **rejects the entire file**. There is
+   no reason to emit one, so don't.
+7. **Tags, favorites, "visited" and notes are set by the user inside the app — not in the
+   KML.** Don't try to encode them. (You *can* influence organization via `<Folder>`
+   structure.)
+8. **Write UTF-8.** UTF-16/UTF-32 (with or without a BOM), ASCII, Latin-1, ISO-8859-x and
+   Windows-125x also work; any other declared encoding (UTF-7, EBCDIC, …) rejects the file.
 
 ## Document skeleton (copy this shape)
 
@@ -46,11 +55,10 @@ file that "validates" but renders wrong.
     <name>Reykjavík Coffee Crawl</name>
     <description>Twelve specialty cafés worth a detour, gathered June 2026.</description>
 
-    <!-- 1. Styles first, all at Document level, each with a stable id -->
+    <!-- 1. Shared styles first, at Document level, each with a stable id -->
     <Style id="cafe">
       <IconStyle>
         <color>ff4287f5</color>      <!-- AABBGGRR: opaque, blue-ish -->
-        <scale>1.1</scale>
         <Icon><href>https://example.com/icons/coffee.png</href></Icon>
       </IconStyle>
     </Style>
@@ -76,7 +84,11 @@ file that "validates" but renders wrong.
 Notes:
 - A single top-level `<Document>` is collapsed into the catalogue root — its `<name>` becomes
   the entry's display name. (If absent, the filename stem is used. Always provide a `<name>`.)
+- The root element must be `<kml>` (a bare `<Document>`, `<Folder>` or `<Placemark>` root is
+  also accepted). Any other XML root is rejected as not a KML file.
 - The `gx:` namespace declaration is only needed if you use `gx_media_links` or `<gx:Track>`.
+- Leading whitespace, a byte-order mark, and stray control characters before or inside the
+  document are tolerated, but don't rely on that — start with the XML declaration.
 
 ## What Pinfold reads — supported elements
 
@@ -85,30 +97,41 @@ Use **only** these. Everything else is parsed-and-discarded (see "What Pinfold i
 ### Structure
 | Element | Notes |
 |---|---|
-| `<Document>` | Root container. Its `name`/`description` become the catalogue entry's. |
-| `<Folder>` | Groups placemarks; nestable to any depth. `name` shows as a section header. |
+| `<Document>` | Root container. Its `name`/`description` become the catalogue entry's; the description opens from an info button on the file screen. |
+| `<Folder>` | Groups placemarks; nestable to any depth. `name` shows as a section header; a folder `description` is previewed under that header and opens in full from its info button. |
 | `<Placemark>` | The unit of content. Add `id="..."` for stable identity (see Stable identity). |
-| `<name>` | Title. **The only searchable field.** Keep it specific and human. |
-| `<description>` | Body text. See Descriptions for how HTML is treated. |
+| `<name>` | Title. Searchable, and what lists show. Keep it specific and human. |
+| `<description>` | Body. Searchable (its plain text). See Descriptions for how HTML is treated. |
+| `<Snippet>` | Short teaser. Replaces the description's first line as the list preview under the name. Searchable. |
+| `<address>` | Shown as an address row in the placemark detail. Searchable. |
+| `<phoneNumber>` | Shown as a tappable call row in the placemark detail. |
 
 ### Geometry (coordinates are `lon,lat[,alt]`)
 | Element | Renders as | Notes |
 |---|---|---|
-| `<Point>` | Map pin + searchable, locatable entry | **Strongly preferred.** Only the *first* coordinate tuple is used. |
-| `<LineString>` | Polyline overlay | All tuples used. Styled by `LineStyle`. |
-| `<Polygon>` | Filled/stroked area | Use `<outerBoundaryIs>` + optional `<innerBoundaryIs>` holes. Styled by `PolyStyle`/`LineStyle`. |
-| `<gx:Track>` | Polyline overlay | Each `<gx:coord>` is **space-separated** `lon lat alt` (different from `<coordinates>`!). Timestamps in `<when>` are ignored. |
-| `<MultiGeometry>` | Each child rendered independently | Fine to mix a Point + LineString in one placemark. |
+| `<Point>` | Map pin + locatable entry | **Strongly preferred.** Only the *first* coordinate tuple is used. |
+| `<LineString>` | Polyline overlay (tappable) | All tuples used. Styled by `LineStyle`. Needs at least 2 vertices. |
+| `<Polygon>` | Filled/stroked area (tappable) | Use `<outerBoundaryIs>` + optional `<innerBoundaryIs>` holes. Styled by `PolyStyle`/`LineStyle`. Rings need at least 3 vertices. |
+| `<gx:Track>` | Polyline overlay + a pin at its start | Each `<gx:coord>` is **space-separated** `lon lat alt` (different from `<coordinates>`!). Timestamps in `<when>` are ignored. |
+| `<gx:MultiTrack>` | Each inner `<gx:Track>` rendered | Treated as its tracks; `<gx:interpolate>` is ignored. |
+| `<MultiGeometry>` | Each child rendered independently | Fine to mix a Point + LineString in one placemark. With several `<Point>`s, the **first** is the placemark's own location and **every extra point gets its own pin** (all opening the same placemark). |
 
-A placemark **without a `<Point>`** (only a line/polygon) still appears, but has no pin and is
-not located/searchable by position. If you want it findable, give it a clear `<name>` or also
-include a `<Point>`. (A `<gx:Track>` placemark keeps a pin at its start.)
+Coordinate whitespace is tolerant: `-9.13, 38.71, 0` (spaces after commas) parses the same as
+`-9.13,38.71,0`; whitespace *without* a comma starts the next tuple.
 
-### Styling (define at `<Document>` level only)
+A placemark **without a `<Point>`** (only a line/polygon) still appears in the list and is
+searchable; on the map its line or area is the tappable target and there is no pin. It is
+located by its first vertex but is not shown on the Favorites map or sorted by distance. If
+it represents a place, also include a `<Point>`.
+
+### Styling
+Define shared styles at the `<Document>` level (any level outside a placemark works) and
+reference them by id. Inline styles inside a placemark are also read.
+
 | Element | Fields Pinfold reads | Ignored fields |
 |---|---|---|
-| `<Style id="…">` | the four sub-styles below | — |
-| `<IconStyle>` | `<color>`, `<scale>`, `<Icon><href>` | `<hotSpot>`, `<heading>` |
+| `<Style id="…">` | the sub-styles below | `<LabelStyle>`, `<BalloonStyle>`, `<ListStyle>` |
+| `<IconStyle>` | `<color>`, `<Icon><href>` | `<scale>` (pins and icons are drawn at a fixed size), `<hotSpot>`, `<heading>` |
 | `<LineStyle>` | `<color>`, `<width>` | `<colorMode>`, `gx:` extras |
 | `<PolyStyle>` | `<color>` (alpha = fill opacity), `<fill>` | `<outline>` |
 | `<StyleMap>` | the `normal` pair only | the `highlight` pair |
@@ -121,29 +144,35 @@ include a `<Point>`. (A `<gx:Track>` placemark keeps a pin at its start.)
   marker images (e.g. Google "paddle"/dot icons) are shown as-is, untinted.
 - `<StyleMap>` is supported but you only need it if a tool generates one; a plain `<Style>` +
   `<styleUrl>` is simpler and fully sufficient.
-- **Reference styles by id:** `<styleUrl>#cafe</styleUrl>`.
+- **Reference shared styles by id:** `<styleUrl>#cafe</styleUrl>`.
+- **Inline styles:** a `<Style>` (or a `<StyleMap>` whose `normal` pair holds one) inside a
+  `<Placemark>` applies to that placemark only. Its fields override the placemark's
+  `<styleUrl>` style field by field, so `<styleUrl>#trail</styleUrl>` plus an inline
+  `<LineStyle><width>6</width></LineStyle>` thickens one trail while keeping the shared
+  color.
 
 ### ExtendedData (custom key/value facts)
-Use either form; both surface in the placemark detail view as name → value rows:
+Use either form; both surface in the placemark detail view as label → value rows:
 
 ```xml
 <ExtendedData>
-  <Data name="Hours"><value>08:00–18:00</value></Data>
-  <Data name="Wi-Fi"><value>Free</value></Data>
+  <Data name="hours"><displayName>Hours</displayName><value>08:00–18:00</value></Data>
+  <Data name="wifi"><value>Free</value></Data>
 </ExtendedData>
 ```
 
-`<SimpleData name="…">` inside `<SchemaData>` also works (the values are read), but the
-`<Schema>` definition itself is ignored, so the simpler `<Data>` form is preferred.
-
-> ExtendedData is **not searchable** — only `<name>` is. Put anything the user might search
-> for into the name or description, and use ExtendedData for structured supporting facts.
+- A `<Data>` element's `<displayName>` is used as the row label; without one the `name`
+  attribute is shown.
+- `<SimpleData name="…">` inside `<SchemaData>` also works (the values are read, labelled by
+  their `name`), but the `<Schema>` definition is ignored — including its
+  `<SimpleField><displayName>` — so the simpler `<Data>` form is preferred.
+- ExtendedData **values are searchable**, alongside names, descriptions, snippets and
+  addresses. Repeated names are all kept.
 
 ## Photos — the `gx_media_links` pattern
 
-This is the **only** way to attach photos to a placemark. They render as a photo gallery in
-the detail view. Provide one or more **http/https** URLs, separated by whitespace, inside a
-`<Data name="gx_media_links">` value:
+This is the way to attach a photo **gallery** to a placemark. Provide one or more
+**http/https** URLs, separated by whitespace, inside a `<Data name="gx_media_links">` value:
 
 ```xml
 <ExtendedData>
@@ -153,42 +182,54 @@ the detail view. Provide one or more **http/https** URLs, separated by whitespac
 </ExtendedData>
 ```
 
-- Remote photo URLs are downloaded and cached locally on import (so they work offline later).
-- In a **KMZ**, you may instead reference a packaged image by a relative path (see KMZ packaging).
-- Do **not** rely on `<img src>` in `<description>` — it will not display.
+- Remote photo (and icon) URLs are downloaded and cached locally so they work offline later —
+  **subject to the user's "Download Images" setting** (Always, Ask per file, or Never). With
+  Never, or before the user allows it, remote images do not appear. At most 500 distinct
+  remote images per file are fetched.
+- In a **KMZ**, you may instead reference a packaged image by a relative path (see KMZ
+  packaging). Packaged images always display, whatever the setting.
 
 ## Descriptions — how HTML is treated
 
-The description is rendered as **readable plain text with tappable links**, not as a web page:
+The description is rendered natively (no web view) as a small set of blocks:
 
-- Tags are **stripped**. `<b>`, `<i>`, `<span>`, `<table>`, `<img>` etc. produce no visual
-  formatting and no images.
-- `<br>` and block-level closings become **line breaks** — useful for paragraphs.
-- **Links survive**: an `<a href="…">label</a>` becomes a tappable link, but only for the
-  schemes `http`, `https`, `mailto`, and `tel`. Other schemes (`javascript:`, `data:`,
-  `file:`) are dropped for security. Bare URLs, emails, and phone numbers are auto-linked.
+- **Paragraphs and line breaks:** `<p>`, `<div>`, `<br>` and other block-level tags break
+  lines; headings `<h1>`–`<h6>` render as bold paragraphs.
+- **Inline formatting:** `<b>`/`<strong>` render bold, `<i>`/`<em>` italic.
+- **Lists:** `<ul>`/`<ol>` with `<li>` render as bulleted/numbered lists.
+- **Tables:** `<table>`/`<tr>`/`<td>`/`<th>` render as rows of cells (`<th>` bold) — a
+  two-column key/value table, as Google My Maps exports, reads well.
+- **Images:** `<img src="…">` renders inline **only from the local cache**: a relative path
+  packaged in the KMZ, or an http(s) URL downloaded at import per the user's Download Images
+  setting. Nothing is loaded when the description is viewed. `data:` and other schemes are
+  never shown. Use `alt` text — it is shown when the image is not available.
+- **Links:** an `<a href="…">label</a>` becomes a tappable link, but only for the schemes
+  `http`, `https`, `mailto`, and `tel`. Other schemes (`javascript:`, `data:`, `file:`) render
+  as plain text. Bare URLs, emails, and phone numbers are auto-linked.
+- Everything else (`<span>`, `<font>`, CSS, scripts, forms) is reduced to its text.
 - You may wrap the description in `<![CDATA[ … ]]>` if it contains markup or `&`/`<`
-  characters — preferred when including links.
+  characters — preferred when including HTML.
 
 **Recommended description style:**
 
 ```xml
-<description><![CDATA[Tiny third-wave café with a rotating single-origin bar.
-Cash only. Closed Mondays.
-Reservations: tel:+3545551234
-More: https://example.com/cafe]]></description>
+<description><![CDATA[<p>Tiny third-wave café with a rotating single-origin bar.</p>
+<ul><li>Cash only</li><li>Closed Mondays</li></ul>
+<p>Reservations: tel:+3545551234<br>More: https://example.com/cafe</p>]]></description>
 ```
 
-Keep descriptions concise. There is a generous size cap, but the UI shows a one-line preview
-in lists and the full readable text in detail — front-load the important sentence.
+Keep descriptions concise and front-load the important sentence: lists show a one-line
+preview (unless a `<Snippet>` is given), and only the first ~1,000 characters of a
+description's text are searchable. Very long descriptions are truncated for display.
 
 ## KMZ packaging (when bundling icons/photos)
 
 Produce a `.kmz` (a ZIP) when you want icons or photos to travel **inside** the file instead
 of being fetched from the network.
 
-- The main document should be named **`doc.kml`** at the archive root. (Pinfold also accepts
-  the first `.kml` alphabetically, but `doc.kml` is the unambiguous convention.)
+- The main document should be named **`doc.kml`** at the archive root. (Without one,
+  Pinfold picks the first top-level `.kml` alphabetically, but `doc.kml` is the unambiguous
+  convention.)
 - Reference packaged resources by a **relative path** from `doc.kml`:
   ```xml
   <Icon><href>icons/coffee.png</href></Icon>
@@ -196,41 +237,47 @@ of being fetched from the network.
   and place the file at `icons/coffee.png` in the archive.
 - Path rules enforced on import: **no absolute paths** (`/…`), **no `..` traversal**. Keep
   everything in subfolders under the archive root.
-- Same relative-path trick works for `gx_media_links` photos packaged inside the KMZ.
-- Keep it reasonable: the importer rejects archives over ~2 GiB uncompressed or ~100k entries.
+- The same relative paths work for `gx_media_links` photos and for `<img src="…">` in
+  descriptions. Write each path exactly as it appears in the archive.
+- Size limits: the root KML may be up to 256 MiB uncompressed, all packaged resources
+  together up to 1 GiB, and the archive at most 100,000 entries. A plain `.kml` file is
+  capped at 256 MiB.
 
-Use plain `.kml` + remote `https://` hrefs when the file should stay tiny and the device will
-have network at import time; use `.kmz` with packaged resources for fully self-contained,
-offline-first bundles.
+Use plain `.kml` + remote `https://` hrefs when the file should stay tiny and the user is
+happy to download images; use `.kmz` with packaged resources for fully self-contained,
+offline-first bundles that display regardless of the image-download setting.
 
 ## What Pinfold IGNORES — don't bother emitting these
 
 These parse without error but have **no effect**. Including them adds noise; omit them.
 
-- **Inline `<Style>` / `<StyleMap>` inside a `<Placemark>`** → ignored. (Define at Document
-  level and reference by `styleUrl`.)
-- `<LabelStyle>`, `<BalloonStyle>` → ignored.
+- `<LabelStyle>`, `<BalloonStyle>`, `<ListStyle>` → ignored.
+- The `highlight` pair of a `<StyleMap>` → ignored.
 - `<TimeStamp>`, `<TimeSpan>`, `<gx:TimeSpan>`, `<gx:Track>` timestamps → ignored.
 - `<Region>`, `<LatLonAltBox>`, `<Lod>` → ignored.
 - `<altitudeMode>` / `<gx:altitudeMode>` → ignored (altitude *values* are kept but the mode
   is not; Pinfold renders in 2D, so altitude has no visible effect).
-- `<NetworkLink>` → **not fetched**. Pinfold is offline-first and never follows them. If you
-  have linked content, inline it into the file instead.
+- `<NetworkLink>` → **never fetched automatically.** If a file contains *only* network links
+  (no placemarks of its own), Pinfold offers a one-time download of the linked http(s) files,
+  which runs only when the user confirms it; the result is a static copy that is not
+  refreshed. Prefer inlining the content into the file instead.
 - `<GroundOverlay>`, `<ScreenOverlay>`, `<PhotoOverlay>` → ignored.
-- `<Model>`, `<gx:MultiTrack>` → geometry not rendered.
+- `<Model>` → not rendered (a placemark whose only geometry is a `<Model>` is dropped).
 - `<visibility>`, `<open>` → ignored.
-- `<Schema>` field definitions → ignored (only `<SimpleData>`/`<Data>` *values* are read).
-- IconStyle `<hotSpot>`/`<heading>`, PolyStyle `<outline>`, `<colorMode>` → ignored.
+- `<Schema>` field definitions (including `<SimpleField><displayName>`) → ignored (only
+  `<SimpleData>`/`<Data>` *values* are read).
+- IconStyle `<scale>`/`<hotSpot>`/`<heading>`, PolyStyle `<outline>`, `<colorMode>` →
+  ignored.
 
 ## Stable identity & good-citizen details
 
 - **Give each `<Placemark>` an `id`** (e.g. `id="cafe-roasters"`). Pinfold uses it as the
-  durable key for favorites, "visited" marks, search results, and Spotlight deep links, so a
-  re-import or edited file keeps the user's per-placemark state. Without an `id`, identity
-  falls back to a hash of name+coordinates — stable only if those don't change.
+  durable key for favorites, "visited" marks, notes, search results, and Spotlight deep
+  links, so a re-import or edited file keeps the user's per-placemark state. Without an `id`,
+  identity falls back to a hash of name+first coordinate — stable only if those don't change.
 - Make `id` values **unique and slug-like** within the file.
-- Always provide a `<name>` on every placemark — nameless placemarks are hard to find
-  (search matches names only) and look broken in lists.
+- Always provide a `<name>` on every placemark — nameless placemarks look broken in lists
+  and on the map.
 - Validate coordinates: longitude in `[-180, 180]`, latitude in `[-90, 90]`. `NaN`/infinite
   values are rejected; out-of-range finite values are accepted but will look wrong.
 
@@ -238,31 +285,63 @@ These parse without error but have **no effect**. Including them adds noise; omi
 
 | Mistake | Fix |
 |---|---|
-| Inline `<Style>` inside a `<Placemark>` | Move it to `<Document>` level, reference via `<styleUrl>#id</styleUrl>`. |
+| Copy-pasting the same inline `<Style>` into every placemark | Works, but define it once at `<Document>` level and reference it via `<styleUrl>#id</styleUrl>`. |
 | `lat,lon` coordinates | KML is **`lon,lat`** — longitude first. |
 | RGBA / `#rrggbb` colors | Use **`AABBGGRR`** hex (alpha first, then blue, green, red). |
-| `<img>` in description for photos | Use `<Data name="gx_media_links">` with whitespace-separated http(s) URLs. |
-| Emitting a `<!DOCTYPE>` | Remove it entirely — its presence rejects the whole file. |
-| Relying on `<NetworkLink>` / overlays / 3D | Not rendered. Inline the content; use Point/Line/Polygon geometry. |
-| Nameless placemarks | Every placemark needs a clear `<name>` (the only searchable text). |
+| Relying on remote `<img>` URLs for essential pictures | They show only if the user allows downloads. Package them in a KMZ, or use `gx_media_links` for a gallery. |
+| A `<!DOCTYPE>` with an internal subset (`[ <!ENTITY …> ]`) | Remove the DOCTYPE entirely — a subset rejects the whole file. |
+| Relying on `<NetworkLink>` / overlays / 3D | Not rendered (network links only via a one-time, user-confirmed download). Inline the content; use Point/Line/Polygon geometry. |
+| Nameless placemarks | Every placemark needs a clear `<name>`. |
+| Places drawn only as a line or polygon | Add a `<Point>` so the place gets a pin and appears on the Favorites map. |
 
 ## Pre-flight checklist
 
 Before emitting the file, verify:
 
-- [ ] No `<!DOCTYPE>` anywhere.
+- [ ] No `<!DOCTYPE>` anywhere (and never one with a `[` internal subset).
+- [ ] UTF-8 encoding (or no `encoding` attribute).
 - [ ] One top-level `<Document>` with a `<name>`.
-- [ ] All `<Style>`/`<StyleMap>` at Document level, each with an `id`; placemarks reference
-      them via `<styleUrl>#id</styleUrl>` — **no inline styles**.
+- [ ] Shared `<Style>`/`<StyleMap>` at Document level, each with an `id`, referenced via
+      `<styleUrl>#id</styleUrl>`; inline styles only for genuine one-off overrides.
 - [ ] Every placemark has a unique `id`, a clear `<name>`, and (ideally) a `<Point>`.
 - [ ] Coordinates are `lon,lat[,alt]`, comma-separated, longitude first.
 - [ ] Colors are `AABBGGRR` hex.
-- [ ] Photos go in `gx_media_links` (whitespace-separated URLs), not `<img>` tags.
-- [ ] Descriptions use plain sentences + `<br>` + http/https/mailto/tel links; wrapped in
-      CDATA if they contain markup or `&`.
+- [ ] Photo galleries go in `gx_media_links` (whitespace-separated URLs or KMZ paths).
+- [ ] Descriptions use paragraphs, bold/italic, lists, tables and http/https/mailto/tel
+      links; wrapped in CDATA if they contain markup or `&`; the key sentence comes first.
 - [ ] For KMZ: main file is `doc.kml`; resources referenced by relative paths with no `..`
-      or leading `/`.
+      or leading `/`; within the size limits.
 - [ ] No ignored elements emitted as if they mattered (see "What Pinfold ignores").
+
+## Other formats Pinfold imports
+
+Pinfold also imports **GPX** and **GeoJSON** (detected by content, not extension) into the
+same model. Prefer KML when you control the output — it is the only format with folders,
+icons and full styling — but these mappings tell you what survives:
+
+**GPX (1.0/1.1)**
+- `<metadata><name>`/`<desc>` → the file's name and description.
+- Each `<wpt>` → a point placemark (`ele` kept as altitude). Each `<trk>` → one placemark
+  with a track per `<trkseg>` (pin at its start). Each `<rte>` → one placemark with a line.
+- `name` → name; `desc` (else `cmt`) plus an http(s) `link`/`url` → description; `sym`,
+  `type`, `time` (and `cmt` when `desc` is present) → ExtendedData rows.
+- When more than one kind is present, placemarks are grouped into "Waypoints", "Tracks" and
+  "Routes" folders. `<extensions>` are ignored. Same DOCTYPE and encoding rules as KML.
+
+**GeoJSON (RFC 7946)**
+- A `FeatureCollection`, a single `Feature`, or a bare geometry; one flat list of placemarks
+  (no folders). A top-level `"name"` on the collection becomes the file name.
+- Positions are `[lon, lat, alt?]`. `Point` → pin; `MultiPoint` → first point is the pin,
+  each further point gets its own pin; `LineString`/`MultiLineString` → lines;
+  `Polygon`/`MultiPolygon` → areas (first ring outer, the rest holes); `GeometryCollection`
+  → its members.
+- Feature `id` → stable identity. `properties.name` (else `title`) → name;
+  `properties.description` → description (HTML kept, plain text escaped).
+- simplestyle keys become a style: `marker-color` (pin tint), `stroke`, `stroke-width`,
+  `stroke-opacity`, `fill`, `fill-opacity` (colors as `#rgb`/`#rrggbb`). `marker-size` and
+  `marker-symbol` are ignored. Every other property → an ExtendedData row (nested values
+  shown as JSON).
+- Invalid JSON (including out-of-range numbers such as `1e999`) rejects the whole file.
 
 ## Minimal complete example
 
@@ -277,22 +356,22 @@ Before emitting the file, verify:
     <Style id="viewpoint">
       <IconStyle>
         <color>ff00a5ff</color>
-        <scale>1.2</scale>
         <Icon><href>https://example.com/icons/binoculars.png</href></Icon>
       </IconStyle>
     </Style>
 
     <Folder>
       <name>Alfama &amp; Graça</name>
+      <description>The old town's eastern hills.</description>
 
       <Placemark id="miradouro-senhora-do-monte">
         <name>Miradouro da Senhora do Monte</name>
-        <description><![CDATA[The highest viewpoint in Lisbon — best at sunset.
-Quiet on weekday mornings.
-Map: https://example.com/spot]]></description>
+        <Snippet>Highest viewpoint in Lisbon</Snippet>
+        <description><![CDATA[<p>The highest viewpoint in Lisbon — <b>best at sunset</b>.</p>
+<p>Quiet on weekday mornings.<br>Map: https://example.com/spot</p>]]></description>
         <styleUrl>#viewpoint</styleUrl>
         <ExtendedData>
-          <Data name="Best time"><value>Sunset</value></Data>
+          <Data name="best_time"><displayName>Best time</displayName><value>Sunset</value></Data>
           <Data name="gx_media_links">
             <value>https://example.com/photos/senhora-monte.jpg</value>
           </Data>
@@ -303,7 +382,8 @@ Map: https://example.com/spot]]></description>
       <Placemark id="miradouro-portas-do-sol">
         <name>Miradouro das Portas do Sol</name>
         <description>Terrace café with a view over Alfama's rooftops to the river.</description>
-        <styleUrl>#viewpoint</styleUrl>
+        <!-- A one-off inline style: a tinted built-in pin, no shared style needed -->
+        <Style><IconStyle><color>ff3c14dc</color></IconStyle></Style>
         <Point><coordinates>-9.1287,38.7119,0</coordinates></Point>
       </Placemark>
 
