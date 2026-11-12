@@ -125,17 +125,26 @@ enum ImportService {
                 hrefSet.insert(href)
             }
         }
+        /// Description images are only ever rendered from the cache, so they must be fetched
+        /// here. `imageSources` trims, matching the key `DescriptionView` looks up. This covers
+        /// placemark, folder and document descriptions (all shown through `DescriptionView`).
+        func gatherImages(from html: String?) {
+            guard let html, html.contains("<") else { return }
+            for src in DescriptionBlocks.imageSources(in: html) where ResourceCache.isRemoteHref(src) {
+                hrefSet.insert(src)
+            }
+        }
+        gatherImages(from: document.descriptionHTML)
+        var containers = [document.root]
+        while let container = containers.popLast() {
+            gatherImages(from: container.descriptionHTML)
+            containers.append(contentsOf: container.children)
+        }
         for placemark in document.root.allPlacemarks {
             for link in placemark.photoLinks where ResourceCache.isRemoteHref(link) {
                 hrefSet.insert(link)
             }
-            // Description images are only ever rendered from the cache, so they must be fetched
-            // here. `imageSources` trims, matching the key `DescriptionView` looks up.
-            if let html = placemark.descriptionHTML, html.contains("<") {
-                for src in DescriptionBlocks.imageSources(in: html) where ResourceCache.isRemoteHref(src) {
-                    hrefSet.insert(src)
-                }
-            }
+            gatherImages(from: placemark.descriptionHTML)
         }
         // Cap the carried array (DoS bound): a crafted file can reference thousands of
         // distinct remote hrefs. `ResourceCache.downloadRemote` enforces the authoritative

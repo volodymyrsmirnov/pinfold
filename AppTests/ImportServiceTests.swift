@@ -171,6 +171,28 @@ import Testing
         #expect(result.remoteResourceHrefs == ["http://y.test/b.png", "https://x.test/a.jpg", "https://z.test/c.jpg"])
     }
 
+    /// Document and folder descriptions render through `DescriptionView` too, which only shows
+    /// cached images, so their `<img>` sources must be gathered as well.
+    @Test func documentAndFolderDescriptionImagesAreGathered() throws {
+        let data = Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+        <name>Doc</name>
+        <description><![CDATA[<img src="https://x.test/doc.jpg">]]></description>
+        <Folder><name>Outer</name>
+        <description><![CDATA[<img src="https://x.test/outer.jpg">]]></description>
+        <Folder><name>Inner</name>
+        <description><![CDATA[<img src="https://x.test/inner.jpg">]]></description>
+        <Placemark><name>P</name><Point><coordinates>1,2</coordinates></Point></Placemark>
+        </Folder></Folder>
+        </Document></kml>
+        """.utf8)
+        let result = try ImportService.prepare(data: data, sourceFilename: "d.kml")
+        #expect(result.remoteResourceHrefs == [
+            "https://x.test/doc.jpg", "https://x.test/inner.jpg", "https://x.test/outer.jpg",
+        ])
+    }
+
     @Test func upperCaseSchemesAreGatheredUnderTheirOriginalString() throws {
         let data = kml(descriptions: [#"<img src="HTTP://X.test/a.jpg"><img src="Https://y.test/b.png">"#])
         let result = try ImportService.prepare(data: data, sourceFilename: "d.kml")
