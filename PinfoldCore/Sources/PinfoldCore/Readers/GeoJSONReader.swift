@@ -11,14 +11,22 @@ enum GeoJSONReader {
     static let maxGeometryDepth = 32
     /// Features plus positions a single file may contain before it is refused.
     static let maxWork = 5_000_000
+    /// Largest GeoJSON file read: `JSONSerialization` materialises the whole tree (roughly
+    /// 7x the file size), so this is far below the plain-KML cap.
+    static let maxBytes = 64 * 1024 * 1024
 
-    static func read(_ data: Data) throws -> KMLDocument {
+    static func read(_ data: Data, maxBytes: Int = maxBytes, maxWork: Int = maxWork) throws -> KMLDocument {
+        guard data.count <= maxBytes else { throw KMLReadError.fileTooLarge }
+        return try read(data, maxWork: maxWork)
+    }
+
+    private static func read(_ data: Data, maxWork: Int) throws -> KMLDocument {
         try Task.checkCancellation()
         let object = try parseJSON(data)
         guard let top = object as? [String: Any], let type = top["type"] as? String else {
             throw KMLReadError.unsupportedFormat
         }
-        var builder = GeoJSONBuilder()
+        var builder = GeoJSONBuilder(maxWork: maxWork)
         var name: String?
         switch type {
         case "FeatureCollection":
@@ -51,11 +59,15 @@ struct GeoJSONBuilder {
     private var placemarks: [KMLPlacemark] = []
     private var styles: [String: KMLStyle] = [:]
     private var styleIDs: [GeoJSONStyleKey: String] = [:]
-    private var work = 0
+    private var meter: WorkMeter
+
+    init(maxWork: Int = GeoJSONReader.maxWork) {
+        meter = WorkMeter(limit: maxWork)
+    }
 
     mutating func addFeature(_ feature: [String: Any]) throws {
         try Task.checkCancellation()
-        try spend(1)
+        try meter.charge(1)
         let geometry = feature["geometry"] as? [String: Any]
         let properties = feature["properties"] as? [String: Any]
         try addPlacemark(geometry: geometry, properties: properties,
@@ -65,9 +77,7 @@ struct GeoJSONBuilder {
     mutating func addPlacemark(geometry: [String: Any]?, properties: [String: Any]?, id: String?) throws {
         var geometries: [KMLGeometry] = []
         if let geometry {
-            var spent = 0
-            try GeoJSONGeometry.collect(geometry, depth: 0, into: &geometries, spent: &spent)
-            try spend(spent)
+            try GeoJSONGeometry.collect(geometry, depth: 0, into: &geometries, spent: &meter)
         }
         let fields = GeoJSONProperties(properties ?? [:])
         let styleUrl = fields.style.map { styleURL(for: $0) }
@@ -84,13 +94,6 @@ struct GeoJSONBuilder {
         return KMLDocument(name: name, descriptionHTML: nil, root: root, styles: styles, styleMaps: [:])
     }
 
-    private mutating func spend(_ amount: Int) throws {
-        work += amount
-        if work > GeoJSONReader.maxWork {
-            throw KMLReadError.geoJSONTooComplex
-        }
-    }
-
     private mutating func styleURL(for key: GeoJSONStyleKey) -> String {
         if let existing = styleIDs[key] {
             return "#\(existing)"
@@ -101,5 +104,19 @@ struct GeoJSONBuilder {
                               lineColor: key.lineColor, lineWidth: key.lineWidth,
                               polyColor: key.polyColor, polyFill: key.polyColor == nil ? nil : true)
         return "#\(id)"
+    }
+}
+
+/// The complexity budget of one GeoJSON file: features, geometry nodes and positions all
+/// count, so no mix of shapes can run past `limit`.
+struct WorkMeter {
+    let limit: Int
+    private(set) var spent = 0
+
+    mutating func charge(_ amount: Int) throws {
+        spent += amount
+        if spent > limit {
+            throw KMLReadError.geoJSONTooComplex
+        }
     }
 }

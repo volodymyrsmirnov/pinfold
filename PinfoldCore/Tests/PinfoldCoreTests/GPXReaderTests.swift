@@ -17,6 +17,22 @@ struct GPXReaderTests {
         try #require(doc.root.children.first { $0.name == name })
     }
 
+    @Test func namespacePrefixedGPXParsesLikeUnprefixed() throws {
+        let plain = try Fixture.data("sample.gpx")
+        var text = try #require(String(data: plain, encoding: .utf8))
+        let elements = #"<(/?)(gpx|wpt|trk|trkseg|trkpt|rte|rtept|name|ele|desc|cmt|sym|type|time|link|text)([\s>/])"#
+        text = text.replacingOccurrences(of: elements, with: "<$1g:$2$3", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"xmlns="http://www.topografix.com/GPX/1/1""#,
+                                         with: #"xmlns:g="http://www.topografix.com/GPX/1/1""#)
+        #expect(text.contains("<g:gpx"))
+        let prefixed = try KMLReader.read(data: Data(text.utf8))
+        let reference = try KMLReader.read(data: plain)
+        #expect(prefixed.format == .gpx)
+        #expect(prefixed.document.root.allPlacemarks.count == reference.document.root.allPlacemarks.count)
+        #expect(prefixed.document.root.allPlacemarks.count > 0)
+        #expect(prefixed.document.root == reference.document.root)
+    }
+
     @Test func waypointsBecomePointPlacemarks() throws {
         let parsed = try KMLReader.read(data: Fixture.data("sample.gpx"))
         #expect(parsed.format == .gpx)
@@ -125,7 +141,7 @@ struct GPXReaderTests {
     }
 
     @Test func unsupportedEncodingIsRejected() {
-        let data = Data(#"<?xml version="1.0" encoding="x-evil"?><gpx/>"#.utf8)
+        let data = Data(#"<?xml version="1.0" encoding="UTF-7"?><gpx/>"#.utf8)
         #expect(throws: KMLParseError.unsupportedEncoding) { try GPXReader.read(data) }
     }
 

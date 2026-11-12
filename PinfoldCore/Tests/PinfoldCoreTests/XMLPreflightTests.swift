@@ -123,8 +123,10 @@ struct XMLPreflightTests {
         try expectParses(Data(("\u{0}" + Self.declaration("UTF-8") + Self.body).utf8))
     }
 
-    @Test func nonAllowListedDeclaredEncoding_isUnsupported() {
-        for name in ["UTF-7", "IBM037", "EBCDIC-US", "x-mac-roman-bogus"] {
+    @Test func deniedDeclaredEncoding_isUnsupported() {
+        let names = ["UTF-7", "IBM037", "ibm-037", "EBCDIC-US", "cp500", "cp1140", "IBM1047", "ISO-2022-JP", "HZ-GB-2312",
+                     "UCS-2", "UCS-4", "UTF-16", "UTF-16LE", "UTF-32", "UTF-32BE", "BOCU-1", "SCSU", "x-EBCDIC-KoreanExtended"]
+        for name in names {
             let input = Data((Self.declaration(name) + Self.body).utf8)
             #expect(throws: KMLParseError.unsupportedEncoding) { try XMLPreflight.normalize(input) }
         }
@@ -136,10 +138,33 @@ struct XMLPreflightTests {
         }
     }
 
-    @Test func declaredEncodingAllowList_acceptsLegitimateNames() throws {
-        for name in ["utf-8", "UTF-16LE", "ISO-8859-2", "windows-1251", "latin1", "US-ASCII", "ASCII"] {
+    @Test func declaredEncoding_acceptsEveryAsciiCompatibleName() throws {
+        let names = ["utf-8", "ISO-8859-2", "windows-1251", "latin1", "US-ASCII", "ASCII", "Shift_JIS", "x-sjis",
+                     "EUC-JP", "EUC-KR", "GB2312", "GBK", "Big5", "KOI8-R", "cp1252", "cp437", "cp850", "macintosh",
+                     "ISO_8859-1", "ISO-8859-15", "IBM850"]
+        for name in names {
             let input = Data((Self.declaration(name) + Self.body).utf8)
-            #expect(try XMLPreflight.normalize(input) == input)
+            #expect(try XMLPreflight.normalize(input) == input, "\(name)")
+        }
+    }
+
+    private static func cfEncoding(_ encoding: CFStringEncodings) -> String.Encoding {
+        String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(encoding.rawValue)))
+    }
+
+    @Test func legacyEncodingDeclarationsWithMatchingBytes_parse() throws {
+        let cases: [(String, String.Encoding, String)] = [
+            ("Shift_JIS", .shiftJIS, "日本語"), ("x-sjis", .shiftJIS, "日本語"), ("EUC-JP", .japaneseEUC, "日本語"),
+            ("GBK", Self.cfEncoding(.GBK_95), "中文"), ("Big5", Self.cfEncoding(.big5), "中文"),
+            ("KOI8-R", Self.cfEncoding(.KOI8_R), "Привет"), ("EUC-KR", Self.cfEncoding(.EUC_KR), "한국"),
+            ("macintosh", .macOSRoman, "Café"), ("ISO_8859-1", .isoLatin1, "Café"),
+            ("cp1252", .windowsCP1252, "Café €"),
+        ]
+        for (name, encoding, title) in cases {
+            let xml = Self.declaration(name) + "<kml><Document><name>\(title)</name></Document></kml>"
+            let data = try #require(xml.data(using: encoding), "\(name)")
+            let doc = try KMLParser.parse(data: data)
+            #expect(doc.root.name == title, "\(name)")
         }
     }
 }

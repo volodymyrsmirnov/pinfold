@@ -45,4 +45,34 @@ struct RootElementTests {
         #expect(doc.name == "Pre")
         #expect(doc.placemarkCount == 1)
     }
+
+    @Test func upperCaseRootNamesAreAcceptedLikeVersion1_7() throws {
+        let doc = try parse("<KML><Document><Placemark><name>U</name><Point><coordinates>1,2</coordinates></Point></Placemark></Document></KML>")
+        #expect(doc.placemarkCount == 1)
+        for root in ["DOCUMENT", "folder", "PLACEMARK", "Kml"] {
+            _ = try parse("<\(root)><name>x</name></\(root)>")
+        }
+        let xml = "<KML><Document><Placemark><name>U</name></Placemark></Document></KML>"
+        #expect(try KMLReader.detectFormat(of: Data(xml.utf8)) == .kml)
+        #expect(try KMLReader.read(data: Data(xml.utf8)).document.placemarkCount == 1)
+    }
+
+    @Test func longLeadingCommentStillSniffsAsKML() throws {
+        let comment = "<!--" + String(repeating: "x", count: 70 * 1024) + "-->"
+        let xml = "<?xml version=\"1.0\"?>" + comment + "<kml><Document><Placemark><name>L</name>"
+            + "<Point><coordinates>1,2</coordinates></Point></Placemark></Document></kml>"
+        #expect(try KMLReader.detectFormat(of: Data(xml.utf8)) == .kml)
+        #expect(try KMLReader.read(data: Data(xml.utf8)).document.placemarkCount == 1)
+    }
+
+    @Test func multiMegabytePrologStillSniffs() throws {
+        let comment = "<!--" + String(repeating: "x", count: 3 * 1024 * 1024) + "-->"
+        let xml = comment + "<gpx version=\"1.1\"><wpt lat=\"1\" lon=\"2\"/></gpx>"
+        #expect(try KMLReader.detectFormat(of: Data(xml.utf8)) == .gpx)
+    }
+
+    @Test func prologOnlyInputIsUnsupported() {
+        let xml = "<?xml version=\"1.0\"?><!--" + String(repeating: "x", count: 100_000) + "-->"
+        #expect(throws: KMLReadError.self) { try KMLReader.detectFormat(of: Data(xml.utf8)) }
+    }
 }

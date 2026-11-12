@@ -183,12 +183,13 @@ struct GeometryTests {
         #expect(pm.coordinate == Coordinate(longitude: 7, latitude: 8, altitude: 0))
     }
 
-    @Test func polygonWithFewerThanThreeOuterVerticesIsDropped() throws {
+    @Test func polygonWithFewerThanThreeOuterVerticesIsDroppedButLocatesPlacemark() throws {
         let pm = try onlyPlacemark("""
         <Polygon><outerBoundaryIs><LinearRing><coordinates>1,1 2,2</coordinates></LinearRing></outerBoundaryIs></Polygon>
         """)
         #expect(pm.geometries.isEmpty)
-        #expect(pm.coordinate == nil)
+        // 1.7 located the placemark at the first vertex; the dropped polygon still donates it.
+        #expect(pm.coordinate == Coordinate(longitude: 1, latitude: 1))
     }
 
     @Test func degenerateInnerRingIsDropped() throws {

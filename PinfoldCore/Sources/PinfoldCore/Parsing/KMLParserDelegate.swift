@@ -49,8 +49,6 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// not mistaken for the document, folder or placemark ones.
     var elementStack: [String] = []
 
-    /// Local names a KML document may start with (a full `<kml>` or a bare fragment).
-    static let rootElements: Set<String> = ["kml", "Document", "Folder", "Placemark"]
     /// Parents under which `<name>` is meaningful.
     static let nameParents: Set<String> = ["Placemark", "Document", "Folder", "NetworkLink"]
     /// Parents under which `<description>` is stored; elsewhere it is swallowed and discarded.
@@ -82,12 +80,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var photoLinks: [String] = []
         var hasPoint = false
         var geometries: [KMLGeometry] = []
-        /// True if the placemark declared a non-point geometry we do NOT capture into
-        /// `geometries` (today only `<Model>`; `<gx:MultiTrack>` is captured through its inner
-        /// `<gx:Track>`s). Such a placemark with no point and no captured geometry is dropped,
-        /// preserving the pre-Task-7 behavior; a truly placeless placemark (description/data
-        /// only, no geometry) stays kept.
-        var hasUncapturedGeometry = false
+        /// What 1.7 derived the placemark's `stableKey` and keep decision from.
+        var legacy = LegacyKeyInputs()
+        /// Allocates the unique ids of `extendedData` items.
+        var dataIDs = DataIDAllocator()
         var sourceID: String?
         /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that
         /// has no point and no kept geometry.
@@ -263,7 +259,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         text = ""
         let local = Self.localName(elementName)
         let parent = elementStack.last
-        if parent == nil, !Self.rootElements.contains(local) {
+        if parent == nil, !Self.isRootElement(local) {
             abortError = KMLParseError.unsupportedRootElement(local)
             parser.abortParsing()
             return
@@ -294,7 +290,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "Style":
             // Inside a Placemark the style is inline: `closeStyleElement` hands it to the
             // placemark rather than indexing it by id.
-            styleBuilder = StyleBuilder(id: attributeDict["id"] ?? nextID("s"))
+            // An inline style gets a throwaway id: it must not consume the shared counter,
+            // or every later `p:pN` key would shift relative to 1.7.
+            styleBuilder = StyleBuilder(id: attributeDict["id"] ?? (placemark == nil ? nextID("s") : "inline"))
         case "IconStyle":
             styleBuilder?.inIconStyle = true
         case "LineStyle":
@@ -367,6 +365,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "Document", "Folder":
             containerStack.removeLast()
         case "name":
+            // 1.7 keyed on the last `<name>` closed anywhere inside the placemark.
+            placemark?.legacy.name = trimmed
             guard let parent, Self.nameParents.contains(parent) else { break }
             if parent == "Placemark" {
                 placemark?.name = trimmed
@@ -396,9 +396,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         // Keep a placemark with a point, with captured geometry, or with no geometry at all
         // (a description/data-only placeless placemark). Drop only a point-less placemark
         // whose sole geometry is an uncaptured non-point type.
-        let keep = pm.hasPoint || !pm.geometries.isEmpty || !pm.hasUncapturedGeometry
-            || pm.fallbackCoordinate != nil
-        guard keep else { return }
+        guard pm.legacy.isKept else { return }
         let coordinate = pm.hasPoint
             ? pm.coordinate
             : Self.firstCoordinate(of: pm.geometries) ?? pm.fallbackCoordinate
@@ -417,7 +415,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                                  photoLinks: pm.photoLinks,
                                  sourceID: pm.sourceID,
                                  snippet: pm.snippet, address: pm.address,
-                                 phoneNumber: pm.phoneNumber)
+                                 phoneNumber: pm.phoneNumber,
+                                 stableKey: pm.legacy.stableKey(id: id, sourceID: pm.sourceID))
         containerStack.last?.placemarks.append(built)
     }
 

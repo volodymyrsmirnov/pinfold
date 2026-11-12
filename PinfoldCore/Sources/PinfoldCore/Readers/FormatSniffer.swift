@@ -18,7 +18,7 @@ enum FormatSniffer {
             throw KMLReadError.unsupportedFormat
         }
         guard let root = rootElementName(normalized) else { throw KMLReadError.unsupportedFormat }
-        if KMLParserDelegate.rootElements.contains(root) {
+        if KMLParserDelegate.isRootElement(root) {
             return .kml
         }
         if root == "gpx" {
@@ -43,9 +43,25 @@ enum FormatSniffer {
     }
 
     /// Local name of the first element, skipping the prolog (declaration, PIs, comments, DOCTYPE).
-    /// Bounded to the prolog, so it is O(prolog) on large documents.
+    /// Bounded to the prolog, so it is O(prolog) on large documents: the scan starts on a
+    /// 64 KiB window and widens (x16) only while the prolog still runs past its end, so a long
+    /// leading comment does not hide the root.
     static func rootElementName(_ data: Data) -> String? {
-        let bytes = Array(data.prefix(64 * 1024))
+        var window = 64 * 1024
+        while true {
+            let bytes = Array(data.prefix(window))
+            let (name, exhausted) = scanForRoot(bytes)
+            if let name, !exhausted {
+                return name
+            }
+            guard window < data.count else { return name }
+            window = window > Int.max / 16 ? data.count : window * 16
+        }
+    }
+
+    /// The root name found in `bytes`, and whether the scan ran off the end of the window
+    /// (so a longer window might change the answer).
+    private static func scanForRoot(_ bytes: [UInt8]) -> (name: String?, exhausted: Bool) {
         var index = 0
         while index < bytes.count {
             guard bytes[index] == UInt8(ascii: "<"), index + 1 < bytes.count else {
@@ -60,10 +76,16 @@ enum FormatSniffer {
                     ? end(of: Array("-->".utf8), in: bytes, from: index + 4)
                     : endOfDoctype(bytes, from: index + 2)
             default:
-                return elementName(bytes, from: index + 1)
+                let name = elementName(bytes, from: index + 1)
+                return (name, nameReachesEnd(bytes, from: index + 1))
             }
         }
-        return nil
+        return (nil, true)
+    }
+
+    /// True when no byte ends the element name before the window does.
+    private static func nameReachesEnd(_ bytes: [UInt8], from start: Int) -> Bool {
+        !bytes[start...].contains { isSpace($0) || $0 == UInt8(ascii: ">") || $0 == UInt8(ascii: "/") }
     }
 
     private static func end(of marker: [UInt8], in bytes: [UInt8], from start: Int) -> Int {

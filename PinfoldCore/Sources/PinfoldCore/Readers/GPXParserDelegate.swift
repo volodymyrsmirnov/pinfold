@@ -104,9 +104,11 @@ final class GPXParserDelegate: NSObject, XMLParserDelegate {
             abort(parser, with: CancellationError())
             return
         }
-        path.append(elementName)
-        if path.count == 1, elementName != "gpx" {
-            abort(parser, with: KMLParseError.unsupportedRootElement(elementName))
+        // Match local names so `<g:gpx xmlns:g="...">` works like an unprefixed document.
+        let local = elementName.split(separator: ":").last.map(String.init) ?? elementName
+        path.append(local)
+        if path.count == 1, local != "gpx" {
+            abort(parser, with: KMLParseError.unsupportedRootElement(local))
             return
         }
         let key = path.joined(separator: "/")

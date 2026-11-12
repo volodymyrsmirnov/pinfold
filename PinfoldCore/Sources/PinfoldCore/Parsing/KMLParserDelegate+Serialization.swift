@@ -28,4 +28,12 @@ extension KMLParserDelegate {
         }
         return raw
     }
+
+    /// Lower-cased local names a KML document may start with (a full `<kml>` or a bare
+    /// fragment). Matched case-insensitively: 1.7 accepted `<KML><Document>`.
+    private static let rootElements: Set<String> = ["kml", "document", "folder", "placemark"]
+
+    static func isRootElement(_ localName: String) -> Bool {
+        rootElements.contains(localName.lowercased())
+    }
 }
