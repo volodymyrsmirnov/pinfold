@@ -136,6 +136,12 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     }
 
     var styleBuilder: StyleBuilder?
+
+    /// Network links collected in document order.
+    var networkLinks: [KMLNetworkLink] = []
+    /// Name and href of the open `<NetworkLink>`, flushed when it closes.
+    var networkLinkName: String?
+    var networkLinkHref: String?
     /// Inline styles collected from placemarks, merged and registered by `makeDocument()`.
     var pendingInlineStyles: [PendingInlineStyle] = []
     /// Inline `<Style>` buffered by the open `<Pair>` of an inline `<StyleMap>` in a placemark.
@@ -189,7 +195,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         let overrides = resolveInlineStyles()
         return KMLDocument(name: effective.name, descriptionHTML: effective.description,
                            root: effective.build(styleUrlOverrides: overrides),
-                           styles: styles, styleMaps: styleMaps)
+                           styles: styles, styleMaps: styleMaps, networkLinks: networkLinks)
     }
 
     func parser(_ parser: XMLParser, didStartElement elementName: String,
@@ -220,6 +226,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             let builder = ContainerBuilder(id: nextID("c"))
             containerStack.last?.children.append(builder)
             containerStack.append(builder)
+        case "NetworkLink":
+            networkLinkName = nil
+            networkLinkHref = nil
         case "Placemark":
             var builder = PlacemarkBuilder()
             builder.sourceID = attributeDict["id"]
@@ -296,7 +305,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         let parent = elementStack.last
         defer { text = "" }
         // Delegate cohesive element groups to helpers to keep this dispatcher's complexity low.
-        guard !endGeometryElement(local),
+        guard !endNetworkLinkElement(local, trimmed: trimmed),
+              !endGeometryElement(local),
               !endStyleElement(local, trimmed: trimmed),
               !endStyleMapElement(local, trimmed: trimmed, parent: parent),
               !endExtendedDataElement(local) else { return }
@@ -307,7 +317,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             guard let parent, Self.nameParents.contains(parent) else { break }
             if parent == "Placemark" {
                 placemark?.name = trimmed
-            } else if parent != "NetworkLink", let c = containerStack.last, c !== rootBuilder {
+            } else if parent == "NetworkLink" {
+                networkLinkName = trimmed.isEmpty ? nil : trimmed
+            } else if let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
             }
         case "Snippet", "snippet", "address", "phoneNumber":

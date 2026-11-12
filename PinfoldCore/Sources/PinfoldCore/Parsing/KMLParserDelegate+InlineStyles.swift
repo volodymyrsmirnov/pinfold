@@ -92,6 +92,8 @@ extension KMLParserDelegate {
     /// Follows one StyleMap hop, like `KMLDocument.resolvedStyle(forStyleUrl:)`.
     private static func resolve(_ url: String?, styles: [String: KMLStyle],
                                 styleMaps: [String: String]) -> KMLStyle?
+    // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
+    // swiftlint:disable:next opening_brace
     {
         func key(_ raw: String?) -> String? {
             guard let raw, !raw.isEmpty else { return nil }
