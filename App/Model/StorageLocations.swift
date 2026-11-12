@@ -334,6 +334,23 @@ struct StorageLocations {
         try writeMetadata(meta, forFolderNamed: name)
     }
 
+    /// Like `updateMetadata`, but throws `CocoaError(.fileNoSuchFile)` when the sidecar is
+    /// absent instead of silently doing nothing. For callers (the network-link snapshot) that
+    /// must not proceed on a sidecar that is missing or merely not downloaded yet. Returns the
+    /// sidecar as it was before `mutate`, so the caller can roll back.
+    @discardableResult
+    func updateExistingMetadata(
+        forFolderNamed name: String, _ mutate: (inout EntryMetadata) -> Void
+    ) throws -> EntryMetadata {
+        guard let original = try readMetadata(forFolderNamed: name) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        var meta = original
+        mutate(&meta)
+        try writeMetadata(meta, forFolderNamed: name)
+        return original
+    }
+
     // MARK: - Enumeration
 
     /// Names of all per-entry folders directly under the synced root. Returns `[]`

@@ -41,6 +41,12 @@ final class StubURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
             return
         }
+        if (300 ..< 400).contains(stub.status), let location = stub.headers["Location"],
+           let target = URL(string: location)
+        {
+            client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: target), redirectResponse: response)
+            return
+        }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         for chunk in stub.chunks {
             client?.urlProtocol(self, didLoad: chunk)
@@ -59,6 +65,48 @@ struct BoundedDownloaderTests {
             timeout: 5,
             configuration: StubURLProtocol.configuration()
         )
+    }
+
+    @Test func crossHostRedirect_isRefusedWhenAsked() async throws {
+        StubURLProtocol.register(.init(status: 302, headers: ["Location": "https://target.redirect.test/a.kml"]),
+                                 host: "origin.redirect.test")
+        StubURLProtocol.register(.init(chunks: [Data([1])]), host: "target.redirect.test")
+        do {
+            _ = try await BoundedDownloader.fetch(
+                #require(URL(string: "https://origin.redirect.test/a.kml")), maxBytes: 100, timeout: 5,
+                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration()
+            )
+            Issue.record("expected failure")
+        } catch DownloadError.redirectedToOtherHost {
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    @Test func crossHostRedirect_isFollowedByDefault() async throws {
+        StubURLProtocol.register(.init(status: 302, headers: ["Location": "https://target2.redirect.test/a.png"]),
+                                 host: "origin2.redirect.test")
+        StubURLProtocol.register(.init(chunks: [Data([7])]), host: "target2.redirect.test")
+        let data = try await BoundedDownloader.fetch(
+            #require(URL(string: "https://origin2.redirect.test/a.png")), maxBytes: 100, timeout: 5,
+            configuration: StubURLProtocol.configuration()
+        )
+        #expect(data == Data([7]))
+    }
+
+    @Test func sameHostRedirect_isFollowedEvenWhenGuarded() async throws {
+        StubURLProtocol.register(.init(status: 302, headers: ["Location": "https://same.redirect.test/b"]),
+                                 host: "same.redirect.test")
+        // Same host answers the redirect target with the same 302 stub: loop ends in an error, but
+        // never as `redirectedToOtherHost`.
+        do {
+            _ = try await BoundedDownloader.fetch(
+                #require(URL(string: "https://same.redirect.test/a")), maxBytes: 100, timeout: 5,
+                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration()
+            )
+        } catch DownloadError.redirectedToOtherHost {
+            Issue.record("same-host redirect must not be refused")
+        } catch {}
     }
 
     @Test(arguments: [404, 429, 503])
