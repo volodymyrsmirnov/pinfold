@@ -3,6 +3,9 @@ import Foundation
 
 /// One captured geometry of a placemark beyond its representative point.
 public enum KMLGeometry: Equatable, Sendable {
+    /// A second or later `<Point>` of a `<MultiGeometry>`. The first valid point is the
+    /// placemark's own `coordinate`, not a geometry.
+    case point(Coordinate)
     case lineString([Coordinate])
     case polygon(outer: [Coordinate], inners: [[Coordinate]])
     case track([Coordinate])
@@ -27,7 +30,7 @@ public struct KMLPlacemark: Equatable, Sendable, Identifiable {
     /// True when the source placemark had an explicit `<Point>` geometry. Distinguishes a
     /// real point from a representative point synthesized from line/polygon/track geometry.
     public let hasPoint: Bool
-    /// Captured geometries beyond the representative point (lines, polygons, tracks).
+    /// Captured geometries beyond the representative point (extra points, lines, polygons, tracks).
     public var geometries: [KMLGeometry] = []
     public let extendedData: [KMLDataItem]
     /// Photo URLs gathered from ExtendedData `gx_media_links` (kept separate from extendedData).

@@ -259,8 +259,13 @@ extension KMLParserDelegate {
             // A Point whose coordinates do not parse is not a point: it must neither set
             // `hasPoint` nor displace a valid one.
             if let point = Coordinate(parsingFirstTuple: text) {
-                placemark?.coordinate = point
-                placemark?.hasPoint = true
+                if placemark?.hasPoint == true {
+                    // MultiGeometry: the first valid point stays the representative one.
+                    placemark?.geometries.append(.point(point))
+                } else {
+                    placemark?.coordinate = point
+                    placemark?.hasPoint = true
+                }
             }
         } else if inLineString {
             lineStringCoords = Coordinate.parseList(text)

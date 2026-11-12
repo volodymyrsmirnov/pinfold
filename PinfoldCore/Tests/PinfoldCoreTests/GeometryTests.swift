@@ -217,4 +217,47 @@ struct GeometryTests {
         #expect(pm.coordinate == Coordinate(longitude: 9, latitude: 9))
         #expect(pm.geometries.isEmpty)
     }
+
+    // MARK: - CB-4 (A2a): every point of a MultiGeometry
+
+    @Test func multiGeometryThreePoints_firstIsRepresentativeRestAreGeometries() throws {
+        let pm = try onlyPlacemark("""
+        <MultiGeometry>
+          <Point><coordinates>1,2</coordinates></Point>
+          <Point><coordinates>3,4</coordinates></Point>
+          <Point><coordinates>5,6</coordinates></Point>
+        </MultiGeometry>
+        """)
+        #expect(pm.hasPoint)
+        #expect(pm.coordinate == Coordinate(longitude: 1, latitude: 2))
+        #expect(pm.geometries == [
+            .point(Coordinate(longitude: 3, latitude: 4)),
+            .point(Coordinate(longitude: 5, latitude: 6)),
+        ])
+    }
+
+    @Test func multiGeometryPointsAndLine_documentOrderPreserved() throws {
+        let pm = try onlyPlacemark("""
+        <MultiGeometry>
+          <Point><coordinates>1,2</coordinates></Point>
+          <LineString><coordinates>10,10 11,11</coordinates></LineString>
+          <Point><coordinates>3,4</coordinates></Point>
+          <gx:Track><gx:coord>20 20</gx:coord><gx:coord>21 21</gx:coord></gx:Track>
+        </MultiGeometry>
+        """)
+        #expect(pm.coordinate == Coordinate(longitude: 1, latitude: 2))
+        #expect(pm.geometries == [
+            .lineString([Coordinate(longitude: 10, latitude: 10), Coordinate(longitude: 11, latitude: 11)]),
+            .point(Coordinate(longitude: 3, latitude: 4)),
+            .track([Coordinate(longitude: 20, latitude: 20), Coordinate(longitude: 21, latitude: 21)]),
+        ])
+    }
+
+    @Test func invalidSecondPointIsNotAGeometry() throws {
+        let pm = try onlyPlacemark("""
+        <MultiGeometry><Point><coordinates>1,2</coordinates></Point>
+        <Point><coordinates>oops</coordinates></Point></MultiGeometry>
+        """)
+        #expect(pm.geometries.isEmpty)
+    }
 }

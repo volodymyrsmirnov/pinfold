@@ -335,6 +335,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     private static func firstCoordinate(of geometries: [KMLGeometry]) -> Coordinate? {
         for geometry in geometries {
             switch geometry {
+            case let .point(coordinate):
+                return coordinate
             case let .lineString(coords), let .track(coords):
                 if let first = coords.first {
                     return first
