@@ -148,7 +148,7 @@ struct KMLParserTests {
         do {
             _ = try KMLParser.parse(data: Data(xml.utf8))
             Issue.record("expected a parse error")
-        } catch let KMLParseError.malformedXML(line, _, detail) {
+        } catch let KMLParseError.malformedXML(line, _, detail, _) {
             #expect(line > 0)
             #expect(!detail.isEmpty)
         } catch {

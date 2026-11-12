@@ -25,7 +25,8 @@ public enum KMLParser {
             let detail = nsError.map { "\($0.domain) code \($0.code)" } ?? "unknown"
             throw KMLParseError.malformedXML(line: parser.lineNumber,
                                              column: parser.columnNumber,
-                                             detail: detail)
+                                             detail: detail,
+                                             code: nsError?.code ?? 0)
         }
         return delegate.makeDocument()
     }

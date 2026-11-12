@@ -30,7 +30,7 @@ struct XMLPreflightTests {
         var data = Data()
         for scalar in [UnicodeScalar(0xFEFF)!] + Array(text.unicodeScalars) {
             let value = scalar.value
-            let bytes = [UInt8(value >> 24), UInt8((value >> 16) & 0xFF), UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)]
+            let bytes = (0 ..< 4).map { UInt8((value >> UInt32(24 - 8 * $0)) & 0xFF) }
             data.append(contentsOf: bigEndian ? bytes : bytes.reversed())
         }
         return data

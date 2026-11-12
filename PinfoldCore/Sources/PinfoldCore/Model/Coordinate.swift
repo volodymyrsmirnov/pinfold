@@ -44,6 +44,8 @@ public struct Coordinate: Equatable, Sendable {
             func flushNumber(upTo end: Int) {
                 guard let start = tokenStart else { return }
                 tokenStart = nil
+                // The bytes come from a UTF-8 buffer, not Data, so the Data lint rule does not apply.
+                // swiftlint:disable:next optional_data_string_conversion
                 let token = String(decoding: UnsafeBufferPointer(rebasing: bytes[start ..< end]), as: UTF8.self)
                 if continues, !current.isEmpty {
                     current.append(token)
