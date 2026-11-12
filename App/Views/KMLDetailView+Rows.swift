@@ -18,6 +18,10 @@ extension KMLDetailView {
         ScrollViewReader { proxy in
             List {
                 searchSection
+                if let offer = networkLinkOffer {
+                    networkLinkSection(offer)
+                }
+                remoteImagesSection
                 if let outline {
                     if outline.rows.isEmpty, !query.isEmpty {
                         Section {
@@ -33,6 +37,7 @@ extension KMLDetailView {
                         }
                     }
                 }
+                OrphanedNotesSection(notes: orphanedNotes)
             }
             .listStyle(.insetGrouped)
             .onGeometryChange(for: CGRect.self) { geometry in

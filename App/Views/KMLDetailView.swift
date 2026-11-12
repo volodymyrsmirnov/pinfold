@@ -36,6 +36,9 @@ struct KMLDetailView: View {
     @Environment(NavigationRouter.self) var router: NavigationRouter?
     @Environment(AppSettings.self) var settings: AppSettings?
     @Environment(\.scenePhase) var scenePhase
+    @Environment(\.resourceCache) var resourceCache
+    @Environment(Catalog.self) var catalog: Catalog?
+    @Environment(ImportCoordinator.self) var importCoordinator: ImportCoordinator?
 
     // MARK: - State
 
@@ -72,6 +75,17 @@ struct KMLDetailView: View {
 
     /// The folder or document description currently shown in a sheet.
     @State var infoSheet: DescriptionSheetContent?
+
+    /// Progress of a user-confirmed network-link snapshot (see `NetworkLinkPrompt`).
+    @State var networkLinkStatus: NetworkLinkStatus = .idle
+
+    /// Notes whose placemark is no longer in the file, computed once per load.
+    @State var orphanedNotes: [(key: String, note: PlacemarkNote)] = []
+
+    /// Remote images waiting for the user's consent (policy "Ask"); `.none` otherwise.
+    @State var pendingConsent = ResourceCache.PendingConsent.none
+    /// Whether the user chose "Not Now" on the consent banner for this visit.
+    @State var consentDismissed = false
 
     /// Live row geometry for scroll-anchor capture/restore. A plain class (not @Observable):
     /// per-frame writes must not invalidate the view tree. See `RowFrameBox`.
@@ -154,6 +168,7 @@ struct KMLDetailView: View {
             collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
+            networkLinkStatus = .idle
             pendingScrollRowID = nil
             rowFrames.reset()
             // Ask for a one-shot location fix so distances and the nearest sort can light up.
