@@ -193,6 +193,10 @@ struct RootView: View {
             syncStatus: syncStatus
         ))
         .catalogErrorAlert(catalog)
+        // Dropping .kml/.kmz files anywhere on the window imports them (C8).
+        .onDrop(of: [.item], isTargeted: nil) { providers in
+            handleDrop(providers)
+        }
         .task { await bootstrap() }
         // Save the resume snapshot on the way OUT (`.inactive` is always passed through
         // before backgrounding — and before iOS's snapshot passes — and also fires on the
@@ -260,6 +264,22 @@ struct RootView: View {
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             handleSpotlightActivity(activity)
         }
+    }
+}
+
+// MARK: - Drag and drop
+
+extension RootView {
+    /// Stages the supported files among the dropped providers and queues them for import.
+    /// Returns whether the drop was taken; unsupported files are silently ignored.
+    func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !providers.isEmpty else { return false }
+        Task {
+            let urls = await DroppedFiles.load(providers)
+            guard !urls.isEmpty else { return }
+            importCoordinator.enqueue(urls, catalog: catalog, cache: resourceCache)
+        }
+        return true
     }
 }
 
