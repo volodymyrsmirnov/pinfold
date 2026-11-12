@@ -36,6 +36,10 @@ public enum KMLReadError: Error {
     case fileTooLarge
     /// The bytes are not KML, KMZ, GPX or GeoJSON (empty input, an unknown XML root, plain text).
     case unsupportedFormat
+    /// The file looks like GeoJSON but is not valid JSON; carries the parser's short reason.
+    case malformedGeoJSON(String)
+    /// The file is valid but nests or repeats geometry beyond what Pinfold will build.
+    case geoJSONTooComplex
 }
 
 extension KMLReadError: LocalizedError {
@@ -47,6 +51,10 @@ extension KMLReadError: LocalizedError {
             "This file is too large to open."
         case .unsupportedFormat:
             "This is not a KML, KMZ, GPX or GeoJSON file."
+        case let .malformedGeoJSON(detail):
+            "This GeoJSON file is not valid JSON (\(detail))."
+        case .geoJSONTooComplex:
+            "This GeoJSON file is too complex to open."
         }
     }
 }

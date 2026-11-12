@@ -50,7 +50,7 @@ public enum KMLParser {
     /// element. This keeps the check O(prolog) instead of O(document) for legitimate
     /// multi-MB files, and means a literal "<!DOCTYPE" inside element content or CDATA is
     /// treated as plain text, not a DTD. The input is already UTF-8 (see `XMLPreflight`).
-    private static func prologHasProhibitedDoctype(_ data: Data) -> Bool {
+    static func prologHasProhibitedDoctype(_ data: Data) -> Bool {
         let doctype = Array("<!DOCTYPE".utf8)
         let comment = Array("<!--".utf8)
         return data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
