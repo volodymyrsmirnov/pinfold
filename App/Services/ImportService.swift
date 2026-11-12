@@ -45,7 +45,8 @@ enum ImportError: Error {
 
 /// Static methods that implement the two-phase import flow:
 /// 1. `prepare` — off-main, pure computation; returns `ImportResult`.
-/// 2. `commit`  — main-actor, performs storage (writes files to disk); returns `CatalogEntry`.
+/// 2. `commit`  — plain synchronous file I/O, `nonisolated`; the coordinator runs it through
+///    `commitOffMain` so the main actor stays free. Returns the `CatalogEntry` on disk.
 enum ImportService {
     fileprivate static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
@@ -133,7 +134,21 @@ enum ImportService {
         )
     }
 
-    // MARK: - Commit (main actor)
+    // MARK: - Commit
+
+    /// Runs `commit` on a background task so the file writes never block the main actor (B11).
+    /// The caller reloads the `Catalog` afterwards, on the main actor.
+    ///
+    /// - Parameter onStart: Called on the background task just before the writes begin. A test
+    ///   seam: it lets a test observe which thread the commit runs on.
+    static func commitOffMain(
+        _ result: ImportResult,
+        storage: StorageLocations,
+        cache: ResourceCache,
+        onStart: (@Sendable () -> Void)? = nil
+    ) async throws -> CatalogEntry {
+        try await detachedCommit(result, storage: storage, cache: cache, onStart: onStart)
+    }
 
     /// Persists a prepared import result to disk: creates the per-entry folder, writes the
     /// `metadata.json` sidecar and the original file, caches embedded resources, and fires a
@@ -153,7 +168,6 @@ enum ImportService {
     ///
     /// - Returns: The `CatalogEntry` that now exists on disk.
     /// - Throws: A file-system error if folder creation or file writing fails.
-    @MainActor
     @discardableResult
     static func commit(
         _ result: ImportResult,
@@ -202,7 +216,10 @@ enum ImportService {
             try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
         } catch {
             ImportService.logger.error(
-                "Cache write failed for \(entry.storageFolderName, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                """
+                Cache write failed for \(entry.storageFolderName, privacy: .public): \
+                \(error.localizedDescription, privacy: .public)
+                """
             )
             try? FileManager.default.removeItem(at: resourcesDir)
             cacheIsReady = false
@@ -229,7 +246,10 @@ private func removeFailedImport(_ entry: CatalogEntry, storage: StorageLocations
         try storage.removeFolder(for: entry)
     } catch {
         ImportService.logger.error(
-            "Could not clean up failed import \(entry.storageFolderName, privacy: .public): \(error.localizedDescription, privacy: .public)"
+            """
+            Could not clean up failed import \(entry.storageFolderName, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
         )
     }
 }
@@ -241,4 +261,19 @@ private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to
     Task.detached {
         await cache.downloadRemote(hrefs, to: resourcesDir)
     }
+}
+
+/// Runs `ImportService.commit` in a detached task. A `nonisolated` free function so the
+/// `Task.detached` closure is compiled outside any `@MainActor` caller's SIL (see the
+/// `ClosureLifetimeFixup` note in FavoritesView.swift).
+private func detachedCommit(
+    _ result: ImportResult,
+    storage: StorageLocations,
+    cache: ResourceCache,
+    onStart: (@Sendable () -> Void)?
+) async throws -> CatalogEntry {
+    try await Task.detached(priority: .userInitiated) {
+        onStart?()
+        return try ImportService.commit(result, storage: storage, cache: cache)
+    }.value
 }

@@ -1,4 +1,5 @@
 import Foundation
+import os
 @testable import Pinfold
 import PinfoldCore
 import Testing
@@ -326,5 +327,21 @@ import Testing
         // The retry (same result) now succeeds and leaves exactly one folder.
         let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
         #expect(folderNames(in: storage.root) == [entry.storageFolderName])
+    }
+
+    // MARK: - Off the main actor (B11)
+
+    @Test func commit_runsOffTheMainActor() async throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let ranOnMain = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+
+        let entry = try await ImportService.commitOffMain(result, storage: storage, cache: stubCache()) {
+            ranOnMain.withLock { $0 = Thread.isMainThread }
+        }
+
+        #expect(ranOnMain.withLock { $0 } == false)
+        #expect(FileManager.default.fileExists(atPath: storage.originalFile(for: entry).path))
     }
 }

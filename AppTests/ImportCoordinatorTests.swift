@@ -159,4 +159,253 @@ import Testing
         #expect(coordinator.importError == nil)
         #expect(catalog.entries.count == 2)
     }
+
+    // MARK: - One queue for every arrival path (B11, B16)
+
+    private func makeInbox(_ name: String = "Inbox") throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    @Test func sameBytesFromOpenedFileAndInboxScan_importOnce() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let inboxURL = try makeInbox()
+        let bytes = kml(lon: 10, lat: 10)
+        let opened = inboxURL.appendingPathComponent("opened.kml")
+        let sameBytes = inboxURL.appendingPathComponent("other-name.kml")
+        try bytes.write(to: opened)
+        try bytes.write(to: sameBytes)
+
+        // "Open in" enqueues the file, then the inbox scan lists it again plus a copy of the
+        // same bytes under another name.
+        coordinator.enqueueOwned([.init(url: opened)], catalog: catalog, storage: storage, cache: cache)
+        let inbox = PendingImportInbox(
+            inboxURL: inboxURL, coordinator: coordinator, catalog: catalog, storage: storage, cache: cache
+        )
+        #expect(inbox.drain() == 1, "the already-queued path must not be enqueued a second time")
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1)
+        #expect(coordinator.pendingDuplicate == nil)
+        #expect(!exists(opened) && !exists(sameBytes), "both copies are cleaned up")
+    }
+
+    @Test func sameFileEnqueuedTwice_importsOnce() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let file = try makeInbox().appendingPathComponent("a.kml")
+        try kml(lon: 11, lat: 11).write(to: file)
+
+        coordinator.enqueue([file, file], catalog: catalog, storage: storage, cache: cache)
+        coordinator.enqueue([file], catalog: catalog, storage: storage, cache: cache)
+        #expect(coordinator.totalCount == 1)
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1)
+        #expect(coordinator.pendingDuplicate == nil)
+        #expect(coordinator.importError == nil)
+        #expect(exists(file), "a picker file is never deleted")
+    }
+
+    @Test func inboxCopy_isDeletedOnSuccess_keptOnTransientFailure_deletedOnParseFailure() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let log = ImportFailureLog()
+        coordinator.failureLog = log
+        let dir = try makeInbox()
+        let good = dir.appendingPathComponent("good.kml")
+        let bad = dir.appendingPathComponent("bad.kml")
+        try kml(lon: 12, lat: 12).write(to: good)
+        try Data("garbage".utf8).write(to: bad)
+
+        coordinator.enqueueOwned([.init(url: good), .init(url: bad)], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(!exists(good), "deleted on success")
+        #expect(!exists(bad), "deleted on a permanent (parse) failure")
+        #expect(log.failures.count == 1)
+        #expect(catalog.entries.count == 1)
+
+        // A transient failure: the storage root becomes read-only, so the commit fails.
+        let transient = dir.appendingPathComponent("later.kml")
+        try kml(lon: 13, lat: 13).write(to: transient)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: storage.root.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: storage.root.path) }
+
+        coordinator.enqueueOwned([.init(url: transient)], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(exists(transient), "kept on a transient failure so a later drain retries it")
+        #expect(log.failures.count == 2)
+        #expect(coordinator.importError == nil, "non-interactive sources use the failure log, not the alert")
+    }
+
+    @Test func nonInteractiveActiveDuplicate_isSkippedSilently() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let log = ImportFailureLog()
+        coordinator.failureLog = log
+        let content = kml(lon: 14, lat: 14)
+        coordinator.enqueuePrepared([(content, "a.kml")], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        coordinator.enqueuePrepared(
+            [(content, "again.kml")], interactive: false, catalog: catalog, storage: storage, cache: cache
+        )
+        await coordinator.drainForTesting()
+
+        #expect(coordinator.pendingDuplicate == nil)
+        #expect(coordinator.importError == nil)
+        #expect(log.failures.isEmpty)
+        #expect(catalog.entries.count == 1)
+    }
+
+    // MARK: - Trashed duplicates (B9)
+
+    private func seedTrashed(
+        _ coordinator: ImportCoordinator, _ catalog: Catalog, _ storage: StorageLocations, _ cache: ResourceCache,
+        content: Data
+    ) async {
+        coordinator.enqueuePrepared([(content, "orig.kml")], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        if let entry = catalog.entries.first {
+            await catalog.moveToTrash(entry)
+        }
+    }
+
+    @Test func trashedDuplicate_stallsWithTrashedKind() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let content = kml(lon: 20, lat: 20)
+        await seedTrashed(coordinator, catalog, storage, cache, content: content)
+        #expect(catalog.active.isEmpty)
+
+        coordinator.enqueuePrepared([(content, "again.kml")], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        #expect(coordinator.pendingDuplicate?.kind == .trashed)
+        #expect(coordinator.pendingDuplicate?.existingEntry.isTrashed == true)
+    }
+
+    @Test func restoreTrashedDuplicate_restoresAndCreatesNoSecondEntry() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let content = kml(lon: 21, lat: 21)
+        await seedTrashed(coordinator, catalog, storage, cache, content: content)
+        coordinator.enqueuePrepared([(content, "again.kml")], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        coordinator.restoreTrashedDuplicate(catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1)
+        #expect(catalog.active.count == 1)
+        #expect(coordinator.pendingDuplicate == nil)
+    }
+
+    @Test func importAsNew_createsSecondEntry() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let content = kml(lon: 22, lat: 22)
+        await seedTrashed(coordinator, catalog, storage, cache, content: content)
+        coordinator.enqueuePrepared([(content, "again.kml")], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        coordinator.importAnyway(catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 2)
+        #expect(catalog.active.count == 1)
+        #expect(catalog.trashed.count == 1)
+    }
+
+    @Test func trashedDuplicateFromInbox_isNotDroppedSilently() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let content = kml(lon: 23, lat: 23)
+        await seedTrashed(coordinator, catalog, storage, cache, content: content)
+        let file = try makeInbox().appendingPathComponent("shared.kml")
+        try content.write(to: file)
+
+        coordinator.enqueueOwned([.init(url: file)], catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+
+        #expect(coordinator.pendingDuplicate?.kind == .trashed, "a trashed duplicate prompts from every source")
+        #expect(exists(file), "the copy stays until the user decides")
+
+        coordinator.skipDuplicate(catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(!exists(file), "skipping deletes the app-owned copy")
+    }
+
+    // MARK: - Progress and cancel (C4a)
+
+    /// Waits until the drain has dequeued its first item (it is then in flight).
+    private func waitUntilFirstItemStarts(_ coordinator: ImportCoordinator) async {
+        while coordinator.currentFilename == nil {
+            await Task.yield()
+        }
+    }
+
+    @Test func progressCountsAdvance() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let first = kml(lon: 30, lat: 30)
+        coordinator.enqueuePrepared(
+            [(first, "a.kml"), (first, "dup.kml"), (kml(lon: 31, lat: 31), "b.kml")],
+            catalog: catalog, storage: storage, cache: cache
+        )
+        #expect(coordinator.totalCount == 3)
+        #expect(coordinator.completedCount == 0)
+        #expect(coordinator.currentPosition == 1)
+
+        await coordinator.drainForTesting()
+        // Stalled on the duplicate after one finished item.
+        #expect(coordinator.completedCount == 1)
+        #expect(coordinator.currentPosition == 2)
+
+        coordinator.skipDuplicate(catalog: catalog, storage: storage, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(coordinator.completedCount == 3)
+        #expect(coordinator.totalCount == 3)
+
+        // A new batch restarts the counters.
+        coordinator.enqueuePrepared([(kml(lon: 32, lat: 32), "c.kml")], catalog: catalog, storage: storage, cache: cache)
+        #expect(coordinator.totalCount == 1)
+        #expect(coordinator.completedCount == 0)
+        await coordinator.drainForTesting()
+    }
+
+    @Test func cancel_dropsRemainingItems_currentItemCompletes() async {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        coordinator.enqueuePrepared(
+            [(kml(lon: 40, lat: 40), "a.kml"), (kml(lon: 41, lat: 41), "b.kml"), (kml(lon: 42, lat: 42), "c.kml")],
+            catalog: catalog, storage: storage, cache: cache
+        )
+        await waitUntilFirstItemStarts(coordinator)
+
+        coordinator.cancel()
+        #expect(coordinator.totalCount == 1)
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1, "only the in-flight item completes")
+        #expect(coordinator.completedCount == 1)
+        #expect(coordinator.isImporting == false)
+    }
+
+    @Test func cancel_deletesPendingInboxCopies() async throws {
+        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let dir = try makeInbox()
+        var files: [URL] = []
+        for index in 0 ..< 3 {
+            let file = dir.appendingPathComponent("f\(index).kml")
+            try kml(lon: Double(50 + index), lat: 50).write(to: file)
+            files.append(file)
+        }
+        coordinator.enqueueOwned(files.map { .init(url: $0) }, catalog: catalog, storage: storage, cache: cache)
+        await waitUntilFirstItemStarts(coordinator)
+
+        coordinator.cancel()
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1)
+        #expect(files.allSatisfy { !exists($0) }, "the in-flight copy is deleted on success, the pending ones on cancel")
+    }
 }

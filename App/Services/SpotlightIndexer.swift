@@ -117,10 +117,11 @@ enum SpotlightIndexer {
 
     // MARK: - Live-index wrappers (fire-and-forget)
 
-    /// Indexes (or re-indexes) every item for `entry`. Fire-and-forget.
-    static func index(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
-        let items = items(for: entry, indexEntries: indexEntries)
-        spotlightIndex(items)
+    /// Indexes (or re-indexes) every item for `entry`. Fire-and-forget. Callable from any
+    /// actor: the (potentially large) item list is built inside the detached task, not on the
+    /// caller's thread.
+    nonisolated static func index(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
+        spotlightIndex(entry: entry, indexEntries: indexEntries)
     }
 
     /// Removes every Spotlight item belonging to `folderName`: its entry item plus all of its
@@ -139,16 +140,15 @@ enum SpotlightIndexer {
 
 // MARK: - Off-main detach (free functions)
 
-/// Submits `items` to the default Core Spotlight index off-main, logging any failure. A
-/// `nonisolated` free function so the `Task.detached` closure is compiled here rather than
-/// inside a `@MainActor` caller's SIL (mirrors `FavoritesView`'s pattern).
-private func spotlightIndex(_ items: [CSSearchableItem]) {
-    guard !items.isEmpty else { return }
-    // `CSSearchableItem` isn't `Sendable`, but these items are freshly built here and never
-    // touched again after this call — ownership transfers wholly into the detached task, so the
-    // capture is race-free. `nonisolated(unsafe)` asserts that to the compiler.
-    nonisolated(unsafe) let items = items
+/// Builds the items for `entry` and submits them to the default Core Spotlight index, all off
+/// the caller's thread, logging any failure. A `nonisolated` free function so the
+/// `Task.detached` closure is compiled here rather than inside a `@MainActor` caller's SIL
+/// (mirrors `FavoritesView`'s pattern). `CSSearchableItem` isn't `Sendable`, so the items are
+/// created and consumed entirely inside the task; only value-type inputs cross the boundary.
+private func spotlightIndex(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
     Task.detached(priority: .utility) {
+        let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
+        guard !items.isEmpty else { return }
         do {
             try await CSSearchableIndex.default().indexSearchableItems(items)
         } catch {
