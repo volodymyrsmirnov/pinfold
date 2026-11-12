@@ -131,6 +131,16 @@ import Testing
         #expect(reopened.note(for: p)?.text == "Bring water")
     }
 
+    @Test func notesRevisionBumpsOnlyWhenNotesChange() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        let before = store.notesRevision
+        store.toggleFavorite(point("r"))
+        #expect(store.notesRevision == before)
+        store.setNote("x", for: point("r"))
+        #expect(store.notesRevision != before)
+    }
+
     @Test func clearingANoteWritesATombstone() throws {
         let (entry, storage) = try makeEntryAndStorage()
         let store = PlacemarkAnnotations(entry: entry, storage: storage)

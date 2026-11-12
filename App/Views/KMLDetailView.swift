@@ -248,8 +248,8 @@ struct KMLDetailView: View {
             documentLoaded: document != nil,
             collapsed: collapsedFolderIDs,
             nearestFirst: nearestFirst,
-            corpusReady: searchCorpus != nil,
-            noteTexts: searchNoteTexts,
+            corpusReady: isSearchActive && searchCorpus != nil,
+            notesRevision: isSearchActive ? (annotations?.notesRevision ?? 0) : 0,
             // A new fix (or the first one) must rebuild a nearest-first outline so the order
             // reflects the user's current position. Identity by coordinate keeps it cheap.
             locationLat: locationAuth.lastLocation?.coordinate.latitude,
