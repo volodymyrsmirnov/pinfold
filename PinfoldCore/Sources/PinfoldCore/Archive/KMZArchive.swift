@@ -72,11 +72,13 @@ public enum KMZArchive {
             var entries: [String: Data] = [:]
             var extractedTotal = 0
             for (entry, safePath) in fileEntries {
+                try Task.checkCancellation()
                 var bytes = Data()
                 // Enforce the byte budget during extraction too: zip headers can lie about
                 // uncompressed sizes, so this streaming check is the real
                 // decompression-bomb defense and must not be removed.
                 _ = try archive.extract(entry) { chunk in
+                    try Task.checkCancellation()
                     extractedTotal &+= chunk.count
                     guard extractedTotal >= 0, extractedTotal <= maxUncompressedBytes else {
                         throw KMZArchiveError.archiveTooLarge
@@ -111,7 +113,9 @@ public enum KMZArchive {
                 throw KMZArchiveError.archiveTooLarge
             }
             var bytes = Data()
+            try Task.checkCancellation()
             _ = try archive.extract(root.entry) { chunk in
+                try Task.checkCancellation()
                 guard bytes.count + chunk.count <= maxRootBytes else {
                     throw KMZArchiveError.archiveTooLarge
                 }
@@ -147,6 +151,7 @@ public enum KMZArchive {
             var total = 0
             do {
                 for (entry, safePath) in fileEntries where safePath != rootPath {
+                    try Task.checkCancellation()
                     let key = rootRelativeKey(safePath, rootKMLPath: rootPath)
                     let name = filenameFor(key)
                     guard isFlatFilename(name) else { continue }
@@ -187,6 +192,7 @@ public enum KMZArchive {
         do {
             defer { try? handle.close() }
             _ = try archive.extract(entry) { chunk in
+                try Task.checkCancellation()
                 running &+= chunk.count
                 guard running >= 0, running <= limit else { throw KMZArchiveError.archiveTooLarge }
                 try handle.write(contentsOf: chunk)
@@ -210,6 +216,8 @@ public enum KMZArchive {
             return try body()
         } catch let error as KMZArchiveError {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw KMZArchiveError.corruptArchive(detail: String(describing: error))
         }

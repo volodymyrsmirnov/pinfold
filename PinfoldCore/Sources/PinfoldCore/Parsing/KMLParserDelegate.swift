@@ -27,6 +27,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// Set by the delegate to abort parsing; `KMLParser.parse` rethrows it.
     var abortError: Error?
 
+    /// Start elements seen, for the periodic cancellation check.
+    private var startElementCount = 0
+    private static let cancellationCheckInterval = 256
+
     private var idCounter = 0
     private func nextID(_ prefix: String) -> String {
         idCounter += 1; return "\(prefix)\(idCounter)"
@@ -247,6 +251,12 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
     // swiftlint:disable:next opening_brace
     {
+        startElementCount += 1
+        if startElementCount % Self.cancellationCheckInterval == 0, Task.isCancelled {
+            abortError = CancellationError()
+            parser.abortParsing()
+            return
+        }
         if startElementWhileCapturingDescription(elementName, attributes: attributeDict) {
             return
         }
