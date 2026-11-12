@@ -22,6 +22,24 @@ extension PlacemarkIndex {
         writeMarker(sha, named: sourceStampFilename, in: resourcesDir)
     }
 
+    /// Records which generation of derived data (index, remote hrefs, ...) `resources/` holds.
+    static let derivedDataVersionFilename = "placemarks-index.version"
+
+    /// Bump when the importer starts deriving something new from the original, so entries
+    /// built by an older build are refreshed once. 2 = description `<img>` hrefs are gathered
+    /// (wave 3); an entry with no version file predates that.
+    static let currentDerivedDataVersion = 2
+
+    /// `true` when `resourcesDir` was built by the current derived-data generation.
+    static func derivedDataIsCurrent(in resourcesDir: URL) -> Bool {
+        readMarker(derivedDataVersionFilename, in: resourcesDir).flatMap(Int.init) == currentDerivedDataVersion
+    }
+
+    /// Marks `resourcesDir` as built by the current derived-data generation.
+    static func writeDerivedDataVersion(to resourcesDir: URL) {
+        writeMarker(String(currentDerivedDataVersion), named: derivedDataVersionFilename, in: resourcesDir)
+    }
+
     /// The SHA of the original last recorded as unparseable, or `nil`.
     static func parseFailureMarker(in resourcesDir: URL) -> String? {
         readMarker(parseFailureFilename, in: resourcesDir)

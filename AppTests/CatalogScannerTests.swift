@@ -442,6 +442,7 @@ import Testing
         try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
         if withIndex {
             try PlacemarkIndex.write([], to: resourcesDir)
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
         }
         return resourcesDir
     }
