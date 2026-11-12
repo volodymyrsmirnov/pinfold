@@ -38,7 +38,7 @@ enum DescriptionBlocks {
         var builder = DescriptionBlockBuilder()
         for token in DescriptionTokenizer.tokens(html) {
             builder.consume(token)
-            if builder.blocks.count >= maxBlocks {
+            if builder.size >= maxBlocks {
                 break
             }
         }
@@ -137,6 +137,12 @@ struct DescriptionBlockBuilder {
     ]
     private static let headings: Set<String> = ["h1", "h2", "h3", "h4", "h5", "h6"]
 
+    /// Emitted blocks plus the list items / table rows still being collected; this is what
+    /// the block cap counts, so a huge list or table cannot dodge it.
+    var size: Int {
+        blocks.count + listItems.count + rows.count
+    }
+
     private var inStructure: Bool {
         listDepth > 0 || tableDepth > 0
     }
@@ -156,8 +162,12 @@ struct DescriptionBlockBuilder {
 
     /// Flushes anything still open (unclosed tags degrade to the text they held).
     mutating func finish() -> [DescriptionBlocks.Block] {
-        closeList()
-        closeTable()
+        while listDepth > 0 {
+            closeList()
+        }
+        while tableDepth > 0 {
+            closeTable()
+        }
         flushParagraph()
         return blocks
     }
@@ -218,9 +228,6 @@ struct DescriptionBlockBuilder {
             closeRow()
         case "td", "th":
             closeCell()
-            if name == "th" {
-                boldDepth = max(0, boldDepth - 1)
-            }
         default:
             if Self.blockTags.contains(name) {
                 if Self.headings.contains(name) {

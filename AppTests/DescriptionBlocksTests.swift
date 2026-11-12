@@ -138,4 +138,62 @@ struct DescriptionBlocksTests {
         #expect(blocks.last == .image(src: "p.png", alt: nil))
         #expect(blocks.count == 2)
     }
+
+    private func allText(_ blocks: [DescriptionBlocks.Block]) -> String {
+        var out: [String] = []
+        for block in blocks {
+            switch block {
+            case let .paragraph(runs): out.append(DescriptionBlocks.text(of: runs))
+            case let .list(_, items): out += items.map { DescriptionBlocks.text(of: $0) }
+            case let .table(rows): out += rows.flatMap { $0.map { DescriptionBlocks.text(of: $0) } }
+            case .image: break
+            }
+        }
+        return out.joined(separator: "|")
+    }
+
+    @Test func unfinishedNestedListAtEOFKeepsText() {
+        let blocks = DescriptionBlocks.parse("<ul><li>A<ul><li>Gate code 1234")
+        #expect(allText(blocks).contains("Gate code 1234"))
+        #expect(allText(blocks).contains("A"))
+    }
+
+    @Test func unfinishedNestedTableAtEOFKeepsText() {
+        let blocks = DescriptionBlocks.parse("<table><tr><td>k</td><td><table><tr><td>Gate code 1234")
+        #expect(allText(blocks).contains("Gate code 1234"))
+    }
+
+    @Test func listItemsCountTowardTheCap() {
+        let blocks = DescriptionBlocks.parse("<ul>" + String(repeating: "<li>x", count: 5000) + "</ul>")
+        var count = 0
+        for case let .list(_, items) in blocks {
+            count += items.count
+        }
+        #expect(count > 0 && count <= DescriptionBlocks.maxBlocks + 1)
+    }
+
+    @Test func tableRowsCountTowardTheCap() {
+        let html = "<table>" + String(repeating: "<tr><td>x</td><td>y</td></tr>", count: 5000) + "</table>"
+        var count = 0
+        for case let .table(rows) in DescriptionBlocks.parse(html) {
+            count += rows.count
+        }
+        #expect(count > 0 && count <= DescriptionBlocks.maxBlocks + 1)
+    }
+
+    @Test func closingThDoesNotUnbalanceBold() {
+        let blocks = DescriptionBlocks.parse("<b>keep</b><table><tr><th>H</th></tr></table><p><b>x</b> after</p>")
+        guard case let .paragraph(runs) = blocks.last else {
+            Issue.record("expected a trailing paragraph")
+            return
+        }
+        #expect(runs.last?.isBold == false)
+        // An extra </th> must not cancel an enclosing <b>.
+        let nested = DescriptionBlocks.parse("<b><table><tr><th>H</th></tr></table>tail</b>")
+        guard case let .paragraph(tail) = nested.last else {
+            Issue.record("expected tail paragraph")
+            return
+        }
+        #expect(tail.first?.isBold == true)
+    }
 }
