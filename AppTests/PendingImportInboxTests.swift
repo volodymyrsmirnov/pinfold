@@ -39,7 +39,6 @@ import Testing
             inboxURL: inboxURL,
             coordinator: coordinator,
             catalog: catalog,
-            storage: storage,
             cache: cache
         )
         return Environment(
@@ -115,7 +114,6 @@ import Testing
             inboxURL: nonExistentInbox,
             coordinator: ImportCoordinator(),
             catalog: catalog,
-            storage: storage,
             cache: cache
         )
         let count = inbox.drain()

@@ -24,9 +24,6 @@ struct PendingImportInbox {
     /// The catalogue, used by the coordinator for deduplication and reloaded after importing.
     let catalog: Catalog
 
-    /// On-disk path helpers for creating per-entry folders and writing files.
-    let storage: StorageLocations
-
     /// Cache for writing embedded resources and initiating remote downloads.
     let cache: ResourceCache
 
@@ -72,6 +69,6 @@ struct PendingImportInbox {
                 )
             }
 
-        return coordinator.enqueueOwned(files, catalog: catalog, storage: storage, cache: cache)
+        return coordinator.enqueueOwned(files, catalog: catalog, cache: cache)
     }
 }

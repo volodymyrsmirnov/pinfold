@@ -101,11 +101,16 @@ import Observation
     }
 
     /// Restores a trashed entry by clearing `trashedAt` in its sidecar, then reloading.
-    func restore(_ entry: CatalogEntry) async {
-        guard writeTrashedAt(nil, to: entry) else { return }
+    ///
+    /// - Returns: `false` when nothing was restored (read-only entry or failed write; the
+    ///   reason is in `actionError`).
+    @discardableResult
+    func restore(_ entry: CatalogEntry) async -> Bool {
+        guard writeTrashedAt(nil, to: entry) else { return false }
         let toIndex = await indexEntries(for: entry)
         SpotlightIndexer.index(entry: entry, indexEntries: toIndex)
         await reload()
+        return true
     }
 
     /// Renames an entry by writing a new `displayName` into its sidecar, then reloading.

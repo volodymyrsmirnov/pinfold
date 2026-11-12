@@ -89,6 +89,8 @@ struct RootView: View {
     /// Whether `bootstrap()` has completed its first catalogue load. Gates the stash above:
     /// a post-bootstrap resolution miss is a genuinely missing entry, not a launch race.
     @State var didBootstrap = false
+    /// Set while a failed migration flips `syncEnabled` back, so the change handler ignores it.
+    @State var revertingSyncSetting = false
 
     @Environment(\.scenePhase) var scenePhase
 
@@ -123,7 +125,10 @@ struct RootView: View {
         _catalog = State(initialValue: Catalog(storage: .applicationSupport, cache: cache))
         let failureLog = ImportFailureLog()
         _importFailureLog = State(initialValue: failureLog)
-        _importCoordinator = State(initialValue: ImportCoordinator(failureLog: failureLog))
+        let coordinator = ImportCoordinator(failureLog: failureLog)
+        // Held until `bootstrap()` has resolved the real storage root.
+        coordinator.hold()
+        _importCoordinator = State(initialValue: coordinator)
     }
 
     var body: some View {
@@ -203,6 +208,10 @@ struct RootView: View {
         // Apply the iCloud toggle live: switch the active root (migrating existing files)
         // and restart the watcher. No relaunch required.
         .onChange(of: settings.syncEnabled) { _, _ in
+            if revertingSyncSetting {
+                revertingSyncSetting = false
+                return
+            }
             Task { await applyStorage(migrate: true) }
         }
         // Routes are per-document: switching (or clearing) the selected file invalidates
