@@ -10,6 +10,19 @@ import os
 /// href is permanently skipped (never retried).
 private let maxResourceBytes = 20 * 1024 * 1024
 
+/// Per-request timeout for a remote resource download, in seconds.
+private let downloadTimeout: TimeInterval = 20
+
+/// Concurrent downloads per entry.
+private let maxConcurrentDownloads = 4
+
+/// A 2xx response that is not an image counts as a failed attempt; after this many the href
+/// is permanently skipped (a captive portal answering 200 with HTML recovers in between).
+private let maxNonImageAttempts = 5
+
+/// Upper bound of the retry backoff.
+private let maxBackoff: TimeInterval = 24 * 60 * 60
+
 /// Maximum number of remote resources downloaded per imported entry. Caps the fan-out of a
 /// crafted file that lists thousands of hrefs (disk + arbitrary outbound requests). Enforced
 /// at the download stage so every caller is covered; the first N in input order are kept.
@@ -36,17 +49,40 @@ final class ResourceCache: Sendable {
     // MARK: - Types
 
     /// A function that fetches bytes for a given URL.
+    ///
+    /// Throw `DownloadError.tooLarge` for an over-cap body (permanent skip); any other error
+    /// is a retryable failure.
     typealias Downloader = @Sendable (URL) async throws -> Data
 
-    /// The default downloader backed by `URLSession.shared`.
+    /// Supplies the current remote-image policy; read at the start of every download pass.
+    typealias PolicyProvider = @Sendable () -> RemoteImagePolicy
+
+    /// The default downloader: `BoundedDownloader` with the size cap and a 20 s timeout.
     static let urlSessionDownloader: Downloader = { url in
-        let (data, _) = try await URLSession.shared.data(from: url)
-        return data
+        try await BoundedDownloader.fetch(url, maxBytes: maxResourceBytes, timeout: downloadTimeout)
+    }
+
+    /// The default policy provider, reading `UserDefaults.standard`.
+    static let storedPolicy: PolicyProvider = {
+        RemoteImagePolicy.stored(in: .standard)
+    }
+
+    /// What the consent banner needs: how many images are waiting and which hosts they live on.
+    struct PendingConsent: Equatable {
+        /// Number of recorded remote hrefs not yet downloaded.
+        var count: Int
+        /// Distinct lowercase hosts of those hrefs, sorted.
+        var hosts: [String]
+
+        static let none = PendingConsent(count: 0, hosts: [])
     }
 
     // MARK: - Properties
 
     private let downloader: Downloader
+    private let policy: PolicyProvider
+    private let now: @Sendable () -> Date
+    private let store = ResourceManifestStore.shared
 
     /// Diagnostics for download bounds (dropped over-cap hrefs, rejected payloads).
     private static let logger = Logger(
@@ -56,12 +92,22 @@ final class ResourceCache: Sendable {
 
     // MARK: - Init
 
-    /// Creates a `ResourceCache` with the given downloader.
+    /// Creates a `ResourceCache`.
     ///
-    /// - Parameter downloader: Closure used to fetch remote resources. Defaults to
-    ///   `URLSession.shared`. Pass a stub in tests to avoid network I/O.
-    init(downloader: @escaping Downloader = ResourceCache.urlSessionDownloader) {
+    /// - Parameters:
+    ///   - downloader: Closure used to fetch remote resources. Defaults to
+    ///     `BoundedDownloader`. Pass a stub in tests to avoid network I/O.
+    ///   - policy: Supplies the remote-image policy. Defaults to the value stored in
+    ///     `UserDefaults.standard` (`.always` when unset).
+    ///   - now: Clock used for retry backoff; injectable for tests.
+    init(
+        downloader: @escaping Downloader = ResourceCache.urlSessionDownloader,
+        policy: @escaping PolicyProvider = ResourceCache.storedPolicy,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.downloader = downloader
+        self.policy = policy
+        self.now = now
     }
 
     // MARK: - Filename derivation
@@ -104,22 +150,25 @@ final class ResourceCache: Sendable {
     /// - Throws: A file-system error if a write fails.
     func writeEmbedded(_ resources: [String: Data], to resourcesDir: URL) throws {
         guard !resources.isEmpty else { return }
-        var manifest = loadManifest(from: resourcesDir)
+        var filenames: [String: String] = [:]
         for (key, data) in resources {
             let filename = cachedFilename(for: key)
-            let dest = resourcesDir.appendingPathComponent(filename)
-            try data.write(to: dest, options: .atomic)
-            manifest[key] = filename
+            try data.write(to: resourcesDir.appendingPathComponent(filename), options: .atomic)
+            filenames[key] = filename
         }
-        try saveManifest(manifest, to: resourcesDir)
+        try store.updateManifest(in: resourcesDir) { $0.merge(filenames) { _, new in new } }
     }
 
     // MARK: - Remote downloads
 
     /// Downloads each http(s) href via the injected downloader and writes the result to
-    /// `resourcesDir`. Individual failures are silently skipped (offline-first). The
-    /// manifest is updated after each successful write, and the full expected href set is
-    /// recorded so `retryPending(in:)` can re-attempt failures later.
+    /// `resourcesDir`. Individual failures are skipped (offline-first) and retried later
+    /// with backoff. The full (capped) href set is always recorded first so
+    /// `retryPending(in:)` can resume it, whatever the policy says.
+    ///
+    /// Honours `RemoteImagePolicy`: `.never` fetches nothing, `.ask` fetches only once the
+    /// entry has consent (`grantConsent(in:)`). Hrefs already in the manifest (cached or
+    /// permanently skipped) and hrefs still inside their backoff window are not fetched.
     ///
     /// - Parameters:
     ///   - hrefs: Remote resource URLs to download.
@@ -137,47 +186,116 @@ final class ResourceCache: Sendable {
             )
             remote = Array(remote.prefix(maxRemoteResourcesPerEntry))
         }
-        // Record the (capped) expected set up front so a later retry pass can fill in any that
-        // fail now, without re-parsing the original file.
-        recordExpectedRemoteHrefs(remote, to: resourcesDir)
-        for href in remote {
-            guard let url = URL(string: href) else { continue }
-            // App Transport Security blocks plain http loads, so fetch over https. Many KML
-            // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
-            // hosts also serve https. The manifest is still keyed by the original `href`
-            // so UI lookups via `localURL(forHref:)` resolve unchanged. A host that serves
-            // *only* http (no https) is unsupported by design — the download fails and the
-            // UI falls back to a generic pin.
-            let downloadURL = Self.httpsUpgraded(url)
-            do {
-                let data = try await downloader(downloadURL)
-                // Reject payloads that are too large or aren't an image we can render. These
-                // are *content* failures, not network failures: mark the href permanently
-                // skipped (see `markSkipped`) so `retryPending` never re-fetches it.
-                guard data.count <= maxResourceBytes else {
-                    let size = data.count
-                    Self.logger.warning(
-                        "Rejecting resource over size cap (\(size, privacy: .public) bytes); skipping"
-                    )
-                    markSkipped(href, to: resourcesDir)
-                    continue
-                }
-                guard Self.looksLikeImage(data) else {
-                    Self.logger.warning("Rejecting non-image remote resource; skipping permanently")
-                    markSkipped(href, to: resourcesDir)
-                    continue
-                }
-                let filename = cachedFilename(for: href)
-                let dest = resourcesDir.appendingPathComponent(filename)
-                try data.write(to: dest, options: .atomic)
-                var manifest = loadManifest(from: resourcesDir)
-                manifest[href] = filename
-                try saveManifest(manifest, to: resourcesDir)
-            } catch {
-                // Offline-first: skip this href *transiently*. The recorded-hrefs file lets
-                // `retryPending` re-attempt it on a later materialization pass / app foreground.
+        store.recordHrefs(remote, in: resourcesDir)
+        await fetchDue(remote, to: resourcesDir)
+    }
+
+    /// Fetches the hrefs that are unresolved and out of backoff, at most
+    /// `maxConcurrentDownloads` at a time.
+    private func fetchDue(_ hrefs: [String], to resourcesDir: URL) async {
+        let state = store.state(in: resourcesDir)
+        switch policy() {
+        case .never: return
+        case .ask where !state.consent: return
+        default: break
+        }
+        let manifest = store.manifest(in: resourcesDir)
+        let current = now()
+        let due = hrefs.filter { href in
+            guard manifest[href] == nil else { return false }
+            guard let next = state.hrefs[href]?.nextAttemptAt else { return true }
+            return next <= current
+        }
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = due.makeIterator()
+            for _ in 0 ..< maxConcurrentDownloads {
+                guard let href = iterator.next() else { break }
+                group.addTask { await self.fetchOne(href, to: resourcesDir) }
+            }
+            while await group.next() != nil {
+                guard let href = iterator.next() else { continue }
+                group.addTask { await self.fetchOne(href, to: resourcesDir) }
             }
         }
+    }
+
+    private func fetchOne(_ href: String, to resourcesDir: URL) async {
+        guard let url = URL(string: href) else { return }
+        // App Transport Security blocks plain http loads, so fetch over https. Many KML
+        // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
+        // hosts also serve https. The manifest is still keyed by the original `href`
+        // so UI lookups via `localURL(forHref:)` resolve unchanged. A host that serves
+        // *only* http (no https) is unsupported by design.
+        do {
+            let data = try await downloader(Self.httpsUpgraded(url))
+            guard data.count <= maxResourceBytes else {
+                Self.logger.warning("Rejecting resource over size cap; skipping permanently")
+                markSkipped(href, to: resourcesDir)
+                return
+            }
+            guard Self.looksLikeImage(data) else {
+                // A 2xx non-image may be a captive portal: retry with backoff, give up
+                // only after `maxNonImageAttempts`.
+                Self.logger.warning("Rejecting non-image remote resource")
+                recordFailure(href, in: resourcesDir, isNonImage: true)
+                return
+            }
+            let filename = cachedFilename(for: href)
+            try data.write(to: resourcesDir.appendingPathComponent(filename), options: .atomic)
+            try store.updateManifest(in: resourcesDir) { $0[href] = filename }
+            store.updateState(in: resourcesDir) { $0.hrefs[href] = nil }
+        } catch DownloadError.tooLarge {
+            Self.logger.warning("Rejecting resource over size cap; skipping permanently")
+            markSkipped(href, to: resourcesDir)
+        } catch {
+            // HTTP errors, offline, timeouts: retry later with backoff.
+            recordFailure(href, in: resourcesDir, isNonImage: false)
+        }
+    }
+
+    /// Delay before the next attempt after `attempts` failures: 60 s, doubling, capped at 24 h.
+    static func backoff(afterAttempts attempts: Int) -> TimeInterval {
+        guard attempts > 0 else { return 0 }
+        return min(60 * pow(2, Double(min(attempts - 1, 20))), maxBackoff)
+    }
+
+    private func recordFailure(_ href: String, in resourcesDir: URL, isNonImage: Bool) {
+        let current = now()
+        var giveUp = false
+        store.updateState(in: resourcesDir) { state in
+            var entry = state.hrefs[href] ?? DownloadState.HrefState(attempts: 0, nextAttemptAt: nil)
+            entry.attempts += 1
+            if isNonImage, entry.attempts >= maxNonImageAttempts {
+                giveUp = true
+                state.hrefs[href] = nil
+            } else {
+                entry.nextAttemptAt = current.addingTimeInterval(Self.backoff(afterAttempts: entry.attempts))
+                state.hrefs[href] = entry
+            }
+        }
+        if giveUp {
+            Self.logger.warning("Non-image content after repeated attempts; skipping permanently")
+            markSkipped(href, to: resourcesDir)
+        }
+    }
+
+    // MARK: - Consent (RemoteImagePolicy.ask)
+
+    /// What the consent banner should show for this entry: recorded remote hrefs that are not
+    /// downloaded yet, but only while the policy is `.ask` and the entry has no consent.
+    func pendingConsent(in resourcesDir: URL) -> PendingConsent {
+        guard policy() == .ask, !store.state(in: resourcesDir).consent else { return .none }
+        let manifest = store.manifest(in: resourcesDir)
+        let pending = store.recordedHrefs(in: resourcesDir).filter { manifest[$0] == nil }
+        let hosts = Set(pending.compactMap { URL(string: $0)?.host?.lowercased() })
+        return PendingConsent(count: pending.count, hosts: hosts.sorted())
+    }
+
+    /// Records the user's consent to download this entry's remote images, then downloads
+    /// everything pending.
+    func grantConsent(in resourcesDir: URL) async {
+        store.updateState(in: resourcesDir) { $0.consent = true }
+        await retryPending(in: resourcesDir)
     }
 
     // MARK: - Image sniffing
@@ -196,16 +314,28 @@ final class ResourceCache: Sendable {
         let b = [UInt8](data.prefix(12))
 
         // PNG: 89 50 4E 47
-        if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 { return true }
+        if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 {
+            return true
+        }
         // JPEG: FF D8 FF
-        if b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF { return true }
+        if b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF {
+            return true
+        }
         // GIF: 47 49 46 38 ("GIF8")
-        if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 { return true }
+        if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 {
+            return true
+        }
         // BMP: 42 4D ("BM")
-        if b[0] == 0x42, b[1] == 0x4D { return true }
+        if b[0] == 0x42, b[1] == 0x4D {
+            return true
+        }
         // TIFF little-endian "II*\0" / big-endian "MM\0*"
-        if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 { return true }
-        if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A { return true }
+        if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 {
+            return true
+        }
+        if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A {
+            return true
+        }
         // WebP: "RIFF"...."WEBP"
         if b[0] == 0x52, b[1] == 0x49, b[2] == 0x46, b[3] == 0x46,
            b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50 { return true }
@@ -217,7 +347,9 @@ final class ResourceCache: Sendable {
                 Array("heic".utf8), Array("heix".utf8), Array("hevc".utf8),
                 Array("mif1".utf8), Array("msf1".utf8), Array("avif".utf8),
             ]
-            if imageBrands.contains(brand) { return true }
+            if imageBrands.contains(brand) {
+                return true
+            }
         }
         return false
     }
@@ -225,13 +357,25 @@ final class ResourceCache: Sendable {
     /// Signature check for payloads shorter than the 12-byte window (BMP, short TIFF/JPEG).
     private static func shortSignatureMatch(_ data: Data) -> Bool {
         let b = [UInt8](data.prefix(4))
-        if b.count >= 2, b[0] == 0x42, b[1] == 0x4D { return true } // BMP
-        if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF { return true } // JPEG
+        if b.count >= 2, b[0] == 0x42, b[1] == 0x4D {
+            return true
+        } // BMP
+        if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF {
+            return true
+        } // JPEG
         if b.count >= 4 {
-            if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 { return true } // PNG
-            if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 { return true } // GIF
-            if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 { return true } // TIFF LE
-            if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A { return true } // TIFF BE
+            if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 {
+                return true
+            } // PNG
+            if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 {
+                return true
+            } // GIF
+            if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 {
+                return true
+            } // TIFF LE
+            if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A {
+                return true
+            } // TIFF BE
         }
         return false
     }
@@ -249,15 +393,14 @@ final class ResourceCache: Sendable {
 
     // MARK: - Retry
 
-    /// Re-attempts any hrefs in `hrefs` that are not yet recorded in the manifest.
+    /// Re-attempts any hrefs in `hrefs` that are not yet recorded in the manifest and are
+    /// outside their backoff window.
     ///
     /// - Parameters:
     ///   - hrefs: The full set of remote hrefs for the entry (same list used at import).
     ///   - resourcesDir: The entry's `resources/` directory.
     func retryPending(_ hrefs: [String], to resourcesDir: URL) async {
-        let manifest = loadManifest(from: resourcesDir)
-        let pending = hrefs.filter { manifest[$0] == nil }
-        await downloadRemote(pending, to: resourcesDir)
+        await downloadRemote(hrefs, to: resourcesDir)
     }
 
     /// Re-attempts downloads for the remote hrefs recorded for this entry (by a prior
@@ -266,7 +409,7 @@ final class ResourceCache: Sendable {
     /// (or when the entry has no remote resources). Call when connectivity may have been
     /// restored — e.g. from the background materialization pass on app foreground.
     func retryPending(in resourcesDir: URL) async {
-        let recorded = loadRecordedHrefs(from: resourcesDir)
+        let recorded = store.recordedHrefs(in: resourcesDir)
         guard !recorded.isEmpty else { return }
         await retryPending(recorded, to: resourcesDir)
     }
@@ -281,7 +424,7 @@ final class ResourceCache: Sendable {
     ///   - resourcesDir: The entry's `resources/` directory.
     /// - Returns: A file `URL` that exists on disk, or `nil`.
     func localURL(forHref href: String, in resourcesDir: URL) -> URL? {
-        let manifest = loadManifest(from: resourcesDir)
+        let manifest = store.manifest(in: resourcesDir)
         // A non-nil but empty filename is the permanent-skip sentinel (see `markSkipped`):
         // the href is "resolved" but maps to no on-disk file.
         guard let filename = manifest[href], !filename.isEmpty else { return nil }
@@ -301,62 +444,7 @@ final class ResourceCache: Sendable {
     /// `fileExists` check, so a skipped href resolves to no image (UI falls back to a generic
     /// pin). No separate sidecar is needed.
     private func markSkipped(_ href: String, to resourcesDir: URL) {
-        var manifest = loadManifest(from: resourcesDir)
-        manifest[href] = ""
-        try? saveManifest(manifest, to: resourcesDir)
-    }
-
-    // MARK: - Manifest helpers
-
-    private func manifestURL(in resourcesDir: URL) -> URL {
-        resourcesDir.appendingPathComponent("manifest.json")
-    }
-
-    /// Loads the manifest from disk. Returns an empty dictionary if the file doesn't
-    /// exist or cannot be decoded.
-    private func loadManifest(from resourcesDir: URL) -> [String: String] {
-        let url = manifestURL(in: resourcesDir)
-        guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data)
-        else {
-            return [:]
-        }
-        return decoded
-    }
-
-    /// Encodes `manifest` to JSON and writes it atomically to `resourcesDir/manifest.json`.
-    private func saveManifest(_ manifest: [String: String], to resourcesDir: URL) throws {
-        let data = try JSONEncoder().encode(manifest)
-        try data.write(to: manifestURL(in: resourcesDir), options: .atomic)
-    }
-
-    // MARK: - Recorded remote hrefs (for retry)
-
-    private func recordedHrefsURL(in resourcesDir: URL) -> URL {
-        resourcesDir.appendingPathComponent("remote-hrefs.json")
-    }
-
-    /// The full set of remote http(s) hrefs expected for this entry, recorded at download
-    /// time so failed downloads can be retried later without re-parsing the original.
-    private func loadRecordedHrefs(from resourcesDir: URL) -> [String] {
-        guard let data = try? Data(contentsOf: recordedHrefsURL(in: resourcesDir)),
-              let decoded = try? JSONDecoder().decode([String].self, from: data)
-        else {
-            return []
-        }
-        return decoded
-    }
-
-    /// Merges `hrefs` into the recorded set and writes it back (sorted, atomic). No-op when
-    /// `hrefs` adds nothing new, so repeated `downloadRemote` calls don't rewrite the file.
-    private func recordExpectedRemoteHrefs(_ hrefs: [String], to resourcesDir: URL) {
-        guard !hrefs.isEmpty else { return }
-        var set = Set(loadRecordedHrefs(from: resourcesDir))
-        let original = set
-        set.formUnion(hrefs)
-        guard set != original else { return }
-        if let data = try? JSONEncoder().encode(set.sorted()) {
-            try? data.write(to: recordedHrefsURL(in: resourcesDir), options: .atomic)
-        }
+        try? store.updateManifest(in: resourcesDir) { $0[href] = "" }
+        store.updateState(in: resourcesDir) { $0.hrefs[href] = nil }
     }
 }
