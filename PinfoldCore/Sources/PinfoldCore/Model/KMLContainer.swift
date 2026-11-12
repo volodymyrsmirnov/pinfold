@@ -4,9 +4,16 @@ public struct KMLContainer: Equatable, Sendable, Identifiable {
     public let name: String?
     public let children: [KMLContainer]
     public let placemarks: [KMLPlacemark]
+    /// The container's own `<description>` HTML, if any.
+    public let descriptionHTML: String?
 
-    public init(id: String, name: String?, children: [KMLContainer], placemarks: [KMLPlacemark]) {
+    public init(id: String, name: String?, children: [KMLContainer], placemarks: [KMLPlacemark],
+                descriptionHTML: String? = nil)
+    // SwiftFormat puts the brace of a wrapped multi-line signature on its own line.
+    // swiftlint:disable:next opening_brace
+    {
         self.id = id
+        self.descriptionHTML = descriptionHTML
         self.name = name
         self.children = children
         self.placemarks = placemarks

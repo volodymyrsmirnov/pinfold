@@ -23,7 +23,9 @@ extension KMLParserDelegate {
 
     /// Returns the local name without a namespace prefix (e.g. "gx:Track" -> "Track").
     static func localName(_ raw: String) -> String {
-        if let colon = raw.firstIndex(of: ":") { return String(raw[raw.index(after: colon)...]) }
+        if let colon = raw.firstIndex(of: ":") {
+            return String(raw[raw.index(after: colon)...])
+        }
         return raw
     }
 }

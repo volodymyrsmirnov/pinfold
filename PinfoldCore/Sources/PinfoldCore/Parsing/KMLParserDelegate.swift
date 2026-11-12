@@ -14,10 +14,13 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             self.id = id
         }
 
-        func build() -> KMLContainer {
-            KMLContainer(id: id, name: name,
-                         children: children.map { $0.build() },
-                         placemarks: placemarks)
+        func build(styleUrlOverrides: [String: String] = [:]) -> KMLContainer {
+            let built = styleUrlOverrides.isEmpty ? placemarks : placemarks.map { placemark in
+                styleUrlOverrides[placemark.id].map { placemark.withStyleUrl($0) } ?? placemark
+            }
+            return KMLContainer(id: id, name: name,
+                                children: children.map { $0.build(styleUrlOverrides: styleUrlOverrides) },
+                                placemarks: built, descriptionHTML: description)
         }
     }
 
@@ -35,6 +38,20 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// Current text accumulation for the open element.
     var text = ""
 
+    /// Local names of the currently open elements, outermost first. Pushed in
+    /// `didStartElement` and popped in `didEndElement` on the normal path only (description
+    /// capture runs its own depth counter and bypasses both). Lets `name`, `description` and
+    /// `styleUrl` check their parent so stray elements (`atom:name`, overlay names, ...) are
+    /// not mistaken for the document, folder or placemark ones.
+    var elementStack: [String] = []
+
+    /// Local names a KML document may start with (a full `<kml>` or a bare fragment).
+    static let rootElements: Set<String> = ["kml", "Document", "Folder", "Placemark"]
+    /// Parents under which `<name>` is meaningful.
+    static let nameParents: Set<String> = ["Placemark", "Document", "Folder", "NetworkLink"]
+    /// Parents under which `<description>` is stored; elsewhere it is swallowed and discarded.
+    static let descriptionParents: Set<String> = ["Placemark", "Document", "Folder"]
+
     /// True only while inside an element whose character data is actually consumed on close
     /// (name, coordinates, gx:coord, style fields, key, styleUrl, value, SimpleData). When
     /// false, `foundCharacters`/`foundCDATA` skip accumulation entirely — most elements
@@ -47,7 +64,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// `wantsText` in `didStartElement`.
     static let textBearingElements: Set<String> = [
         "name", "coordinates", "coord", "color", "width", "fill", "scale", "href",
-        "key", "styleUrl", "value", "SimpleData",
+        "key", "styleUrl", "value", "SimpleData", "Snippet", "snippet", "address", "phoneNumber",
+        "displayName",
     ]
 
     /// Current placemark being assembled.
@@ -61,11 +79,20 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         var hasPoint = false
         var geometries: [KMLGeometry] = []
         /// True if the placemark declared a non-point geometry we do NOT capture into
-        /// `geometries` (e.g. `<Model>`, `<gx:MultiTrack>`). Such a placemark with no point
-        /// and no captured geometry is dropped, preserving the pre-Task-7 behavior; a truly
-        /// placeless placemark (description/data only, no geometry) stays kept.
+        /// `geometries` (today only `<Model>`; `<gx:MultiTrack>` is captured through its inner
+        /// `<gx:Track>`s). Such a placemark with no point and no captured geometry is dropped,
+        /// preserving the pre-Task-7 behavior; a truly placeless placemark (description/data
+        /// only, no geometry) stays kept.
         var hasUncapturedGeometry = false
         var sourceID: String?
+        /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that
+        /// has no point and no kept geometry.
+        var fallbackCoordinate: Coordinate?
+        /// An inline `<Style>` (or the normal pair of an inline `<StyleMap>`).
+        var inlineStyle: StyleFields?
+        var snippet: String?
+        var address: String?
+        var phoneNumber: String?
     }
 
     var placemark: PlacemarkBuilder?
@@ -110,6 +137,16 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
 
     var styleBuilder: StyleBuilder?
 
+    /// Network links collected in document order.
+    var networkLinks: [KMLNetworkLink] = []
+    /// Name and href of the open `<NetworkLink>`, flushed when it closes.
+    var networkLinkName: String?
+    var networkLinkHref: String?
+    /// Inline styles collected from placemarks, merged and registered by `makeDocument()`.
+    var pendingInlineStyles: [PendingInlineStyle] = []
+    /// Inline `<Style>` buffered by the open `<Pair>` of an inline `<StyleMap>` in a placemark.
+    var pairInlineStyle: StyleFields?
+
     // StyleMap assembly. Each <Pair> buffers its <key> ("normal"/"highlight") and style
     // reference separately because KML allows them in either order; the pair is resolved
     // when it closes. The style reference comes from either a <styleUrl> child or an
@@ -127,6 +164,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     var inDataElement = false
     var currentDataName: String?
     var currentDataValue: String?
+    var currentDataDisplayName: String?
     /// `name` attribute of the currently open <SimpleData> (SchemaData child).
     var currentSimpleDataName: String?
 
@@ -143,6 +181,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// whether to trim: markup-bearing descriptions are trimmed, while plain-text/CDATA
     /// descriptions pass through byte-identically to the pre-capture behavior.
     private var descriptionSawMarkup = false
+    /// True when the open `<description>` sits under a parent whose description we do not
+    /// keep (overlay, NetworkLink, ...): the content is still swallowed, then dropped.
+    private var descriptionDiscard = false
 
     func makeDocument() -> KMLDocument {
         // Collapse a single top-level <Document>/<Folder> into the document's root.
@@ -151,11 +192,13 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         } else {
             rootBuilder
         }
+        let overrides = resolveInlineStyles()
         return KMLDocument(name: effective.name, descriptionHTML: effective.description,
-                           root: effective.build(), styles: styles, styleMaps: styleMaps)
+                           root: effective.build(styleUrlOverrides: overrides),
+                           styles: styles, styleMaps: styleMaps, networkLinks: networkLinks)
     }
 
-    func parser(_: XMLParser, didStartElement elementName: String,
+    func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?,
                 attributes attributeDict: [String: String] = [:])
     // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
@@ -166,6 +209,13 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         text = ""
         let local = Self.localName(elementName)
+        let parent = elementStack.last
+        if parent == nil, !Self.rootElements.contains(local) {
+            abortError = KMLParseError.unsupportedRootElement(local)
+            parser.abortParsing()
+            return
+        }
+        elementStack.append(local)
         // Arm text accumulation only for elements whose close actually reads it.
         wantsText = Self.textBearingElements.contains(local)
         if startGeometryElement(local) {
@@ -176,6 +226,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             let builder = ContainerBuilder(id: nextID("c"))
             containerStack.last?.children.append(builder)
             containerStack.append(builder)
+        case "NetworkLink":
+            networkLinkName = nil
+            networkLinkHref = nil
         case "Placemark":
             var builder = PlacemarkBuilder()
             builder.sourceID = attributeDict["id"]
@@ -184,11 +237,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             descriptionDepth = 1
             descriptionBuffer = ""
             descriptionSawMarkup = false
+            descriptionDiscard = !(parent.map(Self.descriptionParents.contains) ?? false)
         case "Style":
-            // Inline per-placemark styles (Style inside a Placemark) are intentionally not
-            // captured in Phase 1 — only document-level styles are indexed. Phase 2 will
-            // handle per-placemark rich styling.
-            guard placemark == nil else { break }
+            // Inside a Placemark the style is inline: `closeStyleElement` hands it to the
+            // placemark rather than indexing it by id.
             styleBuilder = StyleBuilder(id: attributeDict["id"] ?? nextID("s"))
         case "IconStyle":
             styleBuilder?.inIconStyle = true
@@ -197,22 +249,22 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "PolyStyle":
             styleBuilder?.inPolyStyle = true
         case "StyleMap":
-            // Same Phase 1 scope restriction as Style — skip inline StyleMaps inside Placemarks.
-            guard placemark == nil else { break }
             inStyleMap = true
-            styleMapID = attributeDict["id"]
+            styleMapID = placemark == nil ? attributeDict["id"] : nil
             styleMapNormalURL = nil
         case "Pair":
             guard inStyleMap else { break }
             inPair = true
             pairKey = nil
             pairStyleURL = nil
+            pairInlineStyle = nil
         case "ExtendedData":
             inExtendedData = true
         case "Data":
             inDataElement = true
             currentDataName = attributeDict["name"]
             currentDataValue = nil
+            currentDataDisplayName = nil
         case "SimpleData":
             currentSimpleDataName = attributeDict["name"]
         default:
@@ -247,20 +299,32 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let local = Self.localName(elementName)
+        if !elementStack.isEmpty {
+            elementStack.removeLast()
+        }
+        let parent = elementStack.last
         defer { text = "" }
         // Delegate cohesive element groups to helpers to keep this dispatcher's complexity low.
-        guard !endGeometryElement(local),
+        guard !endNetworkLinkElement(local, trimmed: trimmed),
+              !endGeometryElement(local),
               !endStyleElement(local, trimmed: trimmed),
-              !endStyleMapElement(local, trimmed: trimmed),
+              !endStyleMapElement(local, trimmed: trimmed, parent: parent),
               !endExtendedDataElement(local) else { return }
         switch local {
         case "Document", "Folder":
             containerStack.removeLast()
         case "name":
-            if placemark != nil {
+            guard let parent, Self.nameParents.contains(parent) else { break }
+            if parent == "Placemark" {
                 placemark?.name = trimmed
+            } else if parent == "NetworkLink" {
+                networkLinkName = trimmed.isEmpty ? nil : trimmed
             } else if let c = containerStack.last, c !== rootBuilder {
                 c.name = trimmed
+            }
+        case "Snippet", "snippet", "address", "phoneNumber":
+            if parent == "Placemark" {
+                storePlacemarkText(local, trimmed)
             }
         case "Placemark":
             if let pm = placemark {
@@ -280,9 +344,17 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         // (a description/data-only placeless placemark). Drop only a point-less placemark
         // whose sole geometry is an uncaptured non-point type.
         let keep = pm.hasPoint || !pm.geometries.isEmpty || !pm.hasUncapturedGeometry
+            || pm.fallbackCoordinate != nil
         guard keep else { return }
-        let coordinate = pm.hasPoint ? pm.coordinate : Self.firstCoordinate(of: pm.geometries)
-        let built = KMLPlacemark(id: nextID("p"), name: pm.name,
+        let coordinate = pm.hasPoint
+            ? pm.coordinate
+            : Self.firstCoordinate(of: pm.geometries) ?? pm.fallbackCoordinate
+        let id = nextID("p")
+        if let inline = pm.inlineStyle, !inline.isEmpty {
+            pendingInlineStyles.append(PendingInlineStyle(placemarkID: id, fields: inline,
+                                                          sharedStyleUrl: pm.styleUrl))
+        }
+        let built = KMLPlacemark(id: id, name: pm.name,
                                  descriptionHTML: pm.descriptionHTML,
                                  styleUrl: pm.styleUrl,
                                  coordinate: coordinate,
@@ -290,7 +362,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                                  geometries: pm.geometries,
                                  extendedData: pm.extendedData,
                                  photoLinks: pm.photoLinks,
-                                 sourceID: pm.sourceID)
+                                 sourceID: pm.sourceID,
+                                 snippet: pm.snippet, address: pm.address,
+                                 phoneNumber: pm.phoneNumber)
         containerStack.last?.placemarks.append(built)
     }
 
@@ -299,6 +373,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     private static func firstCoordinate(of geometries: [KMLGeometry]) -> Coordinate? {
         for geometry in geometries {
             switch geometry {
+            case let .point(coordinate):
+                return coordinate
             case let .lineString(coords), let .track(coords):
                 if let first = coords.first {
                     return first
@@ -340,11 +416,17 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             let html = descriptionSawMarkup
                 ? descriptionBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
                 : descriptionBuffer
-            if placemark != nil {
+            if descriptionDiscard {
+                // Swallowed: not stored anywhere.
+            } else if placemark != nil {
                 placemark?.descriptionHTML = html
             } else if let c = containerStack.last, c !== rootBuilder {
                 c.description = html
             }
+            if !elementStack.isEmpty {
+                elementStack.removeLast()
+            }
+            descriptionDiscard = false
             descriptionBuffer = ""
             descriptionSawMarkup = false
             text = ""

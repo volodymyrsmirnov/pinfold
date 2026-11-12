@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-made to the documented KML NetworkLink shape (NetworkLink > Link > href), as used by a
+  Google My Maps "keep data up to date with network link" export. The map id is a placeholder.
+-->
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <NetworkLink>
+    <name>Example Map</name>
+    <Link>
+      <href>https://www.google.com/maps/d/kml?forcekml=1&amp;mid=EXAMPLE_MAP_ID</href>
+    </Link>
+  </NetworkLink>
+</kml>

@@ -9,7 +9,6 @@ extension KMLParserDelegate {
     func startGeometryElement(_ local: String) -> Bool {
         switch local {
         case "Point":
-            placemark?.hasPoint = true
             inPoint = true
         case "LineString":
             if placemark != nil {
@@ -23,7 +22,9 @@ extension KMLParserDelegate {
                 polygonInners = []
             }
         case "outerBoundaryIs":
-            if inPolygon { inOuterBoundary = true }
+            if inPolygon {
+                inOuterBoundary = true
+            }
         case "innerBoundaryIs":
             if inPolygon {
                 inInnerBoundary = true
@@ -34,10 +35,13 @@ extension KMLParserDelegate {
                 inTrack = true
                 trackCoords = []
             }
-        case "Model", "MultiTrack":
-            // Geometry types we don't capture; flag so a point-less placemark whose only
-            // geometry is one of these is still dropped (pre-Task-7 behavior).
-            if placemark != nil { placemark?.hasUncapturedGeometry = true }
+        case "Model":
+            // A geometry type we don't capture; flag so a point-less placemark whose only
+            // geometry is a Model is still dropped. (gx:MultiTrack is not flagged: its inner
+            // `Track`s are captured individually.)
+            if placemark != nil {
+                placemark?.hasUncapturedGeometry = true
+            }
         default:
             return false
         }
@@ -53,10 +57,12 @@ extension KMLParserDelegate {
             handleCoordinatesEnd()
         case "coord":
             // gx:coord — one space-separated "lon lat [alt]" triple appended to the track.
-            if inTrack, let c = Self.parseTrackCoord(text) { trackCoords.append(c) }
+            if inTrack, let c = Self.parseTrackCoord(text) {
+                trackCoords.append(c)
+            }
         case "LineString":
             if inLineString {
-                placemark?.geometries.append(.lineString(lineStringCoords))
+                appendLine(lineStringCoords, asTrack: false)
                 inLineString = false
                 lineStringCoords = []
             }
@@ -64,20 +70,25 @@ extension KMLParserDelegate {
             inOuterBoundary = false
         case "innerBoundaryIs":
             if inInnerBoundary {
-                polygonInners.append(currentInnerRing)
+                // A degenerate inner ring is dropped alone; the polygon survives.
+                if currentInnerRing.count >= Self.minRingVertices {
+                    polygonInners.append(currentInnerRing)
+                }
                 inInnerBoundary = false
                 currentInnerRing = []
             }
         case "Polygon":
             if inPolygon {
-                placemark?.geometries.append(.polygon(outer: polygonOuter, inners: polygonInners))
+                if polygonOuter.count >= Self.minRingVertices {
+                    placemark?.geometries.append(.polygon(outer: polygonOuter, inners: polygonInners))
+                }
                 inPolygon = false
                 polygonOuter = []
                 polygonInners = []
             }
         case "Track":
             if inTrack {
-                placemark?.geometries.append(.track(trackCoords))
+                appendLine(trackCoords, asTrack: true)
                 inTrack = false
                 trackCoords = []
             }
@@ -85,6 +96,21 @@ extension KMLParserDelegate {
             return false
         }
         return true
+    }
+
+    /// Fewest vertices of a line or track worth keeping.
+    static let minLineVertices = 2
+    /// Fewest vertices of a polygon ring worth keeping.
+    static let minRingVertices = 3
+
+    /// Appends a line or track when it has enough vertices. A single-vertex one is dropped
+    /// but donates its coordinate so the placemark can still be located on a map.
+    private func appendLine(_ coords: [Coordinate], asTrack: Bool) {
+        if coords.count >= Self.minLineVertices {
+            placemark?.geometries.append(asTrack ? .track(coords) : .lineString(coords))
+        } else if let only = coords.first, placemark?.fallbackCoordinate == nil {
+            placemark?.fallbackCoordinate = only
+        }
     }
 
     /// Closes Style sub-elements (Icon/Line/Poly fields and the Style itself).
@@ -99,13 +125,21 @@ extension KMLParserDelegate {
                 styleBuilder?.polyColor = trimmed
             }
         case "width":
-            if styleBuilder?.inLineStyle == true { styleBuilder?.lineWidth = Double(trimmed) }
+            if styleBuilder?.inLineStyle == true {
+                styleBuilder?.lineWidth = Double(trimmed)
+            }
         case "fill":
-            if styleBuilder?.inPolyStyle == true { styleBuilder?.polyFill = (trimmed == "1" || trimmed == "true") }
+            if styleBuilder?.inPolyStyle == true {
+                styleBuilder?.polyFill = (trimmed == "1" || trimmed == "true")
+            }
         case "scale":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconScale = Double(trimmed) }
+            if styleBuilder?.inIconStyle == true {
+                styleBuilder?.iconScale = Double(trimmed)
+            }
         case "href":
-            if styleBuilder?.inIconStyle == true { styleBuilder?.iconHref = trimmed }
+            if styleBuilder?.inIconStyle == true {
+                styleBuilder?.iconHref = trimmed
+            }
         case "IconStyle":
             styleBuilder?.inIconStyle = false
         case "LineStyle":
@@ -123,36 +157,52 @@ extension KMLParserDelegate {
     /// Indexes the assembled `<Style>` and, if it sits inside a StyleMap `<Pair>`, records it
     /// as that pair's style reference.
     private func closeStyleElement() {
-        if let b = styleBuilder {
+        if let b = styleBuilder, placemark != nil {
+            // Inline style: belongs to the placemark (or to the open Pair of an inline StyleMap).
+            if inPair {
+                pairInlineStyle = StyleFields(b)
+            } else {
+                placemark?.inlineStyle = StyleFields(b)
+            }
+        } else if let b = styleBuilder {
             styles[b.id] = KMLStyle(id: b.id, iconHref: b.iconHref,
                                     iconColor: b.iconColor, iconScale: b.iconScale,
                                     lineColor: b.lineColor, lineWidth: b.lineWidth,
                                     polyColor: b.polyColor, polyFill: b.polyFill)
             // An inline <Style> inside a StyleMap <Pair> acts as that pair's style reference,
             // equivalent to a <styleUrl> pointing at its (possibly synthesized) id.
-            if inPair { pairStyleURL = "#\(b.id)" }
+            if inPair {
+                pairStyleURL = "#\(b.id)"
+            }
         }
         styleBuilder = nil
     }
 
     /// Closes StyleMap-related elements (key/styleUrl/Pair/StyleMap). `styleUrl` inside a
     /// placemark is handled here too since it shares the element name.
-    func endStyleMapElement(_ local: String, trimmed: String) -> Bool {
+    func endStyleMapElement(_ local: String, trimmed: String, parent: String?) -> Bool {
         switch local {
         case "key":
-            if inPair { pairKey = trimmed }
+            if inPair {
+                pairKey = trimmed
+            }
         case "styleUrl":
-            if placemark != nil {
+            if parent == "Placemark" {
                 placemark?.styleUrl = trimmed
-            } else if inPair {
+            } else if parent == "Pair", inPair {
                 pairStyleURL = trimmed
             }
         case "Pair":
             // Resolve only on close: KML allows <key> before or after the style reference.
-            if pairKey == "normal", let url = pairStyleURL {
-                styleMapNormalURL = url
+            if pairKey == "normal" {
+                if let url = pairStyleURL {
+                    styleMapNormalURL = url
+                }
+                if placemark != nil {
+                    applyInlinePair()
+                }
             }
-            inPair = false; pairKey = nil; pairStyleURL = nil
+            inPair = false; pairKey = nil; pairStyleURL = nil; pairInlineStyle = nil
         case "StyleMap":
             if let id = styleMapID, let normal = styleMapNormalURL {
                 styleMaps[id] = normal
@@ -165,6 +215,16 @@ extension KMLParserDelegate {
         return true
     }
 
+    /// Applies the normal pair of an inline `<StyleMap>` to the open placemark: an inline
+    /// style becomes its inline style, a `<styleUrl>` its style reference unless it has one.
+    private func applyInlinePair() {
+        if let inline = pairInlineStyle {
+            placemark?.inlineStyle = inline
+        } else if let url = pairStyleURL, placemark?.styleUrl == nil {
+            placemark?.styleUrl = url
+        }
+    }
+
     /// Closes ExtendedData elements (ExtendedData/value/SimpleData/Data).
     func endExtendedDataElement(_ local: String) -> Bool {
         switch local {
@@ -173,14 +233,20 @@ extension KMLParserDelegate {
         case "value":
             // Only meaningful inside an open <Data>; a stray <value> elsewhere in
             // <ExtendedData> must not leak into the next data item.
-            if inExtendedData, inDataElement { currentDataValue = text }
+            if inExtendedData, inDataElement {
+                currentDataValue = text
+            }
         case "SimpleData":
             if let name = currentSimpleDataName {
-                placemark?.extendedData.append(
-                    KMLDataItem(name: name, value: text.trimmingCharacters(in: .whitespacesAndNewlines))
-                )
+                appendDataItem(name: name, value: text.trimmingCharacters(in: .whitespacesAndNewlines),
+                               displayName: nil)
             }
             currentSimpleDataName = nil
+        case "displayName":
+            if inDataElement {
+                let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                currentDataDisplayName = name.isEmpty ? nil : name
+            }
         case "Data":
             closeDataElement()
         default:
@@ -200,14 +266,36 @@ extension KMLParserDelegate {
                     .map(String.init)
                 placemark?.photoLinks.append(contentsOf: links)
             } else {
-                placemark?.extendedData.append(
-                    KMLDataItem(name: name,
-                                value: value.trimmingCharacters(in: .whitespacesAndNewlines))
-                )
+                appendDataItem(name: name, value: value.trimmingCharacters(in: .whitespacesAndNewlines),
+                               displayName: currentDataDisplayName)
             }
         }
         inDataElement = false
-        currentDataName = nil; currentDataValue = nil
+        currentDataName = nil; currentDataValue = nil; currentDataDisplayName = nil
+    }
+
+    /// Appends an item with an id unique within the placemark (`name`, `name#2`, ...).
+    private func appendDataItem(name: String, value: String, displayName: String?) {
+        guard let existing = placemark?.extendedData else { return }
+        let taken = Set(existing.map(\.id))
+        var id = name
+        var n = 1
+        while taken.contains(id) {
+            n += 1
+            id = "\(name)#\(n)"
+        }
+        placemark?.extendedData.append(KMLDataItem(name: name, value: value,
+                                                   displayName: displayName, id: id))
+    }
+
+    /// Stores a `Snippet`/`address`/`phoneNumber` text on the open placemark; empty is nil.
+    func storePlacemarkText(_ local: String, _ value: String) {
+        let text = value.isEmpty ? nil : value
+        switch local {
+        case "address": placemark?.address = text
+        case "phoneNumber": placemark?.phoneNumber = text
+        default: placemark?.snippet = text
+        }
     }
 
     /// Routes a closing `<coordinates>` element's text to the active geometry buffer, or to
@@ -217,7 +305,17 @@ extension KMLParserDelegate {
         if inPoint {
             // Only capture coordinates while inside a <Point> so that LineString/Polygon
             // vertices in the same placemark don't clobber the Point coordinate.
-            placemark?.coordinate = Coordinate(parsingFirstTuple: text)
+            // A Point whose coordinates do not parse is not a point: it must neither set
+            // `hasPoint` nor displace a valid one.
+            if let point = Coordinate(parsingFirstTuple: text) {
+                if placemark?.hasPoint == true {
+                    // MultiGeometry: the first valid point stays the representative one.
+                    placemark?.geometries.append(.point(point))
+                } else {
+                    placemark?.coordinate = point
+                    placemark?.hasPoint = true
+                }
+            }
         } else if inLineString {
             lineStringCoords = Coordinate.parseList(text)
         } else if inInnerBoundary {
