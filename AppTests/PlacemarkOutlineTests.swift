@@ -275,4 +275,13 @@ struct PlacemarkOutlineTests {
             #expect(Set(ids).count == ids.count, "Row ids must be unique (sort: \(sort))")
         }
     }
+
+    @Test func accentInsensitiveName() {
+        let root = KMLContainer(
+            id: "root", name: nil, children: [],
+            placemarks: [placemark(id: "r1", name: "Reykjavík"), placemark(id: "r2", name: "Oslo")]
+        )
+        let outline = PlacemarkOutline.build(from: root, matching: "reykjavik", collapsed: [])
+        #expect(outline.rows.count == 1)
+    }
 }

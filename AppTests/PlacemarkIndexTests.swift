@@ -239,4 +239,13 @@ struct PlacemarkIndexTests {
 
         #expect(PlacemarkIndex.resolve(keys: [], folderName: "F", in: nonexistent).isEmpty)
     }
+
+    @Test func search_accentInsensitive() throws {
+        let dir = try makeResourcesDir()
+        try PlacemarkIndex.write(
+            [PlacemarkIndex.Entry(key: "a1", name: "Reykjavík Harbour", lat: nil, lon: nil)], to: dir
+        )
+        let hits = PlacemarkIndex.search("reykjavik", in: [(folderName: "A", resourcesDir: dir)])
+        #expect(hits.count == 1)
+    }
 }
