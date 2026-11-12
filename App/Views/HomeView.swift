@@ -161,11 +161,15 @@ struct HomeView: View {
             }
             // Snapshot the (folderName, resourcesDir) pairs on the main actor, then read the
             // index files off-main — the read is pure disk I/O over Sendable URLs.
-            let dirs = active.map {
-                (folderName: $0.storageFolderName, resourcesDir: catalog.storage.resourcesDirectory(for: $0))
+            let sources = active.map {
+                PlacemarkIndex.Source(
+                    folderName: $0.storageFolderName,
+                    resourcesDir: catalog.storage.resourcesDirectory(for: $0),
+                    sidecarURL: catalog.storage.metadataFile(for: $0)
+                )
             }
             let hits = await Task.detached(priority: .userInitiated) {
-                PlacemarkIndex.search(query, in: dirs)
+                PlacemarkIndex.search(query, in: sources)
             }.value
             if Task.isCancelled {
                 return

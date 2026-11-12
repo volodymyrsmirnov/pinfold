@@ -248,4 +248,151 @@ struct PlacemarkIndexTests {
         let hits = PlacemarkIndex.search("reykjavik", in: [(folderName: "A", resourcesDir: dir)])
         #expect(hits.count == 1)
     }
+
+    // MARK: - v2 format
+
+    @Test func entriesCarryHasPointAndText() {
+        let withPoint = KMLPlacemark(
+            id: "p1", name: "Camp", descriptionHTML: "<p>Quiet <b>riverside</b> spot</p>", styleUrl: nil,
+            coordinate: Coordinate(longitude: 1, latitude: 2),
+            extendedData: [KMLDataItem(name: "owner", value: "Ranger Anna")], photoLinks: [],
+            snippet: "Teaser line", address: "12 Mill Road"
+        )
+        let lineOnly = KMLPlacemark(
+            id: "p2", name: "Trail", descriptionHTML: nil, styleUrl: nil,
+            coordinate: Coordinate(longitude: 3, latitude: 4), hasPoint: false,
+            extendedData: [], photoLinks: []
+        )
+        let entries = PlacemarkIndex.entries(for: makeDocument(placemarks: [withPoint, lineOnly]))
+        let camp = entries.first { $0.name == "Camp" }
+        #expect(camp?.hasPoint == true)
+        let text = camp?.text ?? ""
+        #expect(text.contains("riverside"))
+        #expect(!text.contains("<b>"))
+        #expect(text.contains("Ranger Anna"))
+        #expect(text.contains("Teaser line"))
+        #expect(text.contains("12 Mill Road"))
+        let trail = entries.first { $0.name == "Trail" }
+        #expect(trail?.hasPoint == false)
+        #expect(trail?.text == nil)
+    }
+
+    @Test func textIsCapped() {
+        let long = String(repeating: "word ", count: 5000)
+        let placemark = KMLPlacemark(
+            id: "p1", name: "Long", descriptionHTML: long, styleUrl: nil, coordinate: nil,
+            extendedData: [], photoLinks: []
+        )
+        let entry = PlacemarkIndex.entries(for: makeDocument(placemarks: [placemark])).first
+        #expect((entry?.text?.count ?? 0) <= 1000)
+    }
+
+    @Test func existsChecksV2Only() throws {
+        let dir = try makeResourcesDir()
+        #expect(!PlacemarkIndex.exists(in: dir))
+        try Data("[]".utf8).write(to: dir.appendingPathComponent("placemarks-index.json"))
+        #expect(!PlacemarkIndex.exists(in: dir))
+        try PlacemarkIndex.write([], to: dir)
+        #expect(PlacemarkIndex.exists(in: dir))
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("placemarks-index.v2.json").path))
+    }
+
+    @Test func readFallsBackToV1() throws {
+        let dir = try makeResourcesDir()
+        let v1 = #"[{"key":"k1","name":"Old Name","lat":1.5,"lon":2.5},{"key":"k2","name":"No Coord"}]"#
+        try Data(v1.utf8).write(to: dir.appendingPathComponent("placemarks-index.json"))
+        let read = PlacemarkIndex.read(from: dir)
+        #expect(read?.count == 2)
+        #expect(read?.first?.name == "Old Name")
+        #expect(read?.first?.hasPoint == true)
+        #expect(read?.first?.text == nil)
+        #expect(read?.last?.hasPoint == false)
+    }
+
+    @Test func v2WinsOverV1() throws {
+        let dir = try makeResourcesDir()
+        try Data(#"[{"key":"k1","name":"Old"}]"#.utf8).write(to: dir.appendingPathComponent("placemarks-index.json"))
+        try PlacemarkIndex.write([PlacemarkIndex.Entry(key: "k1", name: "New", lat: nil, lon: nil)], to: dir)
+        #expect(PlacemarkIndex.read(from: dir)?.first?.name == "New")
+    }
+
+    @Test func v2RoundTripsHasPointAndText() throws {
+        let dir = try makeResourcesDir()
+        let entry = PlacemarkIndex.Entry(key: "k1", name: "A", lat: 1, lon: 2, hasPoint: false, text: "hello")
+        try PlacemarkIndex.write([entry], to: dir)
+        #expect(PlacemarkIndex.read(from: dir) == [entry])
+    }
+
+    @Test func searchMatchesDescriptionAndExtendedData() throws {
+        let dir = try makeResourcesDir()
+        try PlacemarkIndex.write([
+            PlacemarkIndex.Entry(key: "a", name: "Alpha", lat: nil, lon: nil,
+                                 text: "A quiet riverside spot Ranger Anna"),
+            PlacemarkIndex.Entry(key: "b", name: "Beta", lat: nil, lon: nil, text: nil),
+        ], to: dir)
+        let sources = [(folderName: "F", resourcesDir: dir)]
+        let byDescription = PlacemarkIndex.search("RIVERSIDE", in: sources, store: PlacemarkIndexStore())
+        #expect(byDescription.map(\.key) == ["a"])
+        let byData = PlacemarkIndex.search("ranger ánna", in: sources, store: PlacemarkIndexStore())
+        #expect(byData.map(\.key) == ["a"])
+    }
+
+    // MARK: - Snippets and notes (SR-4)
+
+    /// A fake entry folder: `<root>/<uuid>/resources` plus a sibling `metadata.json`.
+    private func makeEntry(
+        entries: [PlacemarkIndex.Entry], notes: [String: PlacemarkNote] = [:], trashed: Bool = false
+    ) throws -> PlacemarkIndex.Source {
+        let resources = try makeResourcesDir()
+        try PlacemarkIndex.write(entries, to: resources)
+        let sidecar = resources.deletingLastPathComponent().appendingPathComponent("metadata.json")
+        let metadata = EntryMetadata(
+            id: UUID(), displayName: "F", sourceFilename: "f.kml", importDate: .now, pointCount: 0,
+            contentSHA256: "x", trashedAt: trashed ? .now : nil, notes: notes
+        )
+        try metadata.encoded().write(to: sidecar)
+        return PlacemarkIndex.Source(folderName: "F", resourcesDir: resources, sidecarURL: sidecar)
+    }
+
+    @Test func nameHitHasNoSnippet() throws {
+        let source = try makeEntry(entries: [
+            PlacemarkIndex.Entry(key: "a", name: "Riverside Camp", lat: nil, lon: nil, text: "riverside again"),
+        ])
+        let hits = PlacemarkIndex.search("riverside", in: [source], store: PlacemarkIndexStore())
+        #expect(hits.first?.matchedField == .name)
+        #expect(hits.first?.snippet == nil)
+    }
+
+    @Test func descriptionHitCarriesSnippet() throws {
+        let source = try makeEntry(entries: [
+            PlacemarkIndex.Entry(key: "a", name: "Camp", lat: nil, lon: nil, text: "A quiet riverside spot"),
+        ])
+        let hit = PlacemarkIndex.search("RIVERSIDE", in: [source], store: PlacemarkIndexStore()).first
+        #expect(hit?.matchedField == .description)
+        #expect(hit?.snippet?.contains("riverside") == true)
+    }
+
+    @Test func noteHitCarriesSnippet() throws {
+        let note = PlacemarkNote(text: "Bring a torch", modifiedAt: .now, placemarkName: "Camp")
+        let tombstone = PlacemarkNote(text: "", modifiedAt: .now, placemarkName: "Gone")
+        let source = try makeEntry(
+            entries: [
+                PlacemarkIndex.Entry(key: "a", name: "Camp", lat: nil, lon: nil),
+                PlacemarkIndex.Entry(key: "b", name: "Other", lat: nil, lon: nil),
+            ],
+            notes: ["a": note, "b": tombstone]
+        )
+        let hits = PlacemarkIndex.search("torch", in: [source], store: PlacemarkIndexStore())
+        #expect(hits.map(\.key) == ["a"])
+        #expect(hits.first?.matchedField == .note)
+        #expect(hits.first?.snippet == "Bring a torch")
+        #expect(PlacemarkIndex.search("gone", in: [source], store: PlacemarkIndexStore()).isEmpty)
+    }
+
+    @Test func trashedEntriesAreNotSearched() throws {
+        let source = try makeEntry(
+            entries: [PlacemarkIndex.Entry(key: "a", name: "Camp", lat: nil, lon: nil)], trashed: true
+        )
+        #expect(PlacemarkIndex.search("camp", in: [source], store: PlacemarkIndexStore()).isEmpty)
+    }
 }
