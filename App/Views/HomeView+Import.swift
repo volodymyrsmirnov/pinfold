@@ -9,7 +9,6 @@ extension HomeView {
             importCoordinator.enqueue(
                 urls,
                 catalog: catalog,
-                storage: catalog.storage,
                 cache: resourceCache
             )
         case let .failure(error):
