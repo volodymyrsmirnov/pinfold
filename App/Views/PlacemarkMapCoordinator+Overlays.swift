@@ -9,11 +9,30 @@ extension PlacemarkMapRepresentable.Coordinator {
     /// The selected overlay's stroke is drawn this many times thicker.
     static let highlightWidthFactor: CGFloat = 2
 
-    /// Installs the overlay tap recogniser. It never blocks MapKit's own gestures.
+    /// Installs the overlay tap recogniser. It never blocks MapKit's own gestures, but it waits
+    /// for every double-tap recogniser (MapKit's double-tap zoom plus our own placeholder, which
+    /// guarantees at least one) to fail, so a double-tap zoom never also changes the selection.
     func installOverlayTapRecognizer(on mapView: MKMapView) {
         let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleOverlayTap(_:)))
         recognizer.delegate = self
+        let placeholder = UITapGestureRecognizer()
+        placeholder.numberOfTapsRequired = 2
+        placeholder.delegate = self
+        mapView.addGestureRecognizer(placeholder)
         mapView.addGestureRecognizer(recognizer)
+        Self.requireDoubleTapsToFail(for: recognizer, in: mapView)
+    }
+
+    /// Makes `singleTap` wait for every double-tap recogniser found on `view` and its subviews.
+    static func requireDoubleTapsToFail(for singleTap: UITapGestureRecognizer, in view: UIView) {
+        for candidate in view.gestureRecognizers ?? [] {
+            if let tap = candidate as? UITapGestureRecognizer, tap !== singleTap, tap.numberOfTapsRequired == 2 {
+                singleTap.require(toFail: tap)
+            }
+        }
+        for subview in view.subviews {
+            requireDoubleTapsToFail(for: singleTap, in: subview)
+        }
     }
 
     @objc func handleOverlayTap(_ recognizer: UITapGestureRecognizer) {
