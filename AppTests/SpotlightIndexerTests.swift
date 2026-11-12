@@ -92,7 +92,7 @@ struct SpotlightIndexerTests {
         // No placemarks → just the entry item.
         #expect(items.count == 1)
         let entryItem = try? #require(items.first)
-        #expect(entryItem?.domainIdentifier == "entry.11111111-1111-1111-1111-111111111111")
+        #expect(entryItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "11111111-1111-1111-1111-111111111111"))
         #expect(entryItem?.uniqueIdentifier == "11111111-1111-1111-1111-111111111111")
         #expect(entryItem?.attributeSet.title == "Rome Trip")
     }
@@ -105,7 +105,7 @@ struct SpotlightIndexerTests {
         let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
         let placemarkItem = try? #require(items.first { $0.uniqueIdentifier != "FOLDER" })
         #expect(placemarkItem?.uniqueIdentifier == "FOLDER/h:1")
-        #expect(placemarkItem?.domainIdentifier == "entry.FOLDER")
+        #expect(placemarkItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "FOLDER"))
         #expect(placemarkItem?.attributeSet.title == "Colosseum")
         #expect(placemarkItem?.attributeSet.contentDescription == "Rome Trip")
         #expect(placemarkItem?.attributeSet.latitude == 41.89)
@@ -130,11 +130,17 @@ extension SpotlightIndexerTests {
         let entry = makeEntry(folderName: "FOLDER")
         let rows = [PlacemarkIndex.Entry(key: "h:1", name: "A", lat: nil, lon: nil)]
         let domains = Set(SpotlightIndexer.items(for: entry, indexEntries: rows).map(\.domainIdentifier))
-        #expect(domains == ["entry.FOLDER"])
+        #expect(domains == [SpotlightIndexer.domain(forFolderName: "FOLDER")])
     }
 
     @Test func domainNeverContainsAPeriodFromTheFolderName() {
-        #expect(SpotlightIndexer.domain(forFolderName: "a.b") == "entry.a_b")
+        let suffix = SpotlightIndexer.domain(forFolderName: "a.b").dropFirst("entry.".count)
+        #expect(!suffix.contains("."))
         #expect(SpotlightIndexer.domain(forFolderName: "a.b") != SpotlightIndexer.domain(forFolderName: "a"))
+    }
+
+    @Test func distinctFolderNamesMapToDistinctDomains() {
+        #expect(SpotlightIndexer.domain(forFolderName: "a.b") != SpotlightIndexer.domain(forFolderName: "a_b"))
+        #expect(SpotlightIndexer.domain(forFolderName: "é") != SpotlightIndexer.domain(forFolderName: "e"))
     }
 }
