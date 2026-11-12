@@ -1,3 +1,4 @@
+// swiftlint:disable file_length -- one cohesive service; its private store/policy are shared by every pass
 import CryptoKit
 import Foundation
 import os
@@ -194,6 +195,8 @@ final class ResourceCache: Sendable {
     /// `maxConcurrentDownloads` at a time.
     private func fetchDue(_ hrefs: [String], to resourcesDir: URL) async {
         let state = store.state(in: resourcesDir)
+        // Cleared by the user: wait until the entry is opened (`resumeDeferred(in:)`).
+        guard !state.deferredUntilOpened else { return }
         switch policy() {
         case .never: return
         case .ask where !state.consent: return
@@ -434,6 +437,37 @@ final class ResourceCache: Sendable {
         let recorded = store.recordedHrefs(in: resourcesDir)
         guard !recorded.isEmpty else { return }
         await retryPending(recorded, to: resourcesDir)
+    }
+
+    // MARK: - Clearing (C9)
+
+    /// Removes the downloaded http(s) images of this entry and their manifest entries, and
+    /// defers further downloads until the entry is opened (`resumeDeferred(in:)`), so the
+    /// background pass does not refetch what the user just cleared. KMZ-extracted resources,
+    /// the search index and permanent-skip markers stay.
+    func clearDownloaded(in resourcesDir: URL) {
+        let manifest = store.manifest(in: resourcesDir)
+        let remoteKeys = manifest.keys.filter { $0.hasPrefix("http://") || $0.hasPrefix("https://") }
+        for key in remoteKeys {
+            guard let filename = manifest[key], !filename.isEmpty else { continue }
+            try? FileManager.default.removeItem(at: resourcesDir.appendingPathComponent(filename))
+        }
+        // Keep permanent-skip sentinels (empty filename): those hrefs must stay un-retried.
+        try? store.updateManifest(in: resourcesDir) { current in
+            for key in remoteKeys where current[key]?.isEmpty == false {
+                current[key] = nil
+            }
+        }
+        if !store.recordedHrefs(in: resourcesDir).isEmpty {
+            store.updateState(in: resourcesDir) { $0.deferredUntilOpened = true }
+        }
+    }
+
+    /// Clears the deferral set by `clearDownloaded(in:)` and fetches the recorded hrefs again
+    /// (subject to the usual policy, consent and backoff rules). Call when the entry is opened.
+    func resumeDeferred(in resourcesDir: URL) async {
+        store.updateState(in: resourcesDir) { $0.deferredUntilOpened = false }
+        await retryPending(in: resourcesDir)
     }
 
     // MARK: - Lookup

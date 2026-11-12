@@ -320,6 +320,64 @@ struct ResourceCacheTests {
                 "Hrefs beyond the cap must not be downloaded")
     }
 
+    // MARK: - clearDownloaded / resumeDeferred (C9)
+
+    private func countingCache(_ counter: OSAllocatedUnfairLock<Int>) -> ResourceCache {
+        ResourceCache(downloader: { _ in
+            counter.withLock { $0 += 1 }
+            return Self.pngBytes
+        })
+    }
+
+    @Test func clearDownloaded_removesRemoteFilesKeepsEmbeddedAndIndex() async throws {
+        let dir = try makeTempDir()
+        let remote = "https://example.com/photo.png"
+        let embedded = "images/icon.png"
+        let cache = ResourceCache(downloader: { _ in Self.pngBytes })
+        try cache.writeEmbedded([embedded: Self.pngBytes], to: dir)
+        let indexURL = dir.appendingPathComponent(PlacemarkIndex.filename)
+        try Data("{}".utf8).write(to: indexURL)
+        await cache.downloadRemote([remote], to: dir)
+        let remoteFile = try #require(cache.localURL(forHref: remote, in: dir))
+
+        cache.clearDownloaded(in: dir)
+
+        #expect(!FileManager.default.fileExists(atPath: remoteFile.path))
+        #expect(cache.localURL(forHref: remote, in: dir) == nil)
+        #expect(ResourceManifestStore.shared.manifest(in: dir)[remote] == nil)
+        #expect(cache.localURL(forHref: embedded, in: dir) != nil)
+        #expect(FileManager.default.fileExists(atPath: indexURL.path))
+        #expect(ResourceManifestStore.shared.state(in: dir).deferredUntilOpened)
+    }
+
+    @Test func clearedEntryIsNotRetriedByBackgroundPass() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/photo.png"
+        let calls = OSAllocatedUnfairLock(initialState: 0)
+        let cache = countingCache(calls)
+        await cache.downloadRemote([href], to: dir)
+        cache.clearDownloaded(in: dir)
+        let before = calls.withLock { $0 }
+
+        await cache.retryPending(in: dir)
+
+        #expect(calls.withLock { $0 } == before)
+        #expect(cache.localURL(forHref: href, in: dir) == nil)
+    }
+
+    @Test func resumeDeferredFetchesAgain() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/photo.png"
+        let cache = ResourceCache(downloader: { _ in Self.pngBytes })
+        await cache.downloadRemote([href], to: dir)
+        cache.clearDownloaded(in: dir)
+
+        await cache.resumeDeferred(in: dir)
+
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+        #expect(!ResourceManifestStore.shared.state(in: dir).deferredUntilOpened)
+    }
+
     // MARK: - retryPending
 
     @Test func retryPending_downloadsOnlyMissingHrefs() async throws {
