@@ -51,6 +51,10 @@ struct KMLDetailView: View {
     @State var loadError: Error?
     @State var searchText = ""
     @State var annotations: PlacemarkAnnotations?
+    /// The description/detail search index for the loaded document, built off-main after the
+    /// document arrives (`buildSearchCorpus`). `nil` until ready: searches are name-only (plus
+    /// notes) meanwhile, and the outline rebuilds when it lands.
+    @State var searchCorpus: SearchCorpus?
     /// Collapsed folder ids (tree paths like "0/2"). Toggled by tapping a folder row;
     /// ignored while searching (the outline force-expands then).
     @State var collapsedFolderIDs: Set<String> = []
@@ -94,6 +98,9 @@ struct KMLDetailView: View {
     /// Debounce window for search-text changes before rebuilding the outline. Collapse
     /// toggles and document loads are not debounced (they go through a separate trigger).
     static let searchDebounce: Duration = .milliseconds(250)
+
+    /// Prompt for the in-list search field: names, descriptions, details and notes are searched.
+    static let searchPrompt = "Search places, descriptions and notes"
 
     // MARK: - Body
 
@@ -165,6 +172,7 @@ struct KMLDetailView: View {
             document = nil
             loadError = nil
             outline = nil
+            searchCorpus = nil
             collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
@@ -243,12 +251,25 @@ struct KMLDetailView: View {
             documentLoaded: document != nil,
             collapsed: collapsedFolderIDs,
             nearestFirst: nearestFirst,
+            corpusReady: searchCorpus != nil,
+            noteTexts: searchNoteTexts,
             // A new fix (or the first one) must rebuild a nearest-first outline so the order
             // reflects the user's current position. Identity by coordinate keeps it cheap.
             locationLat: locationAuth.lastLocation?.coordinate.latitude,
             locationLon: locationAuth.lastLocation?.coordinate.longitude
         )) {
             await buildOutlineNow()
+        }
+        // Build the search index off-main once the document (re)loads; `nil` first so a
+        // replaced document never searches against a stale corpus.
+        .task(id: document) {
+            searchCorpus = nil
+            guard let root = document?.root else { return }
+            let corpus = await makeSearchCorpus(root: root)
+            if Task.isCancelled {
+                return
+            }
+            searchCorpus = corpus
         }
         // THE destination table: every EntryRoute pushed anywhere in this file's stack —
         // list rows, the toolbar map, the POI page's "Show on Map", the map's preview card,
