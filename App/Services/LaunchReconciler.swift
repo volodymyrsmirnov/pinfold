@@ -87,8 +87,13 @@ struct LaunchReconciler {
     }
 
     /// Applies the plan through the sink and records the new ledger. Does nothing (and keeps
-    /// the ledger) when the catalogue is empty but the ledger is not.
-    @MainActor func reconcileSpotlight(entries: [CatalogEntry], storage: StorageLocations) async {
+    /// the ledger) when the catalogue is empty but the ledger is not, or while iCloud is
+    /// `.unavailable`: the catalogue then shows only local entries, so every iCloud entry would
+    /// look deleted and be deindexed and dropped from the ledger.
+    @MainActor func reconcileSpotlight(
+        entries: [CatalogEntry], storage: StorageLocations, status: SyncStatus.State = .active
+    ) async {
+        guard status != .unavailable else { return }
         let ledger = loadLedger()
         if entries.isEmpty, let ledger, ledger.contains(where: { !$0.value.trashed }) {
             return

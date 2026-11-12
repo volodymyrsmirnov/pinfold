@@ -125,6 +125,22 @@ struct LaunchReconcilerTests {
         #expect(back.indexed.isEmpty && back.deindexed.isEmpty)
     }
 
+    @Test func unavailableICloudNeverDeindexesOrTouchesTheLedger() async {
+        let defaults = freshDefaults()
+        await makeReconciler(RecordingSink(), defaults)
+            .reconcileSpotlight(entries: [entry("LOCAL"), entry("CLOUD")], storage: storage)
+        // Sync on but iCloud unavailable: only the local entry is visible.
+        let sink = RecordingSink()
+        await makeReconciler(sink, defaults)
+            .reconcileSpotlight(entries: [entry("LOCAL")], storage: storage, status: .unavailable)
+        #expect(sink.deindexed.isEmpty && sink.indexed.isEmpty)
+        // iCloud returns: the cloud entry is still in the ledger, so nothing is reindexed.
+        let back = RecordingSink()
+        await makeReconciler(back, defaults)
+            .reconcileSpotlight(entries: [entry("LOCAL"), entry("CLOUD")], storage: storage, status: .active)
+        #expect(back.indexed.isEmpty && back.deindexed.isEmpty)
+    }
+
     // MARK: - Cache pruning
 
     private func seedFolder(_ root: URL, _ name: String, inner: String = "resources") throws {
