@@ -2,6 +2,9 @@ import Foundation
 
 public enum KMLParser {
     public static func parse(data: Data) throws -> KMLDocument {
+        // Normalise encoding/prolog first so the DOCTYPE scan below sees UTF-8 bytes even
+        // for UTF-16/UTF-32 input — see `XMLPreflight`.
+        let data = try XMLPreflight.normalize(data)
         // Reject DTDs before handing the bytes to XMLParser — see `dtdProhibited`.
         if prologContainsDoctype(data) {
             throw KMLParseError.dtdProhibited

@@ -12,4 +12,6 @@ public enum KMLParseError: Error, Equatable {
     case dtdProhibited
     /// The root element is not a KML document root.
     case unsupportedRootElement(String)
+    /// The bytes are in an encoding Pinfold cannot decode (e.g. malformed UTF-16/UTF-32).
+    case unsupportedEncoding
 }
