@@ -48,10 +48,14 @@ final class ImportCoordinator {
         /// The name used as the stored filename / title fallback (e.g. with the share
         /// extension's `<UUID>-` prefix already stripped). Defaults to the file's own name.
         let filename: String
+        /// A staging folder removed together with the file (dropped files live in their own
+        /// `tmp/DroppedFiles/<UUID>/` folder). `nil` for inbox files.
+        let cleanupFolder: URL?
 
-        init(url: URL, filename: String? = nil) {
+        init(url: URL, filename: String? = nil, cleanupFolder: URL? = nil) {
             self.url = url
             self.filename = filename ?? url.lastPathComponent
+            self.cleanupFolder = cleanupFolder
         }
     }
 
@@ -76,6 +80,7 @@ final class ImportCoordinator {
         let filename: String
         let interactive: Bool
         let ownedURL: URL?
+        var cleanupFolder: URL?
         let pathKey: String?
     }
 
@@ -161,6 +166,17 @@ final class ImportCoordinator {
         append(items, catalog: catalog, cache: cache)
     }
 
+    /// Enqueues staged copies of dropped files: app-owned (deleted with their staging folder
+    /// when finished, however that happens) but interactive, like the picker.
+    func enqueueDropped(_ urls: [URL], catalog: Catalog, cache: ResourceCache) {
+        let items = urls.compactMap { url -> PendingImport? in
+            guard track(url) else { return nil }
+            let file = OwnedFile(url: url, cleanupFolder: url.deletingLastPathComponent())
+            return PendingImport(source: .owned(file), interactive: true)
+        }
+        append(items, catalog: catalog, cache: cache)
+    }
+
     /// Enqueues app-owned copies (opened files, inbox files). Non-interactive. Files already
     /// queued, in flight or stalled are ignored.
     ///
@@ -219,7 +235,7 @@ final class ImportCoordinator {
         for item in dropped {
             switch item.source {
             case let .owned(file):
-                try? FileManager.default.removeItem(at: file.url)
+                try? FileManager.default.removeItem(at: file.cleanupFolder ?? file.url)
                 untrack(file.url)
             case let .picker(url):
                 untrack(url)

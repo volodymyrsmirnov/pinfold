@@ -43,7 +43,7 @@ struct StorageUsage: Equatable {
         let manifest = ResourceManifestStore.shared.manifest(in: dir)
         var downloadedNames = Set<String>()
         for (key, filename) in manifest where !filename.isEmpty {
-            if key.hasPrefix("http://") || key.hasPrefix("https://") {
+            if ResourceCache.isRemoteHref(key) {
                 downloadedNames.insert(filename)
             }
         }

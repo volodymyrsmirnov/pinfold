@@ -45,7 +45,8 @@ enum UbiquityContainer {
         var result: Data?
         var coordinationError: NSError?
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { readURL in
-            do { result = try Data(contentsOf: readURL, options: .mappedIfSafe) } catch { accessorError = error }
+            // A plain read: mapping would page bytes in lazily after the coordination ends.
+            do { result = try Data(contentsOf: readURL) } catch { accessorError = error }
         }
         if let coordinationError {
             throw coordinationError

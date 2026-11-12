@@ -162,6 +162,17 @@ struct ResourceCacheTests {
         }
     }
 
+    @Test func downloadRemote_upperCaseSchemeIsFetchedAndKeyedByTheOriginalHref() async throws {
+        let dir = try makeTempDir()
+        let stubData = Self.pngBytes
+        let cache = ResourceCache { _ in stubData }
+        let href = "HTTP://example.com/Upper.png"
+
+        await cache.downloadRemote([href], to: dir)
+
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+    }
+
     @Test func downloadRemote_offlineFirst_failingURLDoesNotBlockOthers() async throws {
         let dir = try makeTempDir()
         let successData = Self.pngBytes

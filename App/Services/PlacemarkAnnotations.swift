@@ -17,7 +17,12 @@ import PinfoldCore
     private(set) var favoriteKeys: Set<String>
     private(set) var visitedKeys: Set<String>
     /// All notes for this entry keyed by stable key, including tombstones (empty text).
-    private(set) var notes: [String: PlacemarkNote]
+    private(set) var notes: [String: PlacemarkNote] {
+        didSet { notesRevision &+= 1 }
+    }
+
+    /// Bumps on every change to `notes`; a cheap identity for "notes changed" triggers.
+    private(set) var notesRevision = 0
 
     @ObservationIgnored private let storage: StorageLocations
     @ObservationIgnored private let folderName: String

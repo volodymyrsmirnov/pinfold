@@ -15,9 +15,9 @@ extension KMLDetailView {
         let nearestFirst: Bool
         /// Flips when the search index lands (or is reset), so an active search rebuilds with it.
         let corpusReady: Bool
-        /// Note texts, only while a search is active (empty otherwise), so editing a note
-        /// re-runs a live search without rebuilding for unrelated note edits.
-        let noteTexts: [String: String]
+        /// Notes revision, only while a search is active (0 otherwise), so editing a note
+        /// re-runs a live search without a rebuild when a search starts or ends.
+        let notesRevision: Int
         let locationLat: Double?
         let locationLon: Double?
     }
@@ -32,9 +32,14 @@ extension KMLDetailView {
         return .document
     }
 
+    /// Whether a non-blank search is active.
+    var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     /// Note texts to search, only while a search is active.
     var searchNoteTexts: [String: String] {
-        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return [:] }
+        guard isSearchActive else { return [:] }
         return annotations?.noteTextsByKey ?? [:]
     }
 

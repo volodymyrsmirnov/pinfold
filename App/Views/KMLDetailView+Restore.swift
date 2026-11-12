@@ -40,7 +40,11 @@ extension KMLDetailView {
     func applyPendingScroll(using proxy: ScrollViewProxy) async {
         guard let target = pendingScrollRowID, let outline else { return }
         guard outline.rows.contains(where: { $0.id == target }) else {
-            if !(nearestFirst && locationAuth.lastLocation == nil) {
+            // Also kept while a restored search's corpus is still indexing: the first outline
+            // matches names + notes only, so a row that matches via description is absent.
+            let awaitingFix = nearestFirst && locationAuth.lastLocation == nil
+            let awaitingCorpus = isSearchActive && searchCorpus == nil
+            if !awaitingFix, !awaitingCorpus {
                 pendingScrollRowID = nil
             }
             return
