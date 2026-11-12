@@ -49,6 +49,39 @@ struct PlacemarkOutline {
         case nearest(CLLocation)
     }
 
+    // MARK: - Matcher
+
+    /// Decides whether a placemark matches the trimmed `query`: by name always; and, when a
+    /// `corpus` is supplied, by description / extended data / snippet / address; and by personal
+    /// note text (`notes` keyed by `stableKey`). Without a corpus it is name-only, as before.
+    struct Matcher {
+        let query: String
+        let corpus: SearchCorpus?
+        let notes: [String: String]
+        private let foldedQuery: String
+
+        init(query: String, corpus: SearchCorpus?, notes: [String: String]) {
+            self.query = query
+            self.corpus = corpus
+            self.notes = notes
+            foldedQuery = SearchText.fold(query)
+        }
+
+        func matches(_ placemark: KMLPlacemark) -> Bool {
+            guard !query.isEmpty else { return true }
+            if let name = placemark.name, SearchText.contains(name, query: query) {
+                return true
+            }
+            if corpus?.matches(placemarkID: placemark.id, foldedQuery: foldedQuery) == true {
+                return true
+            }
+            if let note = notes[placemark.stableKey], !note.isEmpty {
+                return SearchText.contains(note, query: query)
+            }
+            return false
+        }
+    }
+
     // MARK: - Row
 
     struct Row: Identifiable {
@@ -87,10 +120,12 @@ struct PlacemarkOutline {
         from root: KMLContainer,
         matching query: String,
         collapsed: Set<String>,
-        sort: Sort = .document
+        sort: Sort = .document,
+        corpus: SearchCorpus? = nil,
+        notes: [String: String] = [:]
     ) -> PlacemarkOutline {
         if case let .nearest(location) = sort {
-            return buildNearest(from: root, matching: query, location: location)
+            return buildNearest(from: root, matching: query, location: location, corpus: corpus, notes: notes)
         }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let isSearching = !trimmed.isEmpty
@@ -100,10 +135,9 @@ struct PlacemarkOutline {
         var rows: [Row] = []
         var mappable: [KMLPlacemark] = []
 
+        let matcher = Matcher(query: trimmed, corpus: corpus, notes: notes)
         func matches(_ placemark: KMLPlacemark) -> Bool {
-            guard isSearching else { return true }
-            guard let name = placemark.name else { return false }
-            return SearchText.contains(name, query: trimmed)
+            matcher.matches(placemark)
         }
 
         /// Walks a container, appending rows for its matching placemarks and surviving
@@ -172,15 +206,13 @@ struct PlacemarkOutline {
     private static func buildNearest(
         from root: KMLContainer,
         matching query: String,
-        location: CLLocation
+        location: CLLocation,
+        corpus: SearchCorpus?,
+        notes: [String: String]
     ) -> PlacemarkOutline {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        let isSearching = !trimmed.isEmpty
-
+        let matcher = Matcher(query: query.trimmingCharacters(in: .whitespaces), corpus: corpus, notes: notes)
         func matches(_ placemark: KMLPlacemark) -> Bool {
-            guard isSearching else { return true }
-            guard let name = placemark.name else { return false }
-            return SearchText.contains(name, query: trimmed)
+            matcher.matches(placemark)
         }
 
         // Flatten the whole tree into document-order placemarks (folders ignored).

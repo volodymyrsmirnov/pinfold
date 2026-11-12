@@ -150,4 +150,9 @@ struct PlacemarkSearchTests {
         #expect(results.count == 1)
         #expect(results[0].id == "p1")
     }
+
+    @Test func accentInsensitiveName() {
+        let doc = makeDocument(rootPlacemarks: [makePlacemark(id: "1", name: "Reykjavík Harbour")])
+        #expect(placemarksMatching("reykjavik", in: doc).count == 1)
+    }
 }

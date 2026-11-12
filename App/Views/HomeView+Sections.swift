@@ -97,7 +97,9 @@ extension HomeView {
     /// case (`tags` empty → `contains` fails → reset) and the partial-vanish case (the selected
     /// tag gone while other tags remain).
     func resetStaleTagFilter(_ tags: [String]) {
-        if let selectedTag, !tags.contains(selectedTag) { self.selectedTag = nil }
+        if let selectedTag, !tags.contains(selectedTag) {
+            self.selectedTag = nil
+        }
     }
 
     /// Commits the Edit Tags alert: hands the raw comma-split parts to `catalog.setTags`, which
@@ -258,13 +260,22 @@ extension HomeView {
         }
     }
 
-    /// One "Places" hit row: the placemark name (or a coordinate-only placeholder).
+    /// One "Places" hit row: the placemark name (or a coordinate-only placeholder), plus an
+    /// excerpt line when the match was in the description, data or a note rather than the name.
     private func placeHitRow(_ hit: PlacemarkIndex.Hit) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "mappin.circle")
+            Image(systemName: hit.matchedField == .note ? "note.text" : "mappin.circle")
                 .foregroundStyle(.secondary)
-            Text(hit.name.isEmpty ? "Unnamed place" : hit.name)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hit.name.isEmpty ? "Unnamed place" : hit.name)
+                    .lineLimit(1)
+                if let snippet = hit.snippet {
+                    Text(snippet)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
@@ -306,7 +317,11 @@ struct EditTagsAlertModifier: ViewModifier {
             "Edit Tags",
             isPresented: Binding(
                 get: { target != nil },
-                set: { if !$0 { target = nil } }
+                set: {
+                    if !$0 {
+                        target = nil
+                    }
+                }
             ),
             presenting: target
         ) { entry in
