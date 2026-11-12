@@ -22,13 +22,6 @@ struct RootView: View {
         category: "migration"
     )
 
-    /// Diagnostics for "Open in Pinfold" import failures. The user-facing failure banner
-    /// carries only friendly reasons; the underlying errors go here.
-    static let importLogger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
-        category: "import"
-    )
-
     /// Diagnostics for deep-link routing (App Intents + Spotlight taps) that resolve to a
     /// missing/trashed entry — surfaced here rather than to the user (a no-op is fine).
     static let routingLogger = Logger(
@@ -47,7 +40,10 @@ struct RootView: View {
     /// Surfaces partial-migration failures to the Settings flow as an alert.
     @State var migrationAlert = MigrationAlertState()
     /// Surfaces import failures (parse or I/O) from every arrival path to `HomeView`.
-    @State var importFailureLog = ImportFailureLog()
+    @State var importFailureLog: ImportFailureLog
+    /// The single import queue shared by the file picker, "Open in" and both inboxes. Injected
+    /// into the environment so `HomeView` reads progress and prompts from it.
+    @State var importCoordinator: ImportCoordinator
     /// Whether the catalogue's current root is the iCloud (ubiquitous) container. Tracked so
     /// migrations pick the right file API (`setUbiquitous` vs `moveItem`).
     @State var rootIsUbiquitous = false
@@ -125,6 +121,9 @@ struct RootView: View {
         _resourceCache = State(initialValue: cache)
         _mapAppService = State(initialValue: MapAppService())
         _catalog = State(initialValue: Catalog(storage: .applicationSupport, cache: cache))
+        let failureLog = ImportFailureLog()
+        _importFailureLog = State(initialValue: failureLog)
+        _importCoordinator = State(initialValue: ImportCoordinator(failureLog: failureLog))
     }
 
     var body: some View {
@@ -173,14 +172,14 @@ struct RootView: View {
             .modifier(AppEnvironmentBundle(
                 catalog: catalog, settings: settings, mapAppService: mapAppService,
                 migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-                resourceCache: resourceCache, router: router
+                resourceCache: resourceCache, router: router, importCoordinator: importCoordinator
             ))
         }
         .navigationSplitViewStyle(.balanced)
         .modifier(AppEnvironmentBundle(
             catalog: catalog, settings: settings, mapAppService: mapAppService,
             migrationAlert: migrationAlert, importFailureLog: importFailureLog,
-            resourceCache: resourceCache, router: router
+            resourceCache: resourceCache, router: router, importCoordinator: importCoordinator
         ))
         .task { await bootstrap() }
         // Save the resume snapshot on the way OUT (`.inactive` is always passed through
@@ -258,6 +257,7 @@ private struct AppEnvironmentBundle: ViewModifier {
     let importFailureLog: ImportFailureLog
     let resourceCache: ResourceCache
     let router: NavigationRouter
+    let importCoordinator: ImportCoordinator
 
     func body(content: Content) -> some View {
         content
@@ -267,6 +267,7 @@ private struct AppEnvironmentBundle: ViewModifier {
             .environment(migrationAlert)
             .environment(importFailureLog)
             .environment(router)
+            .environment(importCoordinator)
             .environment(\.resourceCache, resourceCache)
             .environment(\.storageLocations, catalog.storage)
     }

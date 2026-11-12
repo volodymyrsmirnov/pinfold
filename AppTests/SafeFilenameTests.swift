@@ -39,4 +39,26 @@ struct SafeFilenameTests {
         #expect(SafeFilename.sanitize("/") == "file")
         #expect(SafeFilename.sanitize("...") == "file")
     }
+
+    // MARK: - strippingInboxPrefix (B10)
+
+    private let uuid = "0F8FAD5B-D9CB-469F-A165-70867728950E"
+
+    @Test func stripsLeadingUUIDPrefix() {
+        #expect(SafeFilename.strippingInboxPrefix("\(uuid)-Trip.kml") == "Trip.kml")
+        #expect(SafeFilename.strippingInboxPrefix("\(uuid.lowercased())-a-b.kmz") == "a-b.kmz")
+    }
+
+    @Test func leavesOtherNamesAlone() {
+        #expect(SafeFilename.strippingInboxPrefix("Trip.kml") == "Trip.kml")
+        #expect(SafeFilename.strippingInboxPrefix("my-trip-2024.kml") == "my-trip-2024.kml")
+        // A UUID with no separator after it, or a UUID in the middle, is not an inbox prefix.
+        #expect(SafeFilename.strippingInboxPrefix("\(uuid).kml") == "\(uuid).kml")
+        #expect(SafeFilename.strippingInboxPrefix("x-\(uuid)-y.kml") == "x-\(uuid)-y.kml")
+    }
+
+    @Test func uuidOnlyNameFallsBack() {
+        #expect(SafeFilename.strippingInboxPrefix("\(uuid)-") == "file")
+        #expect(SafeFilename.strippingInboxPrefix("\(uuid)-.kml") == "file.kml")
+    }
 }

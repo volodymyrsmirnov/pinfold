@@ -27,7 +27,7 @@ extension HomeView {
         // title intact on every size class.
         if importCoordinator.isImporting {
             ToolbarItem(placement: .bottomBar) {
-                ImportProgressLabel(filename: importCoordinator.currentFilename)
+                ImportProgressLabel(coordinator: importCoordinator)
             }
         }
         // Favorites — the consolidated, catalogue-wide starred-placemarks sheet. Leads the

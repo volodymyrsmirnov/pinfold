@@ -1,4 +1,5 @@
 import Foundation
+import os
 @testable import Pinfold
 import PinfoldCore
 import Testing
@@ -256,5 +257,91 @@ import Testing
         #expect(sidecar?.contentSHA256 == entry.contentSHA256)
         #expect(sidecar?.displayName == entry.displayName)
         #expect(sidecar?.trashedAt == nil)
+    }
+
+    // MARK: - Failure cleanup (B8, E3)
+
+    /// Plants a non-empty directory at `path`, so a file write to that path fails.
+    private func blockPath(_ path: URL) throws {
+        try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: path.appendingPathComponent("blocker"))
+    }
+
+    private func folderNames(in root: URL) -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])
+            .filter { !$0.hasPrefix(".") }
+    }
+
+    @Test func commit_originalWriteFails_removesFolderAndCache() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storage = StorageLocations(
+            root: base.appendingPathComponent("synced", isDirectory: true),
+            cacheRoot: base.appendingPathComponent("cache", isDirectory: true)
+        )
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let folder = storage.root.appendingPathComponent(result.storageFolderName, isDirectory: true)
+        try blockPath(folder.appendingPathComponent(result.sourceFilename))
+
+        #expect(throws: (any Error).self) {
+            try ImportService.commit(result, storage: storage, cache: stubCache())
+        }
+
+        #expect(folderNames(in: storage.root).isEmpty, "the half-written entry folder must be removed")
+        #expect(folderNames(in: storage.cacheRoot).isEmpty, "the entry's cache folder must be removed")
+    }
+
+    @Test func commit_cacheWriteFails_importSucceedsAndMarkerIsRemoved() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        // Block the search-index file so the cache write fails.
+        let resources = storage.root
+            .appendingPathComponent(result.storageFolderName, isDirectory: true)
+            .appendingPathComponent("resources", isDirectory: true)
+        try blockPath(resources.appendingPathComponent("placemarks-index.json"))
+
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+
+        #expect(FileManager.default.fileExists(atPath: storage.originalFile(for: entry).path))
+        #expect(try storage.readMetadata(forFolderNamed: entry.storageFolderName) != nil)
+        // `resources/` is the "materialized" marker: removing it lets the scanner rebuild it.
+        #expect(!FileManager.default.fileExists(atPath: storage.resourcesDirectory(for: entry).path))
+    }
+
+    @Test func retryAfterFailedCommit_createsExactlyOneEntry() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let blocker = storage.root
+            .appendingPathComponent(result.storageFolderName, isDirectory: true)
+            .appendingPathComponent(result.sourceFilename)
+        try blockPath(blocker)
+
+        #expect(throws: (any Error).self) {
+            try ImportService.commit(result, storage: storage, cache: stubCache())
+        }
+        #expect(folderNames(in: storage.root).isEmpty)
+
+        // The retry (same result) now succeeds and leaves exactly one folder.
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+        #expect(folderNames(in: storage.root) == [entry.storageFolderName])
+    }
+
+    // MARK: - Off the main actor (B11)
+
+    @Test func commit_runsOffTheMainActor() async throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let ranOnMain = OSAllocatedUnfairLock<Bool?>(initialState: nil)
+
+        let entry = try await ImportService.commitOffMain(result, storage: storage, cache: stubCache()) {
+            ranOnMain.withLock { $0 = Thread.isMainThread }
+        }
+
+        #expect(ranOnMain.withLock { $0 } == false)
+        #expect(FileManager.default.fileExists(atPath: storage.originalFile(for: entry).path))
     }
 }

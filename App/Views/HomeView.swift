@@ -41,6 +41,8 @@ struct HomeView: View {
     @Environment(ImportFailureLog.self) var importFailureLog
     @Environment(AppCommands.self) var appCommands
     @Environment(\.resourceCache) var resourceCache
+    /// The shared import queue, owned by `RootView`.
+    @Environment(ImportCoordinator.self) var importCoordinator
 
     // MARK: - Local state
 
@@ -56,7 +58,6 @@ struct HomeView: View {
     /// like Settings, so it covers the whole window; tapping a favorite dismisses it and drives
     /// the sidebar selection + deep-link.
     @State var isFavoritesPresented = false
-    @State var importCoordinator = ImportCoordinator()
 
     /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
     /// in progress. Set from the active-row context menu's "Rename" action (in HomeViewRows).

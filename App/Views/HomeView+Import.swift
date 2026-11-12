@@ -20,25 +20,36 @@ extension HomeView {
 
 // MARK: - Import progress label
 
-/// A spinner plus the current filename, shown in the bottom bar while the import coordinator is
-/// draining its queue.
+/// The bottom-bar import status: a spinner, "Importing 2 of 5" (just "Importing…" for a single
+/// file), the current filename, and a Cancel button that drops the files not started yet.
 struct ImportProgressLabel: View {
-    let filename: String?
+    let coordinator: ImportCoordinator
 
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
-            if let name = filename {
-                Text("Importing \(name)…")
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
                     .font(.subheadline)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } else {
-                Text("Importing…")
-                    .font(.subheadline)
+                if let name = coordinator.currentFilename {
+                    Text(name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
+            Button("Cancel", role: .cancel) {
+                coordinator.cancel()
+            }
+            .font(.subheadline)
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    private var title: LocalizedStringKey {
+        coordinator.totalCount > 1
+            ? "Importing \(coordinator.currentPosition) of \(coordinator.totalCount)"
+            : "Importing…"
     }
 }
 
@@ -53,9 +64,8 @@ struct ImportAlertsModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Duplicate-import alert
             .alert(
-                "Duplicate File",
+                duplicateTitle,
                 isPresented: Binding(
                     get: { importCoordinator.pendingDuplicate != nil },
                     // Route dismissal through skipDuplicate so the import queue always
@@ -63,30 +73,15 @@ struct ImportAlertsModifier: ViewModifier {
                     // skipDuplicate is idempotent, so the button paths are unaffected.
                     set: {
                         if !$0 {
-                            importCoordinator.skipDuplicate(
-                                catalog: catalog, storage: catalog.storage, cache: resourceCache
-                            )
+                            skip()
                         }
                     }
                 ),
                 presenting: importCoordinator.pendingDuplicate
-            ) { _ in
-                Button("Import Anyway") {
-                    importCoordinator.importAnyway(
-                        catalog: catalog,
-                        storage: catalog.storage,
-                        cache: resourceCache
-                    )
-                }
-                Button("Skip", role: .cancel) {
-                    importCoordinator.skipDuplicate(
-                        catalog: catalog,
-                        storage: catalog.storage,
-                        cache: resourceCache
-                    )
-                }
+            ) { dup in
+                duplicateButtons(for: dup.kind)
             } message: { dup in
-                Text("\"\(dup.result.displayName)\" has already been imported. Would you like to import it again?")
+                Text(duplicateMessage(for: dup))
             }
             // Import error alert
             .alert(
@@ -107,5 +102,45 @@ struct ImportAlertsModifier: ViewModifier {
             } message: { error in
                 Text(error.localizedDescription)
             }
+    }
+
+    // MARK: - Duplicate alert
+
+    private var duplicateTitle: LocalizedStringKey {
+        importCoordinator.pendingDuplicate?.kind == .trashed ? "File in Trash" : "Duplicate File"
+    }
+
+    private func duplicateMessage(for dup: ImportCoordinator.DuplicateAlert) -> LocalizedStringKey {
+        let name = dup.result.displayName
+        return switch dup.kind {
+        case .active:
+            "\"\(name)\" has already been imported. Would you like to import it again?"
+        case .trashed:
+            "\"\(name)\" is already in the Trash. Restore it, or import a new copy?"
+        }
+    }
+
+    @ViewBuilder
+    private func duplicateButtons(for kind: ImportCoordinator.DuplicateKind) -> some View {
+        switch kind {
+        case .active:
+            Button("Import Anyway") { importAnyway() }
+        case .trashed:
+            Button("Restore from Trash") {
+                importCoordinator.restoreTrashedDuplicate(
+                    catalog: catalog, storage: catalog.storage, cache: resourceCache
+                )
+            }
+            Button("Import as New") { importAnyway() }
+        }
+        Button("Skip", role: .cancel) { skip() }
+    }
+
+    private func importAnyway() {
+        importCoordinator.importAnyway(catalog: catalog, storage: catalog.storage, cache: resourceCache)
+    }
+
+    private func skip() {
+        importCoordinator.skipDuplicate(catalog: catalog, storage: catalog.storage, cache: resourceCache)
     }
 }

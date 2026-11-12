@@ -26,6 +26,27 @@ enum SafeFilename {
     /// Deterministic fallback when the input yields no usable name.
     private static let fallback = "file"
 
+    /// Removes the leading `<UUID>-` the share extension prefixes to files it drops into the
+    /// App Group inbox (collision safety). Names without such a prefix are returned unchanged;
+    /// a name that is nothing but the prefix falls back to `"file"` (keeping any extension).
+    /// Stripping happens in the app, so it also covers files already sitting in the inbox.
+    static func strippingInboxPrefix(_ name: String) -> String {
+        // A UUID string is 36 characters; the prefix is the UUID plus one "-" separator.
+        let prefixLength = 37
+        guard name.count >= prefixLength else { return name }
+        let uuidPart = String(name.prefix(36))
+        let separator = name[name.index(name.startIndex, offsetBy: 36)]
+        guard UUID(uuidString: uuidPart) != nil, separator == "-" else { return name }
+        let rest = String(name.dropFirst(prefixLength))
+        if rest.isEmpty {
+            return fallback
+        }
+        if rest.hasPrefix(".") {
+            return fallback + rest
+        }
+        return rest
+    }
+
     static func sanitize(_ raw: String) -> String {
         // 1. Keep only the final path component. Split on both POSIX and Windows separators so
         //    "a/b/c", "a\b\c", and mixed forms all reduce to the last segment.
@@ -86,7 +107,9 @@ enum SafeFilename {
         var used = 0
         for character in string {
             let width = String(character).utf8.count
-            if used + width > budget { break }
+            if used + width > budget {
+                break
+            }
             result.append(character)
             used += width
         }

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import PinfoldCore
 
 // MARK: - ImportResult
@@ -44,8 +45,14 @@ enum ImportError: Error {
 
 /// Static methods that implement the two-phase import flow:
 /// 1. `prepare` — off-main, pure computation; returns `ImportResult`.
-/// 2. `commit`  — main-actor, performs storage (writes files to disk); returns `CatalogEntry`.
+/// 2. `commit`  — plain synchronous file I/O, `nonisolated`; the coordinator runs it through
+///    `commitOffMain` so the main actor stays free. Returns the `CatalogEntry` on disk.
 enum ImportService {
+    fileprivate static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Pinfold",
+        category: "import"
+    )
+
     // MARK: - SHA-256
 
     /// Returns the lowercase hex SHA-256 digest of `data`.
@@ -127,7 +134,21 @@ enum ImportService {
         )
     }
 
-    // MARK: - Commit (main actor)
+    // MARK: - Commit
+
+    /// Runs `commit` on a background task so the file writes never block the main actor (B11).
+    /// The caller reloads the `Catalog` afterwards, on the main actor.
+    ///
+    /// - Parameter onStart: Called on the background task just before the writes begin. A test
+    ///   seam: it lets a test observe which thread the commit runs on.
+    static func commitOffMain(
+        _ result: ImportResult,
+        storage: StorageLocations,
+        cache: ResourceCache,
+        onStart: (@Sendable () -> Void)? = nil
+    ) async throws -> CatalogEntry {
+        try await detachedCommit(result, storage: storage, cache: cache, onStart: onStart)
+    }
 
     /// Persists a prepared import result to disk: creates the per-entry folder, writes the
     /// `metadata.json` sidecar and the original file, caches embedded resources, and fires a
@@ -147,7 +168,6 @@ enum ImportService {
     ///
     /// - Returns: The `CatalogEntry` that now exists on disk.
     /// - Throws: A file-system error if folder creation or file writing fails.
-    @MainActor
     @discardableResult
     static func commit(
         _ result: ImportResult,
@@ -170,26 +190,45 @@ enum ImportService {
             trashedAt: nil
         )
 
-        // Create on-disk folders before writing any files.
-        try storage.createFolders(for: entry)
+        // Create on-disk folders before writing any files. From here on a failure must leave
+        // nothing behind: an orphan folder is skipped by the scanner forever and a retry would
+        // create a second one (B8, E3).
+        do {
+            try storage.createFolders(for: entry)
 
-        // Write the synced metadata sidecar FIRST (see ordering invariant above).
-        try storage.writeMetadata(entry.metadata, for: entry)
+            // Write the synced metadata sidecar FIRST (see ordering invariant above).
+            try storage.writeMetadata(entry.metadata, for: entry)
 
-        // Write the original file bytes.
-        try storage.writeOriginal(result.originalData, for: entry)
+            // Write the original file bytes.
+            try storage.writeOriginal(result.originalData, for: entry)
+        } catch {
+            removeFailedImport(entry, storage: storage)
+            throw error
+        }
 
-        // Write KMZ-embedded resources synchronously (no network needed).
+        // The resource cache and search index are derivable, so a failure here never fails the
+        // import: drop the `resources/` directory (its existence is the scanner's
+        // "materialized" marker) and let the materialisation pass rebuild it.
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
-
-        // Write the local search index alongside the resource cache (derivable, never synced).
-        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        var cacheIsReady = true
+        do {
+            try cache.writeEmbedded(result.embeddedResources, to: resourcesDir)
+            try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        } catch {
+            ImportService.logger.error(
+                """
+                Cache write failed for \(entry.storageFolderName, privacy: .public): \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
+            try? FileManager.default.removeItem(at: resourcesDir)
+            cacheIsReady = false
+        }
 
         // Kick off remote downloads in the background — non-blocking, offline-first.
-        let hrefs = result.remoteResourceHrefs
-        Task.detached {
-            await cache.downloadRemote(hrefs, to: resourcesDir)
+        // Skipped when the cache write failed: the materialisation pass rebuilds it all.
+        if cacheIsReady {
+            downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
         }
 
         // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
@@ -198,4 +237,43 @@ enum ImportService {
 
         return entry
     }
+}
+
+/// Removes the synced folder and cache folder of an import that failed part-way. Best effort:
+/// the original error is what the caller reports.
+private func removeFailedImport(_ entry: CatalogEntry, storage: StorageLocations) {
+    do {
+        try storage.removeFolder(for: entry)
+    } catch {
+        ImportService.logger.error(
+            """
+            Could not clean up failed import \(entry.storageFolderName, privacy: .public): \
+            \(error.localizedDescription, privacy: .public)
+            """
+        )
+    }
+}
+
+/// Starts the background download of `hrefs`. A free function so the `Task.detached` closure
+/// is compiled outside `ImportService.commit` (see the `ClosureLifetimeFixup` note in
+/// FavoritesView.swift).
+private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to resourcesDir: URL) {
+    Task.detached {
+        await cache.downloadRemote(hrefs, to: resourcesDir)
+    }
+}
+
+/// Runs `ImportService.commit` in a detached task. A `nonisolated` free function so the
+/// `Task.detached` closure is compiled outside any `@MainActor` caller's SIL (see the
+/// `ClosureLifetimeFixup` note in FavoritesView.swift).
+private func detachedCommit(
+    _ result: ImportResult,
+    storage: StorageLocations,
+    cache: ResourceCache,
+    onStart: (@Sendable () -> Void)?
+) async throws -> CatalogEntry {
+    try await Task.detached(priority: .userInitiated) {
+        onStart?()
+        return try ImportService.commit(result, storage: storage, cache: cache)
+    }.value
 }
