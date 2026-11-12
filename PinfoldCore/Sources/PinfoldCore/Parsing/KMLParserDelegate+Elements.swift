@@ -9,7 +9,6 @@ extension KMLParserDelegate {
     func startGeometryElement(_ local: String) -> Bool {
         switch local {
         case "Point":
-            placemark?.hasPoint = true
             inPoint = true
         case "LineString":
             if placemark != nil {
@@ -62,7 +61,7 @@ extension KMLParserDelegate {
             }
         case "LineString":
             if inLineString {
-                placemark?.geometries.append(.lineString(lineStringCoords))
+                appendLine(lineStringCoords, asTrack: false)
                 inLineString = false
                 lineStringCoords = []
             }
@@ -70,20 +69,25 @@ extension KMLParserDelegate {
             inOuterBoundary = false
         case "innerBoundaryIs":
             if inInnerBoundary {
-                polygonInners.append(currentInnerRing)
+                // A degenerate inner ring is dropped alone; the polygon survives.
+                if currentInnerRing.count >= Self.minRingVertices {
+                    polygonInners.append(currentInnerRing)
+                }
                 inInnerBoundary = false
                 currentInnerRing = []
             }
         case "Polygon":
             if inPolygon {
-                placemark?.geometries.append(.polygon(outer: polygonOuter, inners: polygonInners))
+                if polygonOuter.count >= Self.minRingVertices {
+                    placemark?.geometries.append(.polygon(outer: polygonOuter, inners: polygonInners))
+                }
                 inPolygon = false
                 polygonOuter = []
                 polygonInners = []
             }
         case "Track":
             if inTrack {
-                placemark?.geometries.append(.track(trackCoords))
+                appendLine(trackCoords, asTrack: true)
                 inTrack = false
                 trackCoords = []
             }
@@ -91,6 +95,21 @@ extension KMLParserDelegate {
             return false
         }
         return true
+    }
+
+    /// Fewest vertices of a line or track worth keeping.
+    static let minLineVertices = 2
+    /// Fewest vertices of a polygon ring worth keeping.
+    static let minRingVertices = 3
+
+    /// Appends a line or track when it has enough vertices. A single-vertex one is dropped
+    /// but donates its coordinate so the placemark can still be located on a map.
+    private func appendLine(_ coords: [Coordinate], asTrack: Bool) {
+        if coords.count >= Self.minLineVertices {
+            placemark?.geometries.append(asTrack ? .track(coords) : .lineString(coords))
+        } else if let only = coords.first, placemark?.fallbackCoordinate == nil {
+            placemark?.fallbackCoordinate = only
+        }
     }
 
     /// Closes Style sub-elements (Icon/Line/Poly fields and the Style itself).
@@ -237,7 +256,12 @@ extension KMLParserDelegate {
         if inPoint {
             // Only capture coordinates while inside a <Point> so that LineString/Polygon
             // vertices in the same placemark don't clobber the Point coordinate.
-            placemark?.coordinate = Coordinate(parsingFirstTuple: text)
+            // A Point whose coordinates do not parse is not a point: it must neither set
+            // `hasPoint` nor displace a valid one.
+            if let point = Coordinate(parsingFirstTuple: text) {
+                placemark?.coordinate = point
+                placemark?.hasPoint = true
+            }
         } else if inLineString {
             lineStringCoords = Coordinate.parseList(text)
         } else if inInnerBoundary {

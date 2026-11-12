@@ -80,6 +80,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         /// placeless placemark (description/data only, no geometry) stays kept.
         var hasUncapturedGeometry = false
         var sourceID: String?
+        /// Coordinate donated by a dropped single-vertex line/track; locates a placemark that
+        /// has no point and no kept geometry.
+        var fallbackCoordinate: Coordinate?
     }
 
     var placemark: PlacemarkBuilder?
@@ -310,8 +313,11 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         // (a description/data-only placeless placemark). Drop only a point-less placemark
         // whose sole geometry is an uncaptured non-point type.
         let keep = pm.hasPoint || !pm.geometries.isEmpty || !pm.hasUncapturedGeometry
+            || pm.fallbackCoordinate != nil
         guard keep else { return }
-        let coordinate = pm.hasPoint ? pm.coordinate : Self.firstCoordinate(of: pm.geometries)
+        let coordinate = pm.hasPoint
+            ? pm.coordinate
+            : Self.firstCoordinate(of: pm.geometries) ?? pm.fallbackCoordinate
         let built = KMLPlacemark(id: nextID("p"), name: pm.name,
                                  descriptionHTML: pm.descriptionHTML,
                                  styleUrl: pm.styleUrl,

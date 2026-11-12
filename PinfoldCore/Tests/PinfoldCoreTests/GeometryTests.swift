@@ -126,4 +126,95 @@ struct GeometryTests {
         // Every point-only placemark keeps a coordinate.
         #expect(allHaveCoordinate)
     }
+
+    // MARK: - CB-3 (A9): invalid and degenerate geometry
+
+    private func onlyPlacemark(_ body: String) throws -> KMLPlacemark {
+        let xml = "<kml><Document><name>D</name><Placemark><name>P</name>\(body)</Placemark></Document></kml>"
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        return try #require(doc.root.allPlacemarks.first)
+    }
+
+    @Test func pointWithUnparseableCoordinates_fallsBackToLineGeometry() throws {
+        let pm = try onlyPlacemark("""
+        <MultiGeometry>
+          <Point><coordinates>abc,def</coordinates></Point>
+          <LineString><coordinates>1,2 3,4</coordinates></LineString>
+        </MultiGeometry>
+        """)
+        #expect(pm.hasPoint == false)
+        #expect(pm.geometries.count == 1)
+        #expect(pm.coordinate == Coordinate(longitude: 1, latitude: 2))
+    }
+
+    @Test func pointWithUnparseableCoordinates_isNotCountedAsPoint() throws {
+        let xml = """
+        <kml><Document><name>D</name>
+          <Placemark><name>Bad</name><Point><coordinates>abc</coordinates></Point></Placemark>
+          <Placemark><name>Good</name><Point><coordinates>1,2</coordinates></Point></Placemark>
+        </Document></kml>
+        """
+        let doc = try KMLParser.parse(data: Data(xml.utf8))
+        #expect(doc.placemarkCount == 2) // the bad one is kept as placeless
+        #expect(doc.pointCount == 1)
+        let bad = doc.root.allPlacemarks.first { $0.name == "Bad" }
+        #expect(bad?.hasPoint == false)
+        #expect(bad?.coordinate == nil)
+    }
+
+    @Test func emptyLineStringIsDropped() throws {
+        let pm = try onlyPlacemark("<LineString><coordinates> </coordinates></LineString>")
+        #expect(pm.geometries.isEmpty)
+        #expect(pm.coordinate == nil)
+        #expect(pm.hasPoint == false)
+    }
+
+    @Test func singleVertexLineIsDropped_butLocatesThePlacemark() throws {
+        let pm = try onlyPlacemark("<LineString><coordinates>5,6</coordinates></LineString>")
+        #expect(pm.geometries.isEmpty)
+        #expect(pm.hasPoint == false)
+        #expect(pm.coordinate == Coordinate(longitude: 5, latitude: 6))
+    }
+
+    @Test func singleVertexTrackIsDropped_butLocatesThePlacemark() throws {
+        let pm = try onlyPlacemark("<gx:Track><gx:coord>7 8 0</gx:coord></gx:Track>")
+        #expect(pm.geometries.isEmpty)
+        #expect(pm.hasPoint == false)
+        #expect(pm.coordinate == Coordinate(longitude: 7, latitude: 8, altitude: 0))
+    }
+
+    @Test func polygonWithFewerThanThreeOuterVerticesIsDropped() throws {
+        let pm = try onlyPlacemark("""
+        <Polygon><outerBoundaryIs><LinearRing><coordinates>1,1 2,2</coordinates></LinearRing></outerBoundaryIs></Polygon>
+        """)
+        #expect(pm.geometries.isEmpty)
+        #expect(pm.coordinate == nil)
+    }
+
+    @Test func degenerateInnerRingIsDropped() throws {
+        let pm = try onlyPlacemark("""
+        <Polygon>
+          <outerBoundaryIs><LinearRing><coordinates>0,0 4,0 4,4 0,4 0,0</coordinates></LinearRing></outerBoundaryIs>
+          <innerBoundaryIs><LinearRing><coordinates>1,1 2,2</coordinates></LinearRing></innerBoundaryIs>
+          <innerBoundaryIs><LinearRing><coordinates>1,1 2,1 2,2 1,1</coordinates></LinearRing></innerBoundaryIs>
+        </Polygon>
+        """)
+        guard case let .polygon(outer, inners)? = pm.geometries.first else {
+            Issue.record("expected the polygon to be kept")
+            return
+        }
+        #expect(outer.count == 5)
+        #expect(inners.count == 1) // only the good inner ring survives
+        #expect(inners.first?.count == 4)
+    }
+
+    @Test func validPointStillWinsOverDegenerateLine() throws {
+        let pm = try onlyPlacemark("""
+        <MultiGeometry><Point><coordinates>9,9</coordinates></Point>
+        <LineString><coordinates>1,1</coordinates></LineString></MultiGeometry>
+        """)
+        #expect(pm.hasPoint)
+        #expect(pm.coordinate == Coordinate(longitude: 9, latitude: 9))
+        #expect(pm.geometries.isEmpty)
+    }
 }
