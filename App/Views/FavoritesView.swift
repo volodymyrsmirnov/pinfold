@@ -51,6 +51,12 @@ struct FavoritesView: View {
     /// `true` when at least one active entry has favorites but none resolved yet (their indexes
     /// aren't materialized). Drives the "will appear after processing" footnote.
     @State private var hasUnresolvedFavorites = false
+    /// List or map presentation (D7).
+    @State private var mode: FavoritesMode = .list
+    /// "Nearest first" ordering for the list; uses the device location when already available.
+    @State private var nearestFirst = false
+    /// The app's existing location facility (same one the file map and detail view use).
+    @State private var locationAuth = LocationAuthorization()
 
     // MARK: - Body
 
@@ -58,17 +64,45 @@ struct FavoritesView: View {
         NavigationStack {
             content
                 .navigationTitle("Favorites")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
+                .toolbar { toolbarContent }
         }
         // Re-load whenever the active catalogue identity set changes. The id is computed in a
         // helper (not an inline `.map` closure) to keep `body`'s SIL free of an extra closure.
         .task(id: activeEntryIDs) {
             await load()
         }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { dismiss() }
+        }
+        ToolbarItem(placement: .principal) {
+            Picker("View", selection: $mode) {
+                Text("List").tag(FavoritesMode.list)
+                Text("Map").tag(FavoritesMode.map)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 180)
+        }
+        if mode == .list {
+            ToolbarItem(placement: .cancellationAction) {
+                Toggle("Nearest first", systemImage: "location.north.line", isOn: $nearestFirst)
+                    .onChange(of: nearestFirst) { _, on in
+                        // User-initiated; reuses the existing When-In-Use flow and usage string.
+                        if on {
+                            locationAuth.request()
+                        }
+                    }
+            }
+        }
+    }
+
+    /// The groups in display order: catalogue order, or nearest-first when requested and a fix exists.
+    private func displayedGroups(_ groups: [FavoriteGroup]) -> [FavoriteGroup] {
+        guard nearestFirst, let here = locationAuth.lastLocation else { return groups }
+        return nearestOrdered(groups, latitude: here.coordinate.latitude, longitude: here.coordinate.longitude)
     }
 
     /// The active entries' ids, the `.task` identity (re-loads when the catalogue set changes).
@@ -89,7 +123,18 @@ struct FavoritesView: View {
                 // The list lives in its own `View` struct so this file's view methods stay small.
                 // Bundling the full `List`/`ForEach`/`Section`/`Button` tree into one big `body`
                 // here tripped a SIL `ClosureLifetimeFixup` blow-up (minutes-long compile).
-                FavoritesList(groups: groups, hasUnresolved: hasUnresolvedFavorites, onTap: open)
+                if mode == .map {
+                    FavoritesMapView(
+                        pins: FavoritePins.pins(from: groups.flatMap(\.hits)),
+                        fileNames: fileNames(of: groups),
+                        onOpen: { open(folderName: $0.folderName, key: $0.key) }
+                    )
+                } else {
+                    FavoritesList(
+                        groups: displayedGroups(groups), hasUnresolved: hasUnresolvedFavorites,
+                        onTap: { open(folderName: $0.folderName, key: $0.key) }
+                    )
+                }
             }
         } else {
             loading
@@ -115,10 +160,10 @@ struct FavoritesView: View {
     /// `pendingPlacemarkKey` with the hit's stableKey, then select the entry. The sheet is
     /// dismissed FIRST so the selection change reaches the underlying split view — driving the
     /// detail column to the favorite's file and pushing the placemark's detail page.
-    private func open(_ hit: PlacemarkIndex.Hit) {
-        guard let entry = catalog.active.first(where: { $0.storageFolderName == hit.folderName }) else { return }
+    private func open(folderName: String, key: String) {
+        guard let entry = catalog.active.first(where: { $0.storageFolderName == folderName }) else { return }
         dismiss()
-        pendingPlacemarkKey = hit.key
+        pendingPlacemarkKey = key
         selection = entry.id
     }
 
@@ -167,6 +212,40 @@ struct FavoritesView: View {
             )
         }
     }
+}
+
+// MARK: - Mode and ordering
+
+/// Whether the sheet shows the grouped list or the map.
+enum FavoritesMode: Hashable {
+    case list
+    case map
+}
+
+/// Folder name to display name for the groups' files (map card subtitle).
+private func fileNames(of groups: [FavoritesView.FavoriteGroup]) -> [String: String] {
+    var names: [String: String] = [:]
+    for group in groups {
+        names[group.entry.storageFolderName] = group.entry.displayName
+    }
+    return names
+}
+
+/// Sorts each group's hits nearest-first and orders the groups by their nearest hit, groups
+/// without any coordinate last (stable).
+private func nearestOrdered(
+    _ groups: [FavoritesView.FavoriteGroup], latitude: Double, longitude: Double
+) -> [FavoritesView.FavoriteGroup] {
+    let keyed = groups.enumerated().map { offset, group in
+        let hits = FavoritePins.nearestFirst(group.hits, latitude: latitude, longitude: longitude)
+        let nearest = hits.first.flatMap {
+            FavoritePins.distance(of: $0, latitude: latitude, longitude: longitude)
+        } ?? .infinity
+        return (offset: offset, nearest: nearest, group: FavoritesView.FavoriteGroup(entry: group.entry, hits: hits))
+    }
+    return keyed.sorted {
+        $0.nearest != $1.nearest ? $0.nearest < $1.nearest : $0.offset < $1.offset
+    }.map(\.group)
 }
 
 // MARK: - Off-main load
@@ -284,7 +363,9 @@ private func resolveFavorites(
             groups.append(FavoritesView.FavoriteGroup(entry: input.entry, hits: hits))
             // A partially-resolved entry (some favorites in the index, some not) still signals
             // there's more to come.
-            if hits.count < keys.count { sawUnresolved = true }
+            if hits.count < keys.count {
+                sawUnresolved = true
+            }
         }
     }
     return FavoritesView.LoadResult(groups: groups, hasUnresolved: sawUnresolved)
