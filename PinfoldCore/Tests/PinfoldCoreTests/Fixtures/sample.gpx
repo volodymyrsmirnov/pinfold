@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Pinfold tests" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Sample Hike</name>
+    <desc>A short loop</desc>
+  </metadata>
+  <wpt lat="50.0875" lon="14.4208">
+    <ele>202.5</ele>
+    <time>2025-05-01T09:30:00Z</time>
+    <name>Trailhead</name>
+    <cmt>Park by the gate</cmt>
+    <desc>Start &amp; finish</desc>
+    <link href="https://example.com/trailhead"><text>Trail page</text></link>
+    <sym>Flag, Blue</sym>
+    <type>Parking</type>
+  </wpt>
+  <wpt lat="50.1" lon="14.45">
+    <name>Viewpoint</name>
+    <cmt>Great view</cmt>
+  </wpt>
+  <rte>
+    <name>Return route</name>
+    <rtept lat="50.10" lon="14.45"><ele>310</ele></rtept>
+    <rtept lat="50.09" lon="14.43"/>
+    <rtept lat="50.0875" lon="14.4208"/>
+  </rte>
+  <trk>
+    <name>Morning track</name>
+    <type>hiking</type>
+    <trkseg>
+      <trkpt lat="50.0875" lon="14.4208"><ele>202.5</ele></trkpt>
+      <trkpt lat="50.09" lon="14.43"><ele>250</ele></trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="50.095" lon="14.44"/>
+      <trkpt lat="50.1" lon="14.45"/>
+      <trkpt lat="nope" lon="14.46"/>
+    </trkseg>
+  </trk>
+</gpx>

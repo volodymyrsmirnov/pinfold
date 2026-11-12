@@ -13,8 +13,14 @@ public struct ParsedKML: Sendable {
     /// Archive-relative path of the root KML file for a KMZ (e.g. "doc.kml"), or nil for plain KML.
     /// Used to key `embeddedResources` relative to the root KML's directory.
     public let rootKMLPath: String?
+    /// The format the data was read from (KML, KMZ, GPX or GeoJSON).
+    public let format: SourceFormat
 
-    public init(document: KMLDocument, embeddedResources: [String: Data], rootKMLPath: String?) {
+    public init(document: KMLDocument, embeddedResources: [String: Data], rootKMLPath: String?,
+                format: SourceFormat = .kml)
+    // swiftlint:disable:next opening_brace
+    {
+        self.format = format
         self.document = document
         self.embeddedResources = embeddedResources
         self.rootKMLPath = rootKMLPath
@@ -28,6 +34,12 @@ public enum KMLReadError: Error {
     case kmzEntryParseFailed(entry: String, underlying: Error)
     /// A plain (non-zip) input exceeds the size cap.
     case fileTooLarge
+    /// The bytes are not KML, KMZ, GPX or GeoJSON (empty input, an unknown XML root, plain text).
+    case unsupportedFormat
+    /// The file looks like GeoJSON but is not valid JSON; carries the parser's short reason.
+    case malformedGeoJSON(String)
+    /// The file is valid but nests or repeats geometry beyond what Pinfold will build.
+    case geoJSONTooComplex
 }
 
 extension KMLReadError: LocalizedError {
@@ -37,6 +49,12 @@ extension KMLReadError: LocalizedError {
             "\(entry): \(underlying.localizedDescription)"
         case .fileTooLarge:
             "This file is too large to open."
+        case .unsupportedFormat:
+            "This is not a KML, KMZ, GPX or GeoJSON file."
+        case let .malformedGeoJSON(detail):
+            "This GeoJSON file is not valid JSON (\(detail))."
+        case .geoJSONTooComplex:
+            "This GeoJSON file is too complex to open."
         }
     }
 }
@@ -60,6 +78,12 @@ public enum KMLReader {
                          maxRootBytes: KMZArchive.defaultMaxUncompressedBytes)
     }
 
+    /// The format of `data`, decided from its content (never a file extension). Throws
+    /// `KMLReadError.unsupportedFormat` for anything that is not KML, KMZ, GPX or GeoJSON.
+    public static func detectFormat(of data: Data) throws -> SourceFormat {
+        KMZArchive.isKMZ(data) ? .kmz : try FormatSniffer.sniff(data)
+    }
+
     /// Streams each non-root KMZ entry to `directory`; returns root-relative key (matching
     /// hrefs as written in the KML) -> written filename. `filenameFor` maps a key to a flat
     /// filename. Unsafe entry paths are skipped. Capped at 1 GiB in total. On any throw, the
@@ -72,15 +96,16 @@ public enum KMLReader {
     }
 
     static func readDocument(data: Data, maxPlainBytes: Int, maxRootBytes: Int) throws -> KMLDocument {
-        guard KMZArchive.isKMZ(data) else { return try parsePlain(data, maxBytes: maxPlainBytes) }
+        guard KMZArchive.isKMZ(data) else { return try parsePlain(data, maxBytes: maxPlainBytes).document }
         let root = try KMZArchive.extractRoot(data, maxRootBytes: maxRootBytes)
         return try parseRoot(root.rootKML, path: root.rootKMLPath)
     }
 
     static func read(data: Data, maxPlainBytes: Int, maxArchiveBytes: Int) throws -> ParsedKML {
         guard KMZArchive.isKMZ(data) else {
-            return try ParsedKML(document: parsePlain(data, maxBytes: maxPlainBytes),
-                                 embeddedResources: [:], rootKMLPath: nil)
+            let plain = try parsePlain(data, maxBytes: maxPlainBytes)
+            return ParsedKML(document: plain.document, embeddedResources: [:], rootKMLPath: nil,
+                             format: plain.format)
         }
         let contents = try KMZArchive.extract(data, maxUncompressedBytes: maxArchiveBytes)
         let document = try parseRoot(contents.rootKML, path: contents.rootKMLPath)
@@ -88,12 +113,18 @@ public enum KMLReader {
             result[KMZArchive.rootRelativeKey(pair.key, rootKMLPath: contents.rootKMLPath)] = pair.value
         }
         return ParsedKML(document: document, embeddedResources: resources,
-                         rootKMLPath: contents.rootKMLPath)
+                         rootKMLPath: contents.rootKMLPath, format: .kmz)
     }
 
-    private static func parsePlain(_ data: Data, maxBytes: Int) throws -> KMLDocument {
+    /// Size-capped, content-dispatched parse of non-zip input.
+    private static func parsePlain(_ data: Data, maxBytes: Int) throws -> (document: KMLDocument, format: SourceFormat) {
         guard data.count <= maxBytes else { throw KMLReadError.fileTooLarge }
-        return try KMLParser.parse(data: data)
+        let format = try FormatSniffer.sniff(data)
+        switch format {
+        case .geoJSON: return try (GeoJSONReader.read(data), format)
+        case .gpx: return try (GPXReader.read(data), format)
+        case .kml, .kmz: return try (KMLParser.parse(data: data), .kml)
+        }
     }
 
     private static func parseRoot(_ bytes: Data, path: String) throws -> KMLDocument {
