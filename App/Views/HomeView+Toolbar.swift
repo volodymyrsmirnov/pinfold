@@ -26,8 +26,10 @@ extension HomeView {
         // Placed in the bottom bar (`.bottomBar`) rather than `.principal`: a principal
         // item REPLACES the navigation title on compact width, which made the "Pinfold"
         // title vanish mid-import. The status bar floats below the list and leaves the
-        // title intact on every size class.
-        if importCoordinator.isImporting {
+        // title intact on every size class. Hidden while select mode owns the bottom bar
+        // (Tag / Trash): the two would crowd each other, and the top-bar import button is
+        // already disabled during an import.
+        if importCoordinator.isImporting, !isSelecting {
             ToolbarItem(placement: .bottomBar) {
                 ImportProgressLabel(coordinator: importCoordinator)
             }
