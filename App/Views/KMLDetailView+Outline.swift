@@ -70,6 +70,7 @@ nonisolated func makeSearchCorpus(root: KMLContainer) async -> SearchCorpus {
 }
 
 /// Walks the document into an outline on a background task.
+// swiftlint:disable:next function_parameter_count -- mirrors PlacemarkOutline.build inputs
 nonisolated func buildOutlineOffMain(
     root: KMLContainer, query: String, collapsed: Set<String>,
     sort: PlacemarkOutline.Sort, corpus: SearchCorpus?, notes: [String: String]
