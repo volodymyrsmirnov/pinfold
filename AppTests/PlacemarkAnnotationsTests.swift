@@ -87,6 +87,33 @@ import Testing
         #expect(reloaded.visitedKeys.contains("id:c"))
     }
 
+    @Test func toggleAppliesDeltaOntoCurrentOnDiskSets() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        // Another device's sync lands while the file is open.
+        try storage.updateMetadata(forFolderNamed: entry.storageFolderName) {
+            $0.favoriteKeys = ["id:remote"]
+            $0.visitedKeys = ["id:remoteV"]
+        }
+        store.toggleFavorite(point("local"))
+        let reloaded = try #require(try storage.readMetadata(forFolderNamed: entry.storageFolderName))
+        #expect(reloaded.favoriteKeys == ["id:remote", "id:local"])
+        #expect(reloaded.visitedKeys == ["id:remoteV"])
+        store.toggleFavorite(point("local"))
+        let after = try #require(try storage.readMetadata(forFolderNamed: entry.storageFolderName))
+        #expect(after.favoriteKeys == ["id:remote"])
+    }
+
+    @Test func readOnlyEntryNeverPersists() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        var readOnly = entry
+        readOnly.sidecarState = .notDownloaded
+        let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
+        store.toggleFavorite(point("x"))
+        let reloaded = try #require(try storage.readMetadata(forFolderNamed: entry.storageFolderName))
+        #expect(reloaded.favoriteKeys.isEmpty)
+    }
+
     // MARK: - Notes
 
     @Test func setNote_persistsThroughUpdateMetadata() throws {

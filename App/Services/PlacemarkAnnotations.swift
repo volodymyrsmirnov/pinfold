@@ -26,6 +26,9 @@ import PinfoldCore
     init(entry: CatalogEntry, storage: StorageLocations) {
         self.storage = storage
         folderName = entry.storageFolderName
+        // A read-only entry (sidecar unreadable / still downloading) must never be written:
+        // the in-memory sets would be empty and a later write would destroy synced data.
+        canPersist = !entry.isReadOnly
         do {
             let meta = try storage.readMetadata(forFolderNamed: entry.storageFolderName)
             favoriteKeys = meta?.favoriteKeys ?? []
@@ -63,13 +66,13 @@ import PinfoldCore
     }
 
     func toggleFavorite(_ placemark: KMLPlacemark) {
-        toggle(&favoriteKeys, key: placemark.stableKey)
-        persist()
+        let added = toggle(&favoriteKeys, key: placemark.stableKey)
+        persist(favorite: (placemark.stableKey, added))
     }
 
     func toggleVisited(_ placemark: KMLPlacemark) {
-        toggle(&visitedKeys, key: placemark.stableKey)
-        persist()
+        let added = toggle(&visitedKeys, key: placemark.stableKey)
+        persist(visited: (placemark.stableKey, added))
     }
 
     /// The live (non-tombstone) note for a placemark, if any.
@@ -105,22 +108,31 @@ import PinfoldCore
             .map { (key: $0.key, note: $0.value) }
     }
 
-    private func toggle(_ set: inout Set<String>, key: String) {
+    /// Toggles `key`, returning `true` if it is now present.
+    private func toggle(_ set: inout Set<String>, key: String) -> Bool {
         if set.contains(key) {
             set.remove(key)
-        } else {
-            set.insert(key)
+            return false
         }
+        set.insert(key)
+        return true
     }
 
-    private func persist() {
+    /// Writes only this session's change onto the *current* on-disk state (re-read at write
+    /// time), so a sidecar that arrived or changed while the file was open is never clobbered
+    /// by the open-time snapshot.
+    private func persist(favorite: (key: String, added: Bool)? = nil, visited: (key: String, added: Bool)? = nil) {
         guard canPersist else { return }
         // Write failure is intentionally swallowed: in-memory state stays updated for this
         // session; a failed write (disk full / iCloud unavailable) will appear undone on next
         // launch. Fine for a lightweight annotation store.
         try? storage.updateMetadata(forFolderNamed: folderName) { meta in
-            meta.favoriteKeys = favoriteKeys
-            meta.visitedKeys = visitedKeys
+            if let favorite {
+                if favorite.added { meta.favoriteKeys.insert(favorite.key) } else { meta.favoriteKeys.remove(favorite.key) }
+            }
+            if let visited {
+                if visited.added { meta.visitedKeys.insert(visited.key) } else { meta.visitedKeys.remove(visited.key) }
+            }
             // Merge rather than replace so a note synced from another device while this
             // file was open is not clobbered by this session's snapshot.
             for (key, note) in notes {
