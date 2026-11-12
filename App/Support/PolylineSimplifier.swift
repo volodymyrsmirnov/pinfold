@@ -60,6 +60,10 @@ enum PolylineSimplifier {
                     maxIndex = index
                 }
             }
+            // Every interior point sits on the chord (stationary run / exactly collinear):
+            // all importances stay 0, so there is nothing left to split. Without this,
+            // zero-distance ranges peel one point per pass and go O(n^2).
+            guard maxDistance > 0 else { continue }
             result[maxIndex] = maxDistance
             stack.append((first, maxIndex))
             stack.append((maxIndex, last))

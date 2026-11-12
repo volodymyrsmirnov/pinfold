@@ -44,4 +44,22 @@ struct PolylineSimplifierTests {
         let xs = result.map(\.longitude)
         #expect(xs == xs.sorted())
     }
+
+    @Test func identicalPointsSimplifyQuickly() {
+        let line = [Coordinate](repeating: Coordinate(longitude: 10, latitude: 20), count: 100_000)
+        let start = ContinuousClock.now
+        let result = PolylineSimplifier.capped(line)
+        #expect(ContinuousClock.now - start < .seconds(1))
+        #expect(result.count == PolylineSimplifier.maxVertices)
+        #expect(result.first == line.first && result.last == line.last)
+    }
+
+    @Test func collinearPointsSimplifyQuickly() {
+        let line = (0 ..< 100_000).map { Coordinate(longitude: Double($0) * 0.0001, latitude: 5) }
+        let start = ContinuousClock.now
+        let result = PolylineSimplifier.capped(line)
+        #expect(ContinuousClock.now - start < .seconds(1))
+        #expect(result.count == PolylineSimplifier.maxVertices)
+        #expect(result.first == line.first && result.last == line.last)
+    }
 }
