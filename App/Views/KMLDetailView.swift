@@ -99,9 +99,6 @@ struct KMLDetailView: View {
     /// toggles and document loads are not debounced (they go through a separate trigger).
     static let searchDebounce: Duration = .milliseconds(250)
 
-    /// Prompt for the in-list search field: names, descriptions, details and notes are searched.
-    static let searchPrompt = "Search places, descriptions and notes"
-
     // MARK: - Body
 
     var body: some View {

@@ -183,7 +183,8 @@ extension KMLDetailView {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("Search placemarks", text: $searchText)
+                // Names, descriptions, details and notes are all searched (C3, D8).
+                TextField("Search places, descriptions and notes", text: $searchText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.search)
