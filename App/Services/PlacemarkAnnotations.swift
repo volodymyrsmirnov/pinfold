@@ -141,7 +141,10 @@ import PinfoldCore
     /// time), so a sidecar that arrived or changed while the file was open is never clobbered
     /// by the open-time snapshot.
     @discardableResult
-    private func persist(favorite: (key: String, added: Bool)? = nil, visited: (key: String, added: Bool)? = nil) -> Bool {
+    private func persist(
+        favorite: (key: String, added: Bool)? = nil,
+        visited: (key: String, added: Bool)? = nil
+    ) -> Bool {
         guard canPersist else { return false }
         // For favorites/visited a failed write is tolerated (in-memory state stays for this
         // session); note saves check the result and surface the failure.
