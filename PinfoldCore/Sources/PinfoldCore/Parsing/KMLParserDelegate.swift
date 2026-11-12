@@ -42,6 +42,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// not mistaken for the document, folder or placemark ones.
     var elementStack: [String] = []
 
+    /// Local names a KML document may start with (a full `<kml>` or a bare fragment).
+    static let rootElements: Set<String> = ["kml", "Document", "Folder", "Placemark"]
     /// Parents under which `<name>` is meaningful.
     static let nameParents: Set<String> = ["Placemark", "Document", "Folder", "NetworkLink"]
     /// Parents under which `<description>` is stored; elsewhere it is swallowed and discarded.
@@ -170,7 +172,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
                            root: effective.build(), styles: styles, styleMaps: styleMaps)
     }
 
-    func parser(_: XMLParser, didStartElement elementName: String,
+    func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI _: String?, qualifiedName _: String?,
                 attributes attributeDict: [String: String] = [:])
     // SwiftFormat owns brace placement and puts wrapped-signature braces on their own line.
@@ -182,6 +184,11 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         text = ""
         let local = Self.localName(elementName)
         let parent = elementStack.last
+        if parent == nil, !Self.rootElements.contains(local) {
+            abortError = KMLParseError.unsupportedRootElement(local)
+            parser.abortParsing()
+            return
+        }
         elementStack.append(local)
         // Arm text accumulation only for elements whose close actually reads it.
         wantsText = Self.textBearingElements.contains(local)
