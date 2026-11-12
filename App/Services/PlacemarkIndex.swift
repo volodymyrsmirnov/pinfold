@@ -310,4 +310,9 @@ enum PlacemarkIndex {
     private static func url(in resourcesDir: URL) -> URL {
         resourcesDir.appendingPathComponent(filename)
     }
+
+    /// The v2 index file in `resourcesDir` (exposed for the marker helpers and tests).
+    static func indexFile(in resourcesDir: URL) -> URL {
+        url(in: resourcesDir)
+    }
 }
