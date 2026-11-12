@@ -122,7 +122,7 @@
 			<key>CFBundleTypeName</key>
 			<string>KML/KMZ</string>
 			<key>LSHandlerRank</key>
-			<string>Owner</string>
+			<string>Alternate</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSItemContentTypes</key>
