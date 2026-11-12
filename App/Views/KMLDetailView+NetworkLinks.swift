@@ -57,5 +57,8 @@ extension KMLDetailView {
         document = nil
         outline = nil
         await loadDocument(for: updated)
+        if let document, !Task.isCancelled {
+            await refreshNotices(for: document)
+        }
     }
 }
