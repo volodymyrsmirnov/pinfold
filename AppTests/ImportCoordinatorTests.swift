@@ -197,6 +197,45 @@ import Testing
         #expect(!exists(opened) && !exists(sameBytes), "both copies are cleaned up")
     }
 
+    @Test func droppedFile_stagingFolderIsRemovedOnSuccessAndFailure() async throws {
+        let (coordinator, catalog, _, cache) = makeEnvironment()
+        let good = try makeInbox().appendingPathComponent("good.kml")
+        let bad = try makeInbox().appendingPathComponent("bad.kml")
+        try kml(lon: 12, lat: 12).write(to: good)
+        try Data("not xml at all".utf8).write(to: bad)
+
+        coordinator.enqueueDropped([good, bad], catalog: catalog, cache: cache)
+        await coordinator.drainForTesting()
+
+        #expect(catalog.entries.count == 1)
+        #expect(coordinator.importError != nil, "a dropped file's failure is shown, like the picker's")
+        #expect(!exists(good) && !exists(good.deletingLastPathComponent()))
+        #expect(!exists(bad) && !exists(bad.deletingLastPathComponent()))
+    }
+
+    @Test func droppedFile_skippedDuplicateAndCancelledItemsAreCleanedUp() async throws {
+        let (coordinator, catalog, _, cache) = makeEnvironment()
+        let content = kml(lon: 13, lat: 13)
+        coordinator.enqueuePrepared([(content, "first.kml")], catalog: catalog, cache: cache)
+        await coordinator.drainForTesting()
+
+        let dup = try makeInbox().appendingPathComponent("dup.kml")
+        try content.write(to: dup)
+        coordinator.enqueueDropped([dup], catalog: catalog, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(coordinator.pendingDuplicate != nil)
+        coordinator.skipDuplicate(catalog: catalog, cache: cache)
+        await coordinator.drainForTesting()
+        #expect(!exists(dup.deletingLastPathComponent()))
+
+        coordinator.hold()
+        let queued = try makeInbox().appendingPathComponent("queued.kml")
+        try kml(lon: 14, lat: 14).write(to: queued)
+        coordinator.enqueueDropped([queued], catalog: catalog, cache: cache)
+        coordinator.cancel()
+        #expect(!exists(queued.deletingLastPathComponent()))
+    }
+
     @Test func sameFileEnqueuedTwice_importsOnce() async throws {
         let (coordinator, catalog, storage, cache) = makeEnvironment()
         let file = try makeInbox().appendingPathComponent("a.kml")

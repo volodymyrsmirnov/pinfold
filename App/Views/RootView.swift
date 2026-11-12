@@ -277,7 +277,7 @@ extension RootView {
         Task {
             let urls = await DroppedFiles.load(providers)
             guard !urls.isEmpty else { return }
-            importCoordinator.enqueue(urls, catalog: catalog, cache: resourceCache)
+            importCoordinator.enqueueDropped(urls, catalog: catalog, cache: resourceCache)
         }
         return true
     }

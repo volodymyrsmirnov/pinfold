@@ -17,7 +17,10 @@ extension ImportCoordinator {
         case let .picker(url):
             ItemContext(filename: url.lastPathComponent, interactive: true, ownedURL: nil, pathKey: Self.key(url))
         case let .owned(file):
-            ItemContext(filename: file.filename, interactive: false, ownedURL: file.url, pathKey: Self.key(file.url))
+            ItemContext(
+                filename: file.filename, interactive: item.interactive, ownedURL: file.url,
+                cleanupFolder: file.cleanupFolder, pathKey: Self.key(file.url)
+            )
         case let .prepared(_, name):
             ItemContext(filename: name, interactive: item.interactive, ownedURL: nil, pathKey: nil)
         }
@@ -27,7 +30,7 @@ extension ImportCoordinator {
     /// advances the progress count.
     func finish(_ context: ItemContext, deleteOwned: Bool) {
         if deleteOwned, let url = context.ownedURL {
-            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: context.cleanupFolder ?? url)
         }
         if let key = context.pathKey {
             trackedPaths.remove(key)
@@ -47,7 +50,8 @@ extension ImportCoordinator {
         }
         if context.interactive {
             importError = error
-            finish(context, deleteOwned: false)
+            // An interactive item is never retried; only a (dropped) app-owned copy exists.
+            finish(context, deleteOwned: true)
             return
         }
         let permanent = Self.isParseFailure(error)
@@ -91,7 +95,7 @@ extension ImportCoordinator {
             )
             failureLog?.record(filename: context.filename, reason: Self.retryReason)
         }
-        finish(context, deleteOwned: false)
+        finish(context, deleteOwned: context.interactive)
     }
 
     private static let retryReason = String(
