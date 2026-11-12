@@ -20,25 +20,36 @@ extension HomeView {
 
 // MARK: - Import progress label
 
-/// A spinner plus the current filename, shown in the bottom bar while the import coordinator is
-/// draining its queue.
+/// The bottom-bar import status: a spinner, "Importing 2 of 5" (just "Importing…" for a single
+/// file), the current filename, and a Cancel button that drops the files not started yet.
 struct ImportProgressLabel: View {
-    let filename: String?
+    let coordinator: ImportCoordinator
 
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
-            if let name = filename {
-                Text("Importing \(name)…")
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
                     .font(.subheadline)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } else {
-                Text("Importing…")
-                    .font(.subheadline)
+                if let name = coordinator.currentFilename {
+                    Text(name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
+            Button("Cancel", role: .cancel) {
+                coordinator.cancel()
+            }
+            .font(.subheadline)
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    private var title: LocalizedStringKey {
+        coordinator.totalCount > 1
+            ? "Importing \(coordinator.currentPosition) of \(coordinator.totalCount)"
+            : "Importing…"
     }
 }
 
