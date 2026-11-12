@@ -83,7 +83,15 @@ final class ShareViewController: UIViewController {
         // claiming access first, the copy can silently fail.
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        try? FileManager.default.copyItem(at: url, to: dest)
+        // Copy to a dot-prefixed temporary name (the app's inbox drain skips hidden files), then
+        // rename into place, so a drain running mid-copy never sees a half-written file.
+        let partial = inbox.appendingPathComponent(".\(UUID().uuidString).partial")
+        do {
+            try FileManager.default.copyItem(at: url, to: partial)
+            try FileManager.default.moveItem(at: partial, to: dest)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+        }
     }
 
     private func complete() {

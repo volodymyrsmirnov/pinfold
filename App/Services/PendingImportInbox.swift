@@ -61,6 +61,8 @@ struct PendingImportInbox {
         // Only regular files; sorted so the import order is deterministic.
         let files = candidates
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true }
+            // The share extension copies to `.<UUID>.partial` and renames when complete.
+            .filter { !$0.lastPathComponent.hasSuffix(".partial") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map {
                 ImportCoordinator.OwnedFile(

@@ -85,6 +85,18 @@ import Testing
         #expect(remaining.isEmpty, "Inbox must be empty after a successful drain")
     }
 
+    @Test func drain_ignoresPartialShareCopies() async throws {
+        let env = try makeEnvironment()
+        try Data("<kml".utf8).write(to: env.inboxURL.appendingPathComponent(".abc.partial"))
+        try Data("<kml".utf8).write(to: env.inboxURL.appendingPathComponent("visible.partial"))
+
+        let count = await drainAndSettle(env)
+
+        #expect(count == 0)
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
+        #expect(remaining.count == 2, "half-written copies are neither imported nor deleted")
+    }
+
     @Test func drain_duplicateContent_skipsSecondImportSilently() async throws {
         let env = try makeEnvironment()
 
