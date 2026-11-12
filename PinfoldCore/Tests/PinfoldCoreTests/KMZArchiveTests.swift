@@ -199,6 +199,23 @@ struct KMZArchiveTests {
         #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("a.bin").path))
     }
 
+    @Test func extractResources_overflowRemovesEarlierFilesWrittenByThisCall() throws {
+        let zip = try makeZip([
+            ("doc.kml", minimalKML),
+            ("a.bin", Data(repeating: 1, count: 60)),
+            ("b.bin", Data(repeating: 2, count: 60)),
+        ])
+        let dir = tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let preexisting = dir.appendingPathComponent("keep.txt")
+        try Data([0x01]).write(to: preexisting)
+        #expect(throws: KMZArchiveError.archiveTooLarge) {
+            try KMZArchive.extractResources(zip, into: dir, filenameFor: { $0 }, maxUncompressedBytes: 100)
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["keep.txt"])
+    }
+
     @Test func extractResources_skipsTraversalEntries() throws {
         let zip = try makeZip([
             ("../evil.png", Data([0x01])),

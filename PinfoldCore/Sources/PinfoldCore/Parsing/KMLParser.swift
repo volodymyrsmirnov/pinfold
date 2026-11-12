@@ -10,6 +10,13 @@ public enum KMLParser {
         if prologHasProhibitedDoctype(data) {
             throw KMLParseError.dtdProhibited
         }
+        return try parseUnguarded(data: data)
+    }
+
+    /// Runs `XMLParser` over already-normalised bytes without the prolog byte scan. The
+    /// delegate's declaration callbacks are the second, encoding-independent DTD defence;
+    /// this entry point exists so tests can exercise them in isolation.
+    static func parseUnguarded(data: Data) throws -> KMLDocument {
         let parser = XMLParser(data: data)
         // External entity resolution must stay off. False is already XMLParser's default;
         // setting it explicitly documents the intent.
@@ -96,11 +103,13 @@ public enum KMLParser {
                 guard i + 1 < bytes.count else { return false }
                 switch bytes[i + 1] {
                 case UInt8(ascii: "?"):
-                    // XML declaration / processing instruction: skip to its closing '>'.
-                    while i < bytes.count, bytes[i] != UInt8(ascii: ">") {
+                    // XML declaration / processing instruction: XML ends it at "?>", not at the
+                    // first '>' (a PI may contain '>' and '<').
+                    i += 2
+                    while i + 1 < bytes.count, !(bytes[i] == UInt8(ascii: "?") && bytes[i + 1] == UInt8(ascii: ">")) {
                         i += 1
                     }
-                    i += 1
+                    i += 2
                 case UInt8(ascii: "!"):
                     if matches(doctype, at: i) {
                         guard let end = endOfSubsetFreeDoctype(from: i + doctype.count) else { return true }

@@ -126,7 +126,8 @@ public enum KMZArchive {
     /// (see `rootRelativeKey`). `filenameFor` maps a key to a flat filename; a result that is
     /// empty or contains a path separator or dot-segment is skipped. Entries with unsafe
     /// archive paths are skipped. Nothing larger than `maxUncompressedBytes` in total is
-    /// written; on overflow the partial file is removed and `archiveTooLarge` is thrown.
+    /// written. On any throw (overflow included) every file written by this call is removed
+    /// again, so the directory is left as it was found; files already there are untouched.
     public static func extractResources(
         _ data: Data,
         into directory: URL,
@@ -144,13 +145,20 @@ public enum KMZArchive {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             var written: [String: String] = [:]
             var total = 0
-            for (entry, safePath) in fileEntries where safePath != rootPath {
-                let key = rootRelativeKey(safePath, rootKMLPath: rootPath)
-                let name = filenameFor(key)
-                guard isFlatFilename(name) else { continue }
-                let target = directory.appendingPathComponent(name)
-                try streamEntry(entry, of: archive, to: target, total: &total, limit: maxUncompressedBytes)
-                written[key] = name
+            do {
+                for (entry, safePath) in fileEntries where safePath != rootPath {
+                    let key = rootRelativeKey(safePath, rootKMLPath: rootPath)
+                    let name = filenameFor(key)
+                    guard isFlatFilename(name) else { continue }
+                    let target = directory.appendingPathComponent(name)
+                    try streamEntry(entry, of: archive, to: target, total: &total, limit: maxUncompressedBytes)
+                    written[key] = name
+                }
+            } catch {
+                for name in written.values {
+                    try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+                }
+                throw error
             }
             return written
         }

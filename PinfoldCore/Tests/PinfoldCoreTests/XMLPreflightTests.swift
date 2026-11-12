@@ -122,4 +122,24 @@ struct XMLPreflightTests {
     @Test func strayLeadingNULInUTF8_isStrippedNotMisdetectedAsUTF16() throws {
         try expectParses(Data(("\u{0}" + Self.declaration("UTF-8") + Self.body).utf8))
     }
+
+    @Test func nonAllowListedDeclaredEncoding_isUnsupported() {
+        for name in ["UTF-7", "IBM037", "EBCDIC-US", "x-mac-roman-bogus"] {
+            let input = Data((Self.declaration(name) + Self.body).utf8)
+            #expect(throws: KMLParseError.unsupportedEncoding) { try XMLPreflight.normalize(input) }
+        }
+    }
+
+    @Test func firstNonWhitespaceByteMustBeLessThan() {
+        #expect(throws: KMLParseError.unsupportedEncoding) {
+            try XMLPreflight.normalize(Data([0x4C, 0x6F, 0xA7, 0x94]))
+        }
+    }
+
+    @Test func declaredEncodingAllowList_acceptsLegitimateNames() throws {
+        for name in ["utf-8", "UTF-16LE", "ISO-8859-2", "windows-1251", "latin1", "US-ASCII", "ASCII"] {
+            let input = Data((Self.declaration(name) + Self.body).utf8)
+            #expect(try XMLPreflight.normalize(input) == input)
+        }
+    }
 }

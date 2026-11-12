@@ -62,7 +62,8 @@ public enum KMLReader {
 
     /// Streams each non-root KMZ entry to `directory`; returns root-relative key (matching
     /// hrefs as written in the KML) -> written filename. `filenameFor` maps a key to a flat
-    /// filename. Unsafe entry paths are skipped. Capped at 1 GiB in total.
+    /// filename. Unsafe entry paths are skipped. Capped at 1 GiB in total. On any throw, the
+    /// files this call already wrote are deleted again (the directory itself is kept).
     @discardableResult
     public static func extractResources(
         fromKMZ data: Data, into directory: URL, filenameFor: (String) -> String

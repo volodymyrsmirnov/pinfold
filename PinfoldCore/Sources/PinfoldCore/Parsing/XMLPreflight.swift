@@ -10,7 +10,9 @@ enum XMLPreflight {
     static func normalize(_ data: Data) throws -> Data {
         var data = try transcodeToUTF8(data)
         data = trimLeadingWhitespace(data)
-        return stripIllegalControlBytes(data)
+        data = stripIllegalControlBytes(data)
+        try requireSupportedEncoding(data)
+        return data
     }
 
     // MARK: Encoding
@@ -92,6 +94,49 @@ enum XMLPreflight {
               next == " " || next == "\t" || next == "\n" || next == "\r" || next == "?",
               let close = trimmed.range(of: "?>") else { return text }
         return String(trimmed[close.upperBound...])
+    }
+
+    // MARK: Encoding allow-list
+
+    /// Rejects input libxml2 could re-decode into something the byte-level DOCTYPE guard
+    /// cannot see (UTF-7, EBCDIC, ...). Runs on the post-transcode, post-trim bytes: the first
+    /// byte must be `<` (an EBCDIC `<` is 0x4C, a UTF-7 document still starts with `<?xml`), and
+    /// any declared encoding must be on the allow-list.
+    private static func requireSupportedEncoding(_ data: Data) throws {
+        guard let first = data.first else { return } // empty: XMLParser reports it
+        guard first == 0x3C else { throw KMLParseError.unsupportedEncoding }
+        guard let name = declaredEncoding(in: data) else { return }
+        guard isAllowedEncoding(name.lowercased()) else { throw KMLParseError.unsupportedEncoding }
+    }
+
+    /// The `encoding` pseudo-attribute of a leading `<?xml …?>` declaration, if any.
+    private static func declaredEncoding(in data: Data) -> String? {
+        let head = data.prefix(512)
+        guard head.starts(with: Array("<?xml".utf8)), head.count > 5,
+              [0x20, 0x09, 0x0A, 0x0D].contains(head[head.startIndex + 5]),
+              let end = head.firstRange(of: Array("?>".utf8)) else { return nil }
+        let declaration = String(bytes: head[..<end.lowerBound], encoding: .utf8) ?? ""
+        guard let range = declaration.range(of: "encoding") else { return nil }
+        var rest = declaration[range.upperBound...].drop { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" }
+        guard rest.first == "=" else { return nil }
+        rest = rest.dropFirst().drop { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" }
+        guard let quote = rest.first, quote == "\"" || quote == "'" else { return nil }
+        let value = rest.dropFirst()
+        guard let close = value.firstIndex(of: quote) else { return nil }
+        return String(value[..<close])
+    }
+
+    private static func isAllowedEncoding(_ name: String) -> Bool {
+        let exact: Set = ["utf-8", "utf8", "us-ascii", "ascii", "latin1", "latin-1", "l1", "iso-ir-100",
+                          "utf-16", "utf-32", "utf-16le", "utf-16be", "utf-32le", "utf-32be"]
+        if exact.contains(name) {
+            return true
+        }
+        for prefix in ["iso-8859-", "windows-125"] where name.hasPrefix(prefix) {
+            let suffix = name.dropFirst(prefix.count)
+            return !suffix.isEmpty && suffix.count <= 2 && suffix.allSatisfy(\.isNumber)
+        }
+        return false
     }
 
     // MARK: Prolog and control characters
