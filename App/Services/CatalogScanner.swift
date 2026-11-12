@@ -40,6 +40,7 @@ struct CatalogScanner {
             // crash mid-commit between the sidecar and the original): skip silently and leave
             // the folder. The watcher rescans once the original lands, surfacing the entry
             // with its intended identity — no self-heal under a fresh UUID.
+            storage.removeStaleSnapshotTemps(inFolderNamed: name)
             guard storage.originalFileURL(inFolderNamed: name) != nil else { return nil }
             return CatalogEntry(metadata: meta, storageFolderName: name)
         case .missing:

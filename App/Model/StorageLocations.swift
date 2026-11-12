@@ -150,25 +150,7 @@ struct StorageLocations {
             .appendingPathComponent("resources", isDirectory: true)
     }
 
-    /// Locates the original KML/KMZ file inside a synced folder, by extension.
-    /// Deterministic (alphabetical) when several match; `nil` if none. Used by the
-    /// reconciler to rebuild an entry from a folder that has files but no sidecar.
-    func originalFileURL(inFolderNamed name: String) -> URL? {
-        let folder = root.appendingPathComponent(name, isDirectory: true)
-        let fm = FileManager.default
-        guard let contents = try? fm.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return nil }
-        return contents
-            .filter {
-                ImportFormats.originalExtensions.contains($0.pathExtension.lowercased())
-                    && !ImportFormats.reservedNames.contains($0.lastPathComponent)
-            }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .first
-    }
+    // `originalFileURL(inFolderNamed:)` lives in StorageLocations+Original.swift.
 
     // MARK: - Coordinated file I/O
 
@@ -324,32 +306,7 @@ struct StorageLocations {
         }
     }
 
-    /// Reads the sidecar, applies `mutate`, and writes it back, preserving every field
-    /// the caller does not touch. No-op if the sidecar is absent. Use this instead of
-    /// reconstructing `EntryMetadata` from an in-memory `CatalogEntry` (which does not
-    /// carry the favorite/visited sets and would clobber them).
-    func updateMetadata(forFolderNamed name: String, _ mutate: (inout EntryMetadata) -> Void) throws {
-        guard var meta = try readMetadata(forFolderNamed: name) else { return }
-        mutate(&meta)
-        try writeMetadata(meta, forFolderNamed: name)
-    }
-
-    /// Like `updateMetadata`, but throws `CocoaError(.fileNoSuchFile)` when the sidecar is
-    /// absent instead of silently doing nothing. For callers (the network-link snapshot) that
-    /// must not proceed on a sidecar that is missing or merely not downloaded yet. Returns the
-    /// sidecar as it was before `mutate`, so the caller can roll back.
-    @discardableResult
-    func updateExistingMetadata(
-        forFolderNamed name: String, _ mutate: (inout EntryMetadata) -> Void
-    ) throws -> EntryMetadata {
-        guard let original = try readMetadata(forFolderNamed: name) else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        var meta = original
-        mutate(&meta)
-        try writeMetadata(meta, forFolderNamed: name)
-        return original
-    }
+    // `updateMetadata` / `updateExistingMetadata` live in StorageLocations+Update.swift.
 
     // MARK: - Enumeration
 
