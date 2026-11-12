@@ -148,6 +148,54 @@ import Testing
                 "prepare must sanitize attacker-controlled filenames to a final path component")
     }
 
+    // MARK: - prepare — description images (D1)
+
+    private func kml(descriptions: [String]) -> Data {
+        let placemarks = descriptions.map {
+            "<Placemark><description><![CDATA[\($0)]]></description>"
+                + "<Point><coordinates>1,2,0</coordinates></Point></Placemark>"
+        }.joined()
+        return Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document>\(placemarks)</Document></kml>
+        """.utf8)
+    }
+
+    @Test func descriptionImagesAreGatheredAsRemoteHrefs() throws {
+        let data = kml(descriptions: [
+            #"<p>a</p><img src=" https://x.test/a.jpg "/><img src="http://y.test/b.png">"#,
+            #"<img src="https://x.test/a.jpg"><img src="https://z.test/c.jpg">"#,
+        ])
+        let result = try ImportService.prepare(data: data, sourceFilename: "d.kml")
+        // Recorded under the exact (trimmed) string DescriptionView looks up in the manifest.
+        #expect(result.remoteResourceHrefs == ["http://y.test/b.png", "https://x.test/a.jpg", "https://z.test/c.jpg"])
+    }
+
+    @Test func nonHTTPImageSourcesAreIgnored() throws {
+        let data = kml(descriptions: [
+            #"<img src="photo.jpg"><img src="data:image/png;base64,AAAA"><img src="javascript:alert(1)">"#
+                + #"<img src="file:///etc/passwd">"#,
+        ])
+        let result = try ImportService.prepare(data: data, sourceFilename: "d.kml")
+        #expect(result.remoteResourceHrefs.isEmpty)
+    }
+
+    @Test func descriptionImageHrefsRespectTheCap() throws {
+        let imgs = (0 ..< 600).map { "<img src=\"https://x.test/\($0).jpg\">" }.joined()
+        let result = try ImportService.prepare(data: kml(descriptions: [imgs]), sourceFilename: "d.kml")
+        #expect(result.remoteResourceHrefs.count == 500)
+    }
+
+    @Test func commit_stampsTheIndexWithSourceAndCurrentVersion() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        let result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        #expect(PlacemarkIndex.sourceStamp(in: resourcesDir) == result.contentSHA256)
+        #expect(PlacemarkIndex.derivedDataIsCurrent(in: resourcesDir))
+    }
+
     // MARK: - prepare — fallback displayName
 
     @Test func prepare_fallbackDisplayName_usesFilenameStem() throws {

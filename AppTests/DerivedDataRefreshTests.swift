@@ -15,7 +15,9 @@ import Testing
 
     /// An entry with Rome.kml as original, a sidecar claiming `sidecarSHA` (default: the real
     /// one), and a materialized resources dir holding an *empty* index (so a refresh is visible).
-    private func seed(sidecarSHA: String? = nil, original: Data? = nil) throws -> Seeded {
+    private func seed(
+        sidecarSHA: String? = nil, original: Data? = nil, currentVersion: Bool = true
+    ) throws -> Seeded {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let storage = StorageLocations(
             root: base.appendingPathComponent("synced", isDirectory: true),
@@ -35,6 +37,9 @@ import Testing
         let resourcesDir = storage.resourcesDirectory(forFolderNamed: "entry")
         try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
         try PlacemarkIndex.write([], to: resourcesDir)
+        if currentVersion {
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+        }
         return Seeded(scanner: scanner, storage: storage, dir: dir, resourcesDir: resourcesDir, sha: sha)
     }
 
@@ -67,6 +72,32 @@ import Testing
 
         #expect(PlacemarkIndex.read(from: seeded.resourcesDir) == [], "no second full refresh")
         #expect(PlacemarkIndex.sourceStamp(in: seeded.resourcesDir) == seeded.sha)
+    }
+
+    // MARK: - Derived-data version (entries refreshed by an older build)
+
+    @Test func entryWithoutCurrentDerivedVersion_isRefreshedExactlyOnce() async throws {
+        let seeded = try seed(currentVersion: false)
+        PlacemarkIndex.writeSourceStamp(seeded.sha, to: seeded.resourcesDir)
+
+        _ = await seeded.scanner.materializeMissingResources()
+        #expect(try #require(PlacemarkIndex.read(from: seeded.resourcesDir)).isEmpty == false, "refreshed")
+        #expect(PlacemarkIndex.derivedDataIsCurrent(in: seeded.resourcesDir))
+
+        // Empty the index again: a second pass must not refresh it.
+        try PlacemarkIndex.write([], to: seeded.resourcesDir)
+        _ = await seeded.scanner.materializeMissingResources()
+        #expect(PlacemarkIndex.read(from: seeded.resourcesDir) == [], "refreshed once only")
+    }
+
+    @Test func unparseableEntryWithoutVersion_doesNotLoop() async throws {
+        let seeded = try seed(original: Data("not xml".utf8), currentVersion: false)
+        PlacemarkIndex.writeSourceStamp(seeded.sha, to: seeded.resourcesDir)
+        _ = await seeded.scanner.materializeMissingResources()
+        #expect(PlacemarkIndex.parseFailureMarker(in: seeded.resourcesDir) == seeded.sha)
+        try AppFixture.data("Rome.kml").write(to: seeded.dir.appendingPathComponent("Rome.kml"))
+        _ = await seeded.scanner.materializeMissingResources()
+        #expect(!PlacemarkIndex.derivedDataIsCurrent(in: seeded.resourcesDir), "marker prevents a re-read")
     }
 
     // MARK: - Unparseable originals are not retried

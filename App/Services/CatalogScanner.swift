@@ -142,6 +142,7 @@ struct CatalogScanner {
         }
         if (try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)) != nil {
             PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
         }
         PlacemarkIndex.clearParseFailureMarker(in: resourcesDir)
     }
@@ -183,8 +184,9 @@ struct CatalogScanner {
         return didWork
     }
 
-    /// Whether the derived data in `resourcesDir` must be rebuilt: the index is missing, or it
-    /// was stamped with a different source SHA than the sidecar's `contentSHA256`.
+    /// Whether the derived data in `resourcesDir` must be rebuilt: the index is missing, it was
+    /// built by an older derived-data generation, or it was stamped with a different source SHA
+    /// than the sidecar's `contentSHA256`.
     ///
     /// An index with no stamp counts as current (existing installs are not re-parsed twice);
     /// `writeLocalCache` stamps every index it writes, and an unstamped one is stamped here with
@@ -192,6 +194,9 @@ struct CatalogScanner {
     /// window (an update landing before that first stamping pass) is small and accepted.
     private func needsRefresh(forFolderNamed name: String, resourcesDir: URL) -> Bool {
         guard PlacemarkIndex.exists(in: resourcesDir) else { return true }
+        // Built by an older build (before description images were gathered): refresh once; the
+        // refresh writes the current version, so this never repeats.
+        guard PlacemarkIndex.derivedDataIsCurrent(in: resourcesDir) else { return true }
         guard case let .ok(meta) = storage.readSidecar(forFolderNamed: name), !meta.contentSHA256.isEmpty
         else { return false }
         let sidecarSHA = meta.contentSHA256

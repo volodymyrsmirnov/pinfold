@@ -103,6 +103,9 @@ enum ImportService {
         do {
             format = try KMLReader.detectFormat(of: data)
             document = try KMLReader.readDocument(data: data)
+        } catch is CancellationError {
+            // A cancelled parse is not a bad file: let the caller see the cancellation.
+            throw CancellationError()
         } catch {
             throw ImportError.parseFailure(underlying: error)
         }
@@ -123,9 +126,14 @@ enum ImportService {
             }
         }
         for placemark in document.root.allPlacemarks {
-            for link in placemark.photoLinks {
-                if link.hasPrefix("http://") || link.hasPrefix("https://") {
-                    hrefSet.insert(link)
+            for link in placemark.photoLinks where Self.isRemoteHref(link) {
+                hrefSet.insert(link)
+            }
+            // Description images are only ever rendered from the cache, so they must be fetched
+            // here. `imageSources` trims, matching the key `DescriptionView` looks up.
+            if let html = placemark.descriptionHTML, html.contains("<") {
+                for src in DescriptionBlocks.imageSources(in: html) where Self.isRemoteHref(src) {
+                    hrefSet.insert(src)
                 }
             }
         }
@@ -147,6 +155,10 @@ enum ImportService {
             remoteResourceHrefs: remoteResourceHrefs,
             indexEntries: PlacemarkIndex.entries(for: document)
         )
+    }
+
+    private static func isRemoteHref(_ href: String) -> Bool {
+        href.hasPrefix("http://") || href.hasPrefix("https://")
     }
 
     // MARK: - Commit
@@ -231,6 +243,9 @@ enum ImportService {
                 try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
             }
             try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+            // Stamp at import so the scanner neither re-parses nor re-stamps a fresh entry.
+            PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
         } catch {
             ImportService.logger.error(
                 """
