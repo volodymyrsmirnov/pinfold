@@ -69,10 +69,12 @@ enum SpotlightIndexer {
     ///
     /// Apple documents `domainIdentifier` as a grouping key for deleting items in bulk, with
     /// dot-separated hierarchy (`deleteSearchableItems(withDomainIdentifiers:)` on `a.b` removes
-    /// that domain; on `a` it removes every `a.*`). Folder names are UUIDs (no periods), but any
-    /// period is replaced so a stray name can never widen a delete into a different hierarchy level.
+    /// that domain; on `a` it removes every `a.*`). The folder name is hex-encoded (UTF-8), so
+    /// the suffix never contains a period and the mapping is one-to-one: two distinct folder
+    /// names can never share (and so never delete) each other's domain.
     static func domain(forFolderName folderName: String) -> String {
-        "\(domainPrefix).\(folderName.replacingOccurrences(of: ".", with: "_"))"
+        let hex = folderName.utf8.map { String(format: "%02x", $0) }.joined()
+        return "\(domainPrefix).\(hex)"
     }
 
     fileprivate static let logger = Logger(
