@@ -203,4 +203,21 @@ import Testing
         let remaining = try FileManager.default.contentsOfDirectory(atPath: env.inboxURL.path)
         #expect(remaining.isEmpty, "Both inbox files must be removed")
     }
+
+    @Test func sharedFileWithoutDocumentName_usesCleanFilenameAsTitle() async throws {
+        let env = try makeEnvironment()
+        let kml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+          <Placemark><Point><coordinates>1,2,0</coordinates></Point></Placemark>
+        </Document></kml>
+        """
+        let name = "0F8FAD5B-D9CB-469F-A165-70867728950E-Weekend Walk.kml"
+        try Data(kml.utf8).write(to: env.inboxURL.appendingPathComponent(name))
+
+        await env.inbox.drain()
+
+        #expect(env.catalog.active.first?.displayName == "Weekend Walk")
+        #expect(env.catalog.active.first?.sourceFilename == "Weekend Walk.kml")
+    }
 }

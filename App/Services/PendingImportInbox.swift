@@ -122,7 +122,7 @@ struct PendingImportInbox {
                 let data = try Data(contentsOf: file)
                 let result = try ImportService.prepare(
                     data: data,
-                    sourceFilename: file.lastPathComponent
+                    sourceFilename: SafeFilename.strippingInboxPrefix(file.lastPathComponent)
                 )
                 let isNew = catalog.entry(withSHA256: result.contentSHA256) == nil
                     && !committedHashes.contains(result.contentSHA256)
