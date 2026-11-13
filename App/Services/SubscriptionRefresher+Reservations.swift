@@ -3,8 +3,8 @@ import Foundation
 /// One subscribe per URL at a time. The link card and the "Subscribe to URL" alert run separate
 /// subscribes; both reserve the URL here (the refresher lives as long as the window, so every
 /// flow in it sees the reservation) from their duplicate check through the hand-off to the
-/// import queue, which then tracks the URL until the new list is committed
-/// (`ImportCoordinator.isSubscribing(to:)`). A second subscribe of a reserved URL waits, then
+/// import queue, which then tracks the URL until the catalogue shows the new list
+/// (`ImportCoordinator.isSubscribing(to:in:)`). A second subscribe of a reserved URL waits, then
 /// finds the first one's list.
 extension SubscriptionRefresher {
     /// Reserves `url`, waiting while another subscribe holds it. Pair with

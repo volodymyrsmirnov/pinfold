@@ -1,5 +1,5 @@
-// Duplicate resolution and the commit step. A pure move out of `ImportCoordinator.swift`
-// (file length); members are internal only so the extension can reach the coordinator state.
+/// Duplicate resolution and the commit step. A pure move out of `ImportCoordinator.swift`
+/// (file length); members are internal only so the extension can reach the coordinator state.
 extension ImportCoordinator {
     // MARK: - Duplicate resolution
 
@@ -86,6 +86,15 @@ extension ImportCoordinator {
         return matches.first { !$0.isTrashed } ?? matches.first
     }
 
+    /// Whether `catalog` shows the commit of `result`: the committed entry itself for a new
+    /// online list, else any entry with its bytes.
+    private static func isShown(_ committed: CatalogEntry, for result: ImportResult, in catalog: Catalog) -> Bool {
+        if result.subscription != nil {
+            return catalog.entries.contains { $0.id == committed.id }
+        }
+        return catalog.entry(withSHA256: result.contentSHA256) != nil
+    }
+
     /// Commits `result` off-main, awaits the catalog reload so the next item's duplicate check
     /// sees this commit, then finishes the item. A commit failure is reported (see
     /// `reportCommitFailure`) and leaves a non-interactive copy in place for a retry.
@@ -100,19 +109,24 @@ extension ImportCoordinator {
         do {
             // Resolved now, not captured at enqueue time: the active root can change (iCloud
             // switch at launch) while an item waits in the queue.
-            _ = try await ImportService.commitOffMain(result, storage: catalog.storage, cache: cache)
+            let committed = try await ImportService.commitOffMain(result, storage: catalog.storage, cache: cache)
             recentlyCommittedHashes.insert(result.contentSHA256)
             await catalog.reload()
             // A newer reload may have overtaken ours without publishing; retry a few times so
             // the entry is visible, then forget the hash. If it still is not, it stays in
-            // `recentlyCommittedHashes` and duplicate checks keep honouring it.
+            // `recentlyCommittedHashes` and duplicate checks keep honouring it. A new online
+            // list is looked for by its own id: another list may have the same bytes.
             var retries = 0
-            while catalog.entry(withSHA256: result.contentSHA256) == nil, retries < 3 {
+            while !Self.isShown(committed, for: result, in: catalog), retries < 3 {
                 retries += 1
                 await catalog.reload()
             }
             if catalog.entry(withSHA256: result.contentSHA256) != nil {
                 recentlyCommittedHashes.remove(result.contentSHA256)
+            }
+            if let url = result.subscription?.url, !Self.isShown(committed, for: result, in: catalog) {
+                // Still being added as far as a subscribe is concerned (`isSubscribing(to:in:)`).
+                committedSubscriptions[url] = committed
             }
             finish(context, deleteOwned: true)
         } catch {

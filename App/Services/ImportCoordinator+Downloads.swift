@@ -11,8 +11,16 @@ extension ImportCoordinator {
         append([PendingImport(source: .subscribed(result), interactive: true)], catalog: catalog, cache: cache)
     }
 
-    /// Whether a new online list following `url` is queued or being committed.
-    func isSubscribing(to url: URL) -> Bool {
-        pendingSubscriptionURLs.contains(url)
+    /// Whether a new online list following `url` is queued, being committed, or committed but
+    /// not shown by `catalog` yet. A committed list is forgotten once `catalog` shows it (or its
+    /// folder is gone).
+    func isSubscribing(to url: URL, in catalog: Catalog) -> Bool {
+        if let committed = committedSubscriptions[url] {
+            let shown = catalog.entries.contains { $0.id == committed.id }
+            let deleted = !FileManager.default.fileExists(atPath: catalog.storage.folder(for: committed).path)
+            guard shown || deleted else { return true }
+            committedSubscriptions[url] = nil
+        }
+        return pendingSubscriptionURLs.contains(url)
     }
 }

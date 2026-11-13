@@ -131,8 +131,12 @@ final class ImportCoordinator {
     /// file cannot both import it.
     var trackedPaths: Set<String> = []
     /// URLs of new online lists that are queued or being committed (and reloaded), so a second
-    /// subscribe of the same URL does not add another list (`isSubscribing(to:)`).
+    /// subscribe of the same URL does not add another list (`isSubscribing(to:in:)`).
     var pendingSubscriptionURLs: Set<URL> = []
+    /// New online lists committed this session that `catalog.entries` does not show yet (a newer
+    /// reload overtook the one awaited after the commit), keyed by URL. Kept until the catalogue
+    /// shows that very entry, so a subscribe of the URL meanwhile does not add a second list.
+    var committedSubscriptions: [URL: CatalogEntry] = [:]
     /// Hashes whose commit (and the reload that follows) has not finished yet.
     var inFlightHashes: Set<String> = []
     /// Hashes committed this session that `catalog.entries` may not show yet (a newer reload can
@@ -173,6 +177,7 @@ final class ImportCoordinator {
     /// the previous root, so a manual re-import of the same file must not be dropped for them.
     func storageDidChange() {
         recentlyCommittedHashes.removeAll()
+        committedSubscriptions.removeAll()
     }
 
     /// Resumes draining and starts on anything queued while held.

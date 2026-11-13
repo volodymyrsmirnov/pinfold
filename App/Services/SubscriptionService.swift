@@ -212,7 +212,7 @@ enum SubscriptionURL {
         if let existing = following(url) {
             return .existing(existing.id)
         }
-        return coordinator.isSubscribing(to: url) ? .enqueued : nil
+        return coordinator.isSubscribing(to: url, in: catalog) ? .enqueued : nil
     }
 
     /// The non-trashed list that already follows `url`, if any.

@@ -32,8 +32,8 @@ import Observation
     /// Monotonically increasing token identifying the latest `reload`. A detached scan captures
     /// the token it was started for and only publishes its result if it is still the latest, so
     /// a slower earlier scan can never clobber a newer one (concurrent reloads settle to the
-    /// final state).
-    @ObservationIgnored private var scanGeneration = 0
+    /// final state). Internal so tests can overtake a reload in flight.
+    @ObservationIgnored var scanGeneration = 0
     /// While `true` no materialization pass starts (a root migration is about to run).
     @ObservationIgnored var backgroundWorkSuspended = false
 

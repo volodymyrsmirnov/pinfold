@@ -358,6 +358,40 @@ struct SubscriptionServiceTests {
         #expect(env.catalog.entries.count == 1)
         #expect(env.stub.calls == 1)
     }
+
+    /// The commit's reloads are all overtaken by a newer one that has not published yet, and
+    /// another online list already has the same bytes (so a check by content hash is fooled).
+    /// Until the new list shows, a second subscribe must still see it as being added.
+    @Test func subscribe_afterACommitNotShownYet_doesNotAddASecondList() async throws {
+        let env = makeEnvironment()
+        let other = try Subscription(url: #require(URL(string: "https://other.test/feed.kml")), origin: .url,
+                                     subscribedAt: Date(timeIntervalSince1970: 1000))
+        try await addList(env, data: kml(["A"]), filename: "feed.kml", subscription: other)
+        env.stub.respond(with: kml(["A"]))
+        let catalog = env.catalog
+        let overtaker = Task { @MainActor in
+            while !Task.isCancelled {
+                catalog.scanGeneration &+= 1
+                await Task.yield()
+            }
+        }
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        await env.coordinator.drainForTesting()
+        overtaker.cancel()
+        await overtaker.value
+        // The scenario held: the new list is committed but not in the catalogue.
+        #expect(!env.catalog.entries.contains { $0.subscription?.url == feedURL })
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        #expect(env.stub.calls == 1)
+        await env.coordinator.drainForTesting()
+        await env.catalog.reload()
+        let added = try #require(env.catalog.entries.first { $0.subscription?.url == feedURL })
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .existing(added.id))
+        #expect(env.catalog.entries.count { $0.subscription?.url == feedURL } == 1)
+        #expect(!env.coordinator.isSubscribing(to: feedURL, in: env.catalog))
+    }
 }
 
 // MARK: - Stub fetcher
