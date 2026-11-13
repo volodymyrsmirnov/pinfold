@@ -392,6 +392,77 @@ struct SubscriptionServiceTests {
         #expect(env.catalog.entries.count { $0.subscription?.url == feedURL } == 1)
         #expect(!env.coordinator.isSubscribing(to: feedURL, in: env.catalog))
     }
+
+    /// Keeps every catalogue reload from publishing until cancelled.
+    private func overtakeReloads(_ catalog: Catalog) -> Task<Void, Never> {
+        Task { @MainActor in
+            while !Task.isCancelled {
+                catalog.scanGeneration &+= 1
+                await Task.yield()
+            }
+        }
+    }
+
+    /// The in-place subscribe's reload is overtaken, so the catalogue still shows the link file
+    /// without a subscription. A URL subscribe of the same address must not add a second list.
+    @Test func subscribe_afterAnInPlaceSubscribeNotShownYet_doesNotAddASecondList() async throws {
+        let env = makeEnvironment()
+        let links = try await addList(env, data: linkFile([feedURL.absoluteString]), filename: "links.kml")
+        let link = KMLNetworkLink(name: "Feed", href: feedURL.absoluteString)
+        env.stub.respond(with: kml(["A"]))
+        let overtaker = overtakeReloads(env.catalog)
+
+        #expect(try await env.service.subscribeInPlace(links, link: link) == .converted(links.id))
+        overtaker.cancel()
+        await overtaker.value
+        // The scenario held: the subscription is on disk but not in the catalogue.
+        #expect(try env.sidecar(links.storageFolderName).subscription?.url == feedURL)
+        #expect(!env.catalog.entries.contains { $0.subscription?.url == feedURL })
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        #expect(env.stub.calls == 1)
+        await env.coordinator.drainForTesting()
+        await env.catalog.reload()
+        #expect(env.catalog.entries.count == 1)
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .existing(links.id))
+        #expect(!env.coordinator.isSubscribing(to: feedURL, in: env.catalog))
+    }
+
+    /// The same for a normal list with the fetched bytes that became the online list.
+    @Test func subscribe_afterAConversionNotShownYet_doesNotAddASecondList() async throws {
+        let env = makeEnvironment()
+        let match = try await addList(env, data: kml(["A"]), filename: "feed.kml")
+        env.stub.respond(with: kml(["A"]))
+        let overtaker = overtakeReloads(env.catalog)
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .converted(match.id))
+        overtaker.cancel()
+        await overtaker.value
+        #expect(!env.catalog.entries.contains { $0.subscription?.url == feedURL })
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        #expect(env.stub.calls == 1)
+        await env.coordinator.drainForTesting()
+        await env.catalog.reload()
+        #expect(env.catalog.entries.count == 1)
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .existing(match.id))
+    }
+
+    /// A list whose subscription was stopped before the catalogue showed it no longer holds
+    /// its URL as being added.
+    @Test func subscribe_afterAConversionStoppedBeforeShown_isNotStuckBeingAdded() async throws {
+        let env = makeEnvironment()
+        let match = try await addList(env, data: kml(["A"]), filename: "feed.kml")
+        env.stub.respond(with: kml(["A"]))
+        let overtaker = overtakeReloads(env.catalog)
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .converted(match.id))
+        overtaker.cancel()
+        await overtaker.value
+
+        try env.storage.updateExistingMetadata(forFolderNamed: match.storageFolderName) { $0.subscription = nil }
+
+        #expect(!env.coordinator.isSubscribing(to: feedURL, in: env.catalog))
+    }
 }
 
 // MARK: - Stub fetcher

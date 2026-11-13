@@ -76,6 +76,9 @@ enum SubscriptionURL {
         if let match = convertibleList(sha: fetched.result.contentSHA256) {
             let converted = try await convert(match, to: subscription, state: fetched.state)
             if converted {
+                // Held as being added until the catalogue shows it (its reload may have been
+                // overtaken).
+                coordinator.noteSubscribed(url, entry: match, catalog: catalog)
                 return .converted(match.id)
             }
         }
@@ -134,6 +137,8 @@ enum SubscriptionURL {
         if let error {
             throw error
         }
+        // Held as being added until the catalogue shows it (its reload may have been overtaken).
+        coordinator.noteSubscribed(url, entry: entry, catalog: catalog)
         return .converted(entry.id)
     }
 

@@ -11,16 +11,32 @@ extension ImportCoordinator {
         append([PendingImport(source: .subscribed(result), interactive: true)], catalog: catalog, cache: cache)
     }
 
-    /// Whether a new online list following `url` is queued, being committed, or committed but
-    /// not shown by `catalog` yet. A committed list is forgotten once `catalog` shows it (or its
-    /// folder is gone).
+    /// Records that `entry` now follows `url` on disk (`SubscriptionService` converted it), unless
+    /// `catalog` already shows it doing so: until it does, `isSubscribing(to:in:)` holds the URL.
+    func noteSubscribed(_ url: URL, entry: CatalogEntry, catalog: Catalog) {
+        guard !Self.shows(entry, following: url, in: catalog) else { return }
+        committedSubscriptions[url] = entry
+    }
+
+    /// Whether a new online list following `url` is queued, being committed, or a list
+    /// subscribed to it is not shown by `catalog` following it yet. Such a list is forgotten once
+    /// `catalog` shows it following the URL, or once its sidecar on disk no longer follows it
+    /// (deleted, stopped, or unreadable).
     func isSubscribing(to url: URL, in catalog: Catalog) -> Bool {
         if let committed = committedSubscriptions[url] {
-            let shown = catalog.entries.contains { $0.id == committed.id }
-            let deleted = !FileManager.default.fileExists(atPath: catalog.storage.folder(for: committed).path)
-            guard shown || deleted else { return true }
+            let shown = Self.shows(committed, following: url, in: catalog)
+            guard shown || !Self.followsOnDisk(committed, url, storage: catalog.storage) else { return true }
             committedSubscriptions[url] = nil
         }
         return pendingSubscriptionURLs.contains(url)
+    }
+
+    private static func followsOnDisk(_ entry: CatalogEntry, _ url: URL, storage: StorageLocations) -> Bool {
+        guard case let .ok(sidecar) = storage.readSidecar(forFolderNamed: entry.storageFolderName) else { return false }
+        return sidecar.subscription?.url == url
+    }
+
+    private static func shows(_ entry: CatalogEntry, following url: URL, in catalog: Catalog) -> Bool {
+        catalog.entries.contains { $0.id == entry.id && $0.subscription?.url == url }
     }
 }

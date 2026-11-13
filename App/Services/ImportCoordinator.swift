@@ -133,9 +133,11 @@ final class ImportCoordinator {
     /// URLs of new online lists that are queued or being committed (and reloaded), so a second
     /// subscribe of the same URL does not add another list (`isSubscribing(to:in:)`).
     var pendingSubscriptionURLs: Set<URL> = []
-    /// New online lists committed this session that `catalog.entries` does not show yet (a newer
-    /// reload overtook the one awaited after the commit), keyed by URL. Kept until the catalogue
-    /// shows that very entry, so a subscribe of the URL meanwhile does not add a second list.
+    /// Online lists subscribed this session (a new list committed, or a list converted by
+    /// `SubscriptionService`) that `catalog.entries` does not show following their URL yet (a
+    /// newer reload overtook the one awaited after the write), keyed by URL. Kept until the
+    /// catalogue shows that very entry following the URL, so a subscribe of the URL meanwhile
+    /// does not add a second list.
     var committedSubscriptions: [URL: CatalogEntry] = [:]
     /// Hashes whose commit (and the reload that follows) has not finished yet.
     var inFlightHashes: Set<String> = []
