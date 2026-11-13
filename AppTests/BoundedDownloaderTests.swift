@@ -9,6 +9,8 @@ final class StubURLProtocol: URLProtocol {
         var status = 200
         var headers: [String: String] = [:]
         var chunks: [Data] = []
+        /// Request headers that must be present; otherwise the stub fails the request.
+        var requiredRequestHeaders: [String: String] = [:]
     }
 
     private static let stubs = OSAllocatedUnfairLock<[String: Stub]>(initialState: [:])
@@ -39,6 +41,10 @@ final class StubURLProtocol: URLProtocol {
               )
         else {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+            return
+        }
+        for (name, value) in stub.requiredRequestHeaders where request.value(forHTTPHeaderField: name) != value {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
         }
         if (300 ..< 400).contains(stub.status), let location = stub.headers["Location"],
@@ -174,6 +180,108 @@ struct BoundedDownloaderTests {
             )
             Issue.record("expected failure")
         } catch DownloadError.transport {
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    // MARK: Conditional fetch
+
+    private func conditional(
+        host: String, etag: String? = nil, lastModified: String? = nil, maxBytes: Int = 1000,
+        now: Date = .now, followCrossHost: Bool = false
+    ) async throws -> ConditionalResponse {
+        try await BoundedDownloader.fetchConditional(
+            #require(URL(string: "https://\(host)/feed.kml")), etag: etag, lastModified: lastModified,
+            maxBytes: maxBytes, timeout: 5, followCrossHostRedirects: followCrossHost,
+            configuration: StubURLProtocol.configuration(), now: now
+        )
+    }
+
+    @Test func conditional_sendsIfNoneMatchAndIfModifiedSince() async throws {
+        let host = "cond-headers.test"
+        StubURLProtocol.register(.init(
+            status: 304,
+            requiredRequestHeaders: ["If-None-Match": "\"abc\"", "If-Modified-Since": "Wed, 01 Jan 2025 00:00:00 GMT"]
+        ), host: host)
+        let response = try await conditional(host: host, etag: "\"abc\"", lastModified: "Wed, 01 Jan 2025 00:00:00 GMT")
+        guard case .notModified = response.body else {
+            Issue.record("expected notModified")
+            return
+        }
+    }
+
+    @Test func conditional_304_isNotModified() async throws {
+        let host = "cond-304.test"
+        StubURLProtocol.register(.init(status: 304), host: host)
+        let response = try await conditional(host: host)
+        guard case .notModified = response.body else {
+            Issue.record("expected notModified")
+            return
+        }
+    }
+
+    @Test func conditional_200_returnsBodyAndHeaders() async throws {
+        let host = "cond-200.test"
+        StubURLProtocol.register(.init(
+            headers: ["ETag": "\"v1\"", "Last-Modified": "Wed, 01 Jan 2025 00:00:00 GMT", "Cache-Control": "public, max-age=600",
+                      "Expires": "Wed, 01 Jan 2025 00:01:00 GMT"],
+            chunks: [Data([1, 2, 3])]
+        ), host: host)
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let response = try await conditional(host: host, now: now)
+        guard case let .data(data) = response.body else {
+            Issue.record("expected data")
+            return
+        }
+        #expect(data == Data([1, 2, 3]))
+        #expect(response.etag == "\"v1\"")
+        #expect(response.lastModified == "Wed, 01 Jan 2025 00:00:00 GMT")
+        #expect(response.httpExpires == now.addingTimeInterval(600))
+    }
+
+    @Test func conditional_expiresHeader_parsed() async throws {
+        let host = "cond-expires.test"
+        StubURLProtocol.register(.init(
+            headers: ["Expires": "Wed, 01 Jan 2025 00:01:00 GMT"], chunks: [Data([1])]
+        ), host: host)
+        let response = try await conditional(host: host)
+        #expect(response.httpExpires == Date(timeIntervalSince1970: 1_735_689_660))
+    }
+
+    @Test func conditional_500_throwsHttpStatus() async {
+        let host = "cond-500.test"
+        StubURLProtocol.register(.init(status: 500, chunks: [Data([1])]), host: host)
+        do {
+            _ = try await conditional(host: host)
+            Issue.record("expected failure")
+        } catch let DownloadError.httpStatus(code) {
+            #expect(code == 500)
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    @Test func conditional_oversize_throwsTooLarge() async {
+        let host = "cond-big.test"
+        StubURLProtocol.register(.init(chunks: [Data(count: 600), Data(count: 600)]), host: host)
+        do {
+            _ = try await conditional(host: host)
+            Issue.record("expected tooLarge")
+        } catch DownloadError.tooLarge {
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    @Test func conditional_crossHostRedirect_refused() async {
+        StubURLProtocol.register(.init(status: 302, headers: ["Location": "https://cond-target.test/a"]),
+                                 host: "cond-origin.test")
+        StubURLProtocol.register(.init(chunks: [Data([1])]), host: "cond-target.test")
+        do {
+            _ = try await conditional(host: "cond-origin.test")
+            Issue.record("expected failure")
+        } catch DownloadError.redirectedToOtherHost {
         } catch {
             Issue.record("unexpected error \(error)")
         }

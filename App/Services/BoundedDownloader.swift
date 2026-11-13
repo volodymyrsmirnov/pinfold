@@ -13,6 +13,16 @@ enum DownloadError: Error {
     case transport(Error)
 }
 
+/// Outcome of a conditional GET.
+struct ConditionalResponse: Sendable {
+    enum Body: Sendable { case notModified, data(Data) }
+    let body: Body
+    let etag: String?
+    let lastModified: String?
+    /// From `Cache-Control: max-age` (relative to now) or the `Expires` header.
+    let httpExpires: Date?
+}
+
 /// A small, hardened HTTP GET for untrusted remote resources.
 ///
 /// - Uses an ephemeral session (no cookies, credentials or disk cache).
@@ -42,6 +52,84 @@ enum BoundedDownloader {
         followCrossHostRedirects: Bool = true,
         configuration: URLSessionConfiguration = .ephemeral
     ) async throws -> Data {
+        let result = try await download(
+            url, request: URLRequest(url: url), maxBytes: maxBytes, timeout: timeout,
+            followCrossHostRedirects: followCrossHostRedirects, configuration: configuration,
+            allowNotModified: false
+        )
+        return result.data ?? Data()
+    }
+
+    /// Conditional GET: sends `If-None-Match` / `If-Modified-Since` when given, treats `304` as
+    /// `.notModified`, and reports the validators and freshness hints of a `200`.
+    ///
+    /// - Parameters:
+    ///   - etag: The previously stored `ETag`, sent as `If-None-Match`.
+    ///   - lastModified: The previously stored `Last-Modified`, sent as `If-Modified-Since`.
+    ///   - now: The reference time for `Cache-Control: max-age` (injectable for tests).
+    /// - Throws: `DownloadError`, or `CancellationError` when the calling task is cancelled.
+    static func fetchConditional(
+        _ url: URL,
+        etag: String?,
+        lastModified: String?,
+        maxBytes: Int,
+        timeout: TimeInterval,
+        followCrossHostRedirects: Bool = false,
+        configuration: URLSessionConfiguration = .ephemeral,
+        now: Date = .now
+    ) async throws -> ConditionalResponse {
+        var request = URLRequest(url: url)
+        if let etag {
+            request.setValue(etag, forHTTPHeaderField: "If-None-Match")
+        }
+        if let lastModified {
+            request.setValue(lastModified, forHTTPHeaderField: "If-Modified-Since")
+        }
+        let result = try await download(
+            url, request: request, maxBytes: maxBytes, timeout: timeout,
+            followCrossHostRedirects: followCrossHostRedirects, configuration: configuration,
+            allowNotModified: true
+        )
+        let http = result.response
+        return ConditionalResponse(
+            body: result.data.map { .data($0) } ?? .notModified,
+            etag: http.value(forHTTPHeaderField: "ETag"),
+            lastModified: http.value(forHTTPHeaderField: "Last-Modified"),
+            httpExpires: httpExpiry(http, now: now)
+        )
+    }
+
+    /// `Cache-Control: max-age` (relative to `now`) wins over the `Expires` header.
+    private static func httpExpiry(_ http: HTTPURLResponse, now: Date) -> Date? {
+        if let control = http.value(forHTTPHeaderField: "Cache-Control") {
+            for directive in control.split(separator: ",") {
+                let parts = directive.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2,
+                      parts[0].trimmingCharacters(in: .whitespaces).lowercased() == "max-age",
+                      let seconds = TimeInterval(parts[1].trimmingCharacters(in: .whitespaces)
+                          .trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+                else { continue }
+                return now.addingTimeInterval(seconds)
+            }
+        }
+        guard let expires = http.value(forHTTPHeaderField: "Expires") else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter.date(from: expires)
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    private static func download(
+        _ url: URL,
+        request baseRequest: URLRequest,
+        maxBytes: Int,
+        timeout: TimeInterval,
+        followCrossHostRedirects: Bool,
+        configuration: URLSessionConfiguration,
+        allowNotModified: Bool
+    ) async throws -> (response: HTTPURLResponse, data: Data?) {
         guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else {
             throw DownloadError.transport(URLError(.unsupportedURL))
         }
@@ -49,7 +137,7 @@ enum BoundedDownloader {
         configuration.timeoutIntervalForResource = timeout * 3
         let session = URLSession(configuration: configuration)
         defer { session.finishTasksAndInvalidate() }
-        var request = URLRequest(url: url)
+        var request = baseRequest
         request.timeoutInterval = timeout
         let delegate = SameHostRedirectGuard(enabled: !followCrossHostRedirects)
 
@@ -57,6 +145,9 @@ enum BoundedDownloader {
             let (bytes, response) = try await session.bytes(for: request, delegate: delegate)
             if delegate.refusedRedirect {
                 throw DownloadError.redirectedToOtherHost
+            }
+            if allowNotModified, let http = response as? HTTPURLResponse, http.statusCode == 304 {
+                return (http, nil)
             }
             try validate(response, maxBytes: maxBytes)
             var data = Data()
@@ -67,7 +158,7 @@ enum BoundedDownloader {
                     throw DownloadError.tooLarge
                 }
             }
-            return data
+            return try (httpResponse(response), data)
         } catch let error as DownloadError {
             throw error
         } catch is CancellationError {
@@ -82,6 +173,13 @@ enum BoundedDownloader {
             }
             throw DownloadError.transport(error)
         }
+    }
+
+    private static func httpResponse(_ response: URLResponse) throws -> HTTPURLResponse {
+        guard let http = response as? HTTPURLResponse else {
+            throw DownloadError.transport(URLError(.badServerResponse))
+        }
+        return http
     }
 
     private static func validate(_ response: URLResponse, maxBytes: Int) throws {
