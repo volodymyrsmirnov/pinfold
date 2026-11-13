@@ -203,6 +203,25 @@ struct SubscriptionContentWriterTests {
         }
         #expect(!expected.isEmpty)
         #expect(reindexed.deindexedIdentifiers == expected)
+        #expect(!reindexed.replacedSpotlightDomain)
         #expect(reindexed.entry.pointCount == 1)
+    }
+
+    /// No previous index to diff against (an earlier rebuild failed): the folder's whole
+    /// Spotlight domain is replaced, so placemarks the new content dropped can't linger.
+    @Test func applyAndReindex_withoutAPreviousIndex_replacesTheFolderDomain() async throws {
+        let env = try await makeEnvironment()
+        for name in [PlacemarkIndex.filename, PlacemarkIndex.legacyFilename] {
+            try? FileManager.default.removeItem(at: env.resourcesDir.appendingPathComponent(name))
+        }
+        #expect(PlacemarkIndex.read(from: env.resourcesDir) == nil)
+        let new = try ImportService.prepare(data: kml(["Fresh"]), sourceFilename: "feed.kml")
+
+        let reindexed = try await SubscriptionContentWriter.applyAndReindex(
+            new, to: env.entry, storage: env.storage, cache: env.cache
+        )
+
+        #expect(reindexed.replacedSpotlightDomain)
+        #expect(reindexed.deindexedIdentifiers.isEmpty)
     }
 }

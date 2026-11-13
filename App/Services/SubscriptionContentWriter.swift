@@ -17,6 +17,9 @@ enum SubscriptionContentWriter {
         let entry: CatalogEntry
         /// The Spotlight items removed: placemarks the new content no longer has.
         let deindexedIdentifiers: [String]
+        /// Whether the folder's whole Spotlight domain was replaced instead, because there was
+        /// no previous index to tell which placemarks left.
+        var replacedSpotlightDomain = false
     }
 
     /// Replaces `entry`'s original with `result`, off the main actor: resolves any iCloud
@@ -34,6 +37,8 @@ enum SubscriptionContentWriter {
     /// `apply`, then refreshes what search and Spotlight hold for `entry`: drops its cached
     /// placemark index, removes the Spotlight items of placemarks the new content no longer has
     /// and re-indexes the rest (a trashed list is out of Spotlight; restoring it re-indexes).
+    /// Without a previous index to diff against, the folder's Spotlight domain is deleted and
+    /// then re-indexed, in that order.
     /// Shared by a refresh and the in-place subscribe. Safe inside a `StorageApplyQueue`
     /// operation: it never waits on the queue.
     @discardableResult
@@ -48,10 +53,14 @@ enum SubscriptionContentWriter {
             resourcesDir: storage.resourcesDirectory(for: entry), sidecar: storage.metadataFile(for: entry)
         )
         guard !entry.isTrashed else { return Reindexed(entry: applied.entry, deindexedIdentifiers: []) }
+        guard let previous = applied.previousIndex else {
+            SpotlightIndexer.reindexReplacingDomain(entry: applied.entry, indexEntries: result.indexEntries)
+            return Reindexed(entry: applied.entry, deindexedIdentifiers: [], replacedSpotlightDomain: true)
+        }
         // Removed and added identifiers are disjoint, so the two fire-and-forget calls can
         // land in any order.
         let removed = SpotlightIndexer.removedPlacemarkIdentifiers(
-            folderName: entry.storageFolderName, previous: applied.previousIndex, current: result.indexEntries
+            folderName: entry.storageFolderName, previous: previous, current: result.indexEntries
         )
         SpotlightIndexer.deindex(identifiers: removed)
         SpotlightIndexer.index(entry: applied.entry, indexEntries: result.indexEntries)
@@ -59,10 +68,10 @@ enum SubscriptionContentWriter {
     }
 }
 
-/// The written entry and the search index of the content it replaced (empty when there was none).
+/// The written entry and the search index of the content it replaced (`nil` when none could be read).
 private struct Applied {
     let entry: CatalogEntry
-    let previousIndex: [PlacemarkIndex.Entry]
+    let previousIndex: [PlacemarkIndex.Entry]?
 }
 
 /// Runs the refresh write in a detached task. A `nonisolated` free function so the detached
@@ -80,7 +89,7 @@ private nonisolated func writeRefresh(
     _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations, cache: ResourceCache
 ) throws -> Applied {
     // Read before the write prunes it: Spotlight items of placemarks that leave are removed.
-    let previousIndex = PlacemarkIndex.read(from: storage.resourcesDirectory(for: entry)) ?? []
+    let previousIndex = PlacemarkIndex.read(from: storage.resourcesDirectory(for: entry))
     try resolveOriginalConflicts(at: storage.originalFile(for: entry))
     let updated = try writeSnapshot(result, to: entry, storage: storage, resetResources: .derivedOnly)
     // The new original is in place, so a failure here never fails the refresh: the index is
