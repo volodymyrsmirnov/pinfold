@@ -105,9 +105,19 @@ struct GeoJSONProperties {
         return String(bytes: data, encoding: .utf8)
     }
 
-    /// Plain text is escaped so `&` and `<` show literally; text that already holds tags is kept.
+    /// Text holding a real HTML tag (a known element such as `<b>`, `</p>`, `<br/>`,
+    /// `<img src=…>`, or an `<!--` comment) counts as HTML.
+    /// Any other `<word>` is plain prose and must survive as text.
+    private static let htmlTag = try? NSRegularExpression(
+        pattern: "<!--|</?(?:a|abbr|b|big|blockquote|br|caption|center|cite|code|dd|del|div|dl|dt|em|font"
+            + "|h[1-6]|hr|i|iframe|img|ins|li|mark|ol|p|pre|q|s|small|span|strike|strong|sub|sup|table"
+            + "|tbody|td|tfoot|th|thead|tr|tt|u|ul)(?=[\\s/>])",
+        options: .caseInsensitive
+    )
+
+    /// Plain text is escaped so `&` and `<` show literally; text that holds real HTML is kept.
     static func html(_ text: String) -> String {
-        let hasTag = text.range(of: "<[A-Za-z/!]", options: .regularExpression) != nil
+        let hasTag = htmlTag?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
         guard !hasTag else { return text }
         return text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
