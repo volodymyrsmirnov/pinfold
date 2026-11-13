@@ -1,4 +1,5 @@
 import Foundation
+import PinfoldCore
 
 /// Per-device refresh bookkeeping for a subscribed list. Lives in the local `resources/`
 /// folder, never in the synced sidecar, so devices don't fight over fetch timestamps.
@@ -15,6 +16,24 @@ struct SubscriptionState: Codable, Equatable, Sendable {
     var httpExpires: Date?
 }
 
+extension SubscriptionState {
+    /// This state with every hint safe to store and schedule with: `serverMinRefreshPeriod`
+    /// sanitised like a file's hints (`KMLRefreshHint`), dates that are not finite dropped.
+    var sanitised: SubscriptionState {
+        var safe = self
+        safe.serverMinRefreshPeriod = KMLRefreshHint.sanitised(serverMinRefreshPeriod)
+        safe.lastAttemptAt = Self.finite(lastAttemptAt)
+        safe.lastSuccessAt = Self.finite(lastSuccessAt)
+        safe.serverExpires = Self.finite(serverExpires)
+        safe.httpExpires = Self.finite(httpExpires)
+        return safe
+    }
+
+    private static func finite(_ date: Date?) -> Date? {
+        date.flatMap { $0.timeIntervalSinceReferenceDate.isFinite ? $0 : nil }
+    }
+}
+
 enum SubscriptionStateStore {
     static let filename = "subscription-state.json"
 
@@ -28,11 +47,13 @@ enum SubscriptionStateStore {
     }
 
     /// Writes atomically, creating the directory if needed. Best effort: state is derivable.
+    /// Non-finite hints are dropped first (`sanitised`): JSON cannot hold them, and the whole
+    /// write would fail.
     static func write(_ state: SubscriptionState, in resourcesDir: URL) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(state) else { return }
+        guard let data = try? encoder.encode(state.sanitised) else { return }
         try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
         try? data.write(to: resourcesDir.appendingPathComponent(filename), options: .atomic)
     }

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os
+import PinfoldCore
 
 /// Why refreshing an online list failed. The description is what the list shows and records.
 enum SubscriptionError: Error, LocalizedError, Equatable {
@@ -326,7 +327,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
                 state.etag = response.etag
                 state.lastModified = response.lastModified
                 state.httpExpires = response.httpExpires
-                state.serverMinRefreshPeriod = result.networkLinkControl?.minRefreshPeriod
+                state.serverMinRefreshPeriod = KMLRefreshHint.sanitised(result.networkLinkControl?.minRefreshPeriod)
                 state.serverExpires = result.networkLinkControl?.expires
             } catch {
                 failure = .writeFailed(error.localizedDescription)

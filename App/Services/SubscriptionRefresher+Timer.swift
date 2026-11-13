@@ -25,13 +25,24 @@ extension SubscriptionRefresher {
         guard let fireDate else { return }
         nextFireDate = fireDate
         timerTask = Task { [weak self, clock] in
-            let delay = max(0, fireDate.timeIntervalSince(clock()))
+            let delay = SubscriptionRefresher.timerDelay(until: fireDate, now: clock())
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self else { return }
             timerTask = nil
             nextFireDate = nil
             await refreshDue()
         }
+    }
+
+    /// The longest the timer sleeps: one day. A timer that fires early just re-checks.
+    nonisolated static let maxTimerDelay: TimeInterval = 24 * 3600
+
+    /// Seconds to sleep until `fireDate`: never negative and never above `maxTimerDelay`, so
+    /// no hint can overflow `Duration` (which traps).
+    nonisolated static func timerDelay(until fireDate: Date, now: Date) -> TimeInterval {
+        let delay = fireDate.timeIntervalSince(now)
+        guard delay.isFinite else { return maxTimerDelay }
+        return min(maxTimerDelay, max(0, delay))
     }
 
     func cancelTimer() {

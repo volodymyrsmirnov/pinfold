@@ -1,6 +1,7 @@
 import Foundation
 import os
 @testable import Pinfold
+import PinfoldCore
 import Testing
 
 /// URLProtocol stub: answers by host so tests running in one process never collide.
@@ -238,6 +239,16 @@ struct BoundedDownloaderTests {
         #expect(response.etag == "\"v1\"")
         #expect(response.lastModified == "Wed, 01 Jan 2025 00:00:00 GMT")
         #expect(response.httpExpires == now.addingTimeInterval(600))
+    }
+
+    @Test(arguments: ["inf", "nan", "-5", "1e30"])
+    func conditional_absurdMaxAge_isDroppedOrCapped(maxAge: String) async throws {
+        let host = "cond-maxage-\(maxAge).test"
+        StubURLProtocol.register(.init(headers: ["Cache-Control": "max-age=\(maxAge)"], chunks: [Data([1])]), host: host)
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let response = try await conditional(host: host, now: now)
+        let expected: Date? = maxAge == "1e30" ? now.addingTimeInterval(KMLRefreshHint.maxSeconds) : nil
+        #expect(response.httpExpires == expected)
     }
 
     @Test func conditional_expiresHeader_parsed() async throws {

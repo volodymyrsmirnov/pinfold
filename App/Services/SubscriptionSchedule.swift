@@ -6,10 +6,13 @@ enum SubscriptionSchedule {
     static let defaultInterval: TimeInterval = 3600
     static let floor: TimeInterval = 300
 
-    /// A hint is usable only when it is finite and positive; anything else is treated as absent.
+    /// The longest gap between two checks, whatever a hint says (30 days).
+    static let maxGap = KMLRefreshHint.maxSeconds
+
+    /// A hint is usable only when it is finite and positive (anything else is treated as
+    /// absent), and is capped at `maxGap`.
     private static func usable(_ value: TimeInterval?) -> TimeInterval? {
-        guard let value, value.isFinite, value > 0 else { return nil }
-        return value
+        KMLRefreshHint.sanitised(value)
     }
 
     private static func effectiveFloor(_ state: SubscriptionState) -> TimeInterval {
@@ -26,7 +29,8 @@ enum SubscriptionSchedule {
             let expires = state.serverExpires ?? state.httpExpires
             guard let expires else { return max(minimum, defaultInterval) }
             let base = state.lastAttemptAt ?? now
-            return max(minimum, expires.timeIntervalSince(base))
+            let gap = expires.timeIntervalSince(base)
+            return gap.isFinite ? min(maxGap, max(minimum, gap)) : max(minimum, defaultInterval)
         case .onChange, nil:
             return max(minimum, defaultInterval)
         }

@@ -8,9 +8,9 @@ import Testing
 struct SubscriptionRefresherTests {
     // MARK: - Fixtures
 
-    private nonisolated static let now = Date(timeIntervalSince1970: 2_000_000_000)
+    nonisolated static let now = Date(timeIntervalSince1970: 2_000_000_000)
 
-    private func kml(_ names: [String], extra: String = "") -> Data {
+    func kml(_ names: [String], extra: String = "") -> Data {
         let placemarks = names.enumerated().map { index, name in
             "<Placemark><name>\(name)</name><Point><coordinates>\(index + 1),2,0</coordinates></Point></Placemark>"
         }.joined()
@@ -20,7 +20,7 @@ struct SubscriptionRefresherTests {
         """.utf8)
     }
 
-    @MainActor private struct Environment {
+    @MainActor struct Environment {
         let storage: StorageLocations
         let cache: ResourceCache
         let catalog: Catalog
@@ -48,7 +48,7 @@ struct SubscriptionRefresherTests {
         }
     }
 
-    private func makeEnvironment() -> Environment {
+    func makeEnvironment() -> Environment {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let storage = StorageLocations(root: base.appendingPathComponent("synced", isDirectory: true),
                                        cacheRoot: base.appendingPathComponent("cache", isDirectory: true))
@@ -59,8 +59,8 @@ struct SubscriptionRefresherTests {
 
     /// Commits a subscribed list for `url` and returns its folder name.
     @discardableResult
-    private func addOnlineList(_ env: Environment, url: String = "https://example.test/feed.kml",
-                               names: [String] = ["Old"], state: SubscriptionState? = nil) async throws -> String
+    func addOnlineList(_ env: Environment, url: String = "https://example.test/feed.kml",
+                       names: [String] = ["Old"], state: SubscriptionState? = nil) async throws -> String
     {
         var prepared = try ImportService.prepare(data: kml(names), sourceFilename: "feed.kml")
         prepared.subscription = try Subscription(url: #require(URL(string: url)), origin: .url,
@@ -74,12 +74,12 @@ struct SubscriptionRefresherTests {
     }
 
     /// A state that makes a list not due for about an hour.
-    private var checkedAMinuteAgo: SubscriptionState {
+    var checkedAMinuteAgo: SubscriptionState {
         SubscriptionState(lastAttemptAt: Self.now.addingTimeInterval(-60),
                           lastSuccessAt: Self.now.addingTimeInterval(-60))
     }
 
-    private func started(_ refresher: SubscriptionRefresher) async {
+    func started(_ refresher: SubscriptionRefresher) async {
         refresher.start()
         await refresher.activationTask?.value
     }
@@ -519,7 +519,7 @@ struct SubscriptionRefresherTests {
 
     // MARK: - Helpers
 
-    private func failure(of result: Result<Void, SubscriptionError>) -> SubscriptionError? {
+    func failure(of result: Result<Void, SubscriptionError>) -> SubscriptionError? {
         if case let .failure(error) = result {
             error
         } else {
@@ -527,12 +527,12 @@ struct SubscriptionRefresherTests {
         }
     }
 
-    private func modificationDate(_ url: URL) throws -> Date? {
+    func modificationDate(_ url: URL) throws -> Date? {
         try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
     }
 
     /// Every file in `dir` but the refresh state, with its modification date.
-    private func resourceListing(_ dir: URL) throws -> [String: Date] {
+    func resourceListing(_ dir: URL) throws -> [String: Date] {
         var listing: [String: Date] = [:]
         for name in try FileManager.default.contentsOfDirectory(atPath: dir.path)
             where name != SubscriptionStateStore.filename
@@ -542,7 +542,7 @@ struct SubscriptionRefresherTests {
         return listing
     }
 
-    private func waitUntil(_ condition: () -> Bool) async throws {
+    func waitUntil(_ condition: () -> Bool) async throws {
         for _ in 0 ..< 200 where !condition() {
             try await Task.sleep(for: .milliseconds(10))
         }
@@ -552,7 +552,7 @@ struct SubscriptionRefresherTests {
 // MARK: - Stub fetcher
 
 /// Records every fetch and answers with a canned response, optionally holding at a gate.
-private final class FetchStub: @unchecked Sendable {
+final class FetchStub: @unchecked Sendable {
     private let lock = NSLock()
     private var response: Result<ConditionalResponse, Error> = .failure(DownloadError.httpStatus(404))
     private var recorded: [String] = []
@@ -610,7 +610,7 @@ private final class FetchStub: @unchecked Sendable {
 }
 
 /// Holds fetches until opened. With `autoOpenAt`, it opens once that many fetches have arrived.
-private actor FetchGate {
+actor FetchGate {
     private(set) var arrivals = 0
     private var isOpen = false
     private let autoOpenAt: Int?

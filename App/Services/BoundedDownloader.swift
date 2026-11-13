@@ -1,5 +1,6 @@
 import Foundation
 import os
+import PinfoldCore
 
 /// Why a `BoundedDownloader` fetch failed.
 enum DownloadError: Error {
@@ -104,10 +105,12 @@ enum BoundedDownloader {
         if let control = http.value(forHTTPHeaderField: "Cache-Control") {
             for directive in control.split(separator: ",") {
                 let parts = directive.split(separator: "=", maxSplits: 1)
+                // A non-finite, non-positive or absurd `max-age` is ignored or capped
+                // (`KMLRefreshHint`): it is stored and scheduled with.
                 guard parts.count == 2,
                       parts[0].trimmingCharacters(in: .whitespaces).lowercased() == "max-age",
-                      let seconds = TimeInterval(parts[1].trimmingCharacters(in: .whitespaces)
-                          .trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+                      let seconds = KMLRefreshHint.sanitised(TimeInterval(parts[1].trimmingCharacters(in: .whitespaces)
+                              .trimmingCharacters(in: CharacterSet(charactersIn: "\""))))
                 else { continue }
                 return now.addingTimeInterval(seconds)
             }

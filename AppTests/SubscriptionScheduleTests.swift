@@ -87,4 +87,26 @@ struct SubscriptionScheduleTests {
         #expect(!SubscriptionSchedule.isDue(entry(sub(), state: .notDownloaded), state: attempted(), now: later))
         #expect(!SubscriptionSchedule.isDue(entry(nil), state: attempted(), now: later))
     }
+
+    // MARK: - Absurd hints (F1)
+
+    @Test func hugeHints_areCappedAtThirtyDays() {
+        let cap = KMLRefreshHint.maxSeconds
+        #expect(due(sub(mode: .onInterval, interval: 1e30), attempted()) == t0.addingTimeInterval(cap))
+        var slow = attempted()
+        slow.serverMinRefreshPeriod = 1e30
+        #expect(due(sub(), slow) == t0.addingTimeInterval(cap))
+        var failed = slow
+        failed.lastError = "boom"
+        #expect(due(sub(), failed) == t0.addingTimeInterval(cap))
+        var farExpiry = attempted()
+        farExpiry.serverExpires = t0.addingTimeInterval(1e15)
+        #expect(due(sub(mode: .onExpire), farExpiry) == t0.addingTimeInterval(cap))
+    }
+
+    @Test func timerDelay_isClampedToADay() {
+        #expect(SubscriptionRefresher.timerDelay(until: t0.addingTimeInterval(1e21), now: t0) == 24 * 3600)
+        #expect(SubscriptionRefresher.timerDelay(until: t0.addingTimeInterval(600), now: t0) == 600)
+        #expect(SubscriptionRefresher.timerDelay(until: t0.addingTimeInterval(-60), now: t0) == 0)
+    }
 }

@@ -154,7 +154,7 @@ enum SubscriptionURL {
         let state = SubscriptionState(
             lastAttemptAt: attemptAt, lastSuccessAt: refresher.clock(), etag: response.etag,
             lastModified: response.lastModified,
-            serverMinRefreshPeriod: result.networkLinkControl?.minRefreshPeriod,
+            serverMinRefreshPeriod: KMLRefreshHint.sanitised(result.networkLinkControl?.minRefreshPeriod),
             serverExpires: result.networkLinkControl?.expires, httpExpires: response.httpExpires
         )
         return Fetched(result: result, state: state)

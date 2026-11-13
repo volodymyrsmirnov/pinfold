@@ -6,7 +6,8 @@ public struct KMLNetworkLink: Equatable, Sendable {
     public let href: String
     /// `<refreshMode>` of the `<Link>`/`<Url>`; nil when absent or not a known value.
     public let refreshMode: KMLRefreshMode?
-    /// `<refreshInterval>` in seconds; nil when absent or not numeric.
+    /// `<refreshInterval>` in seconds; nil when absent, not numeric, not finite or not positive.
+    /// Capped at `KMLRefreshHint.maxSeconds`.
     public let refreshInterval: TimeInterval?
 
     public init(name: String?, href: String,
@@ -16,7 +17,7 @@ public struct KMLNetworkLink: Equatable, Sendable {
         self.name = name
         self.href = href
         self.refreshMode = refreshMode
-        self.refreshInterval = refreshInterval
+        self.refreshInterval = KMLRefreshHint.sanitised(refreshInterval)
     }
 }
 
@@ -27,11 +28,12 @@ public enum KMLRefreshMode: String, Sendable, Equatable, Codable {
 
 /// The file-level `<NetworkLinkControl>` hints. `<Update>` blocks are ignored.
 public struct KMLNetworkLinkControl: Equatable, Sendable {
+    /// In seconds; sanitised like `KMLNetworkLink.refreshInterval`.
     public let minRefreshPeriod: TimeInterval?
     public let expires: Date?
 
     public init(minRefreshPeriod: TimeInterval?, expires: Date?) {
-        self.minRefreshPeriod = minRefreshPeriod
+        self.minRefreshPeriod = KMLRefreshHint.sanitised(minRefreshPeriod)
         self.expires = expires
     }
 }

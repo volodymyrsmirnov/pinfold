@@ -17,4 +17,17 @@ struct Subscription: Codable, Equatable, Sendable {
     /// KML refresh hints, when the source file provided them.
     var refreshMode: KMLRefreshMode?
     var refreshInterval: TimeInterval?
+
+    /// `refreshInterval` is sanitised (`KMLRefreshHint`): a non-finite value cannot be written
+    /// to the sidecar, and a huge one would overflow the refresh timer.
+    init(
+        url: URL, origin: Origin, subscribedAt: Date, refreshMode: KMLRefreshMode? = nil,
+        refreshInterval: TimeInterval? = nil
+    ) {
+        self.url = url
+        self.origin = origin
+        self.subscribedAt = subscribedAt
+        self.refreshMode = refreshMode
+        self.refreshInterval = KMLRefreshHint.sanitised(refreshInterval)
+    }
 }

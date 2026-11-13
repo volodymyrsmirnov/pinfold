@@ -147,4 +147,33 @@ struct NetworkLinkTests {
         let doc = try parse("<kml><Document><name>D</name></Document></kml>")
         #expect(doc.networkLinkControl == nil)
     }
+
+    @Test func refreshInterval_nonFiniteOrNonPositive_isDropped_andHugeIsCapped() throws {
+        let values = ["inf", "nan", "-5", "0", "1e30"]
+        let links = values.map {
+            "<NetworkLink><Link><href>https://a/\($0).kml</href><refreshInterval>\($0)</refreshInterval></Link></NetworkLink>"
+        }.joined()
+        let doc = try parse("<kml><Document>\(links)</Document></kml>")
+        #expect(doc.networkLinks.map(\.refreshInterval) == [nil, nil, nil, nil, KMLRefreshHint.maxSeconds])
+    }
+
+    @Test func minRefreshPeriod_nonFiniteIsDropped_andHugeIsCapped() throws {
+        let infinite = try parse("""
+        <kml><NetworkLinkControl><minRefreshPeriod>inf</minRefreshPeriod></NetworkLinkControl>\
+        <Document><name>D</name></Document></kml>
+        """)
+        #expect(infinite.networkLinkControl?.minRefreshPeriod == nil)
+        let huge = try parse("""
+        <kml><NetworkLinkControl><minRefreshPeriod>1e21</minRefreshPeriod></NetworkLinkControl>\
+        <Document><name>D</name></Document></kml>
+        """)
+        #expect(huge.networkLinkControl?.minRefreshPeriod == KMLRefreshHint.maxSeconds)
+    }
+
+    @Test func modelInitialisersSanitiseHints() {
+        #expect(KMLNetworkLink(name: nil, href: "https://a", refreshInterval: .infinity).refreshInterval == nil)
+        #expect(KMLNetworkLink(name: nil, href: "https://a", refreshInterval: 60).refreshInterval == 60)
+        #expect(KMLNetworkLinkControl(minRefreshPeriod: .nan, expires: nil).minRefreshPeriod == nil)
+        #expect(KMLRefreshHint.maxSeconds == 30 * 24 * 3600)
+    }
 }
