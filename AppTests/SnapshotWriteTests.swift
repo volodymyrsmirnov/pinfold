@@ -99,6 +99,38 @@ struct SnapshotWriteTests {
         #expect(try !names(in: storage, entry).contains { $0.hasSuffix(".tmp") })
     }
 
+    // MARK: - Crash leftovers (F11)
+
+    @Test func differentName_leftoverFileAtNewName_isReplaced() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        // A crash after an earlier write placed the new file but before the sidecar named it.
+        let leftover = storage.folder(for: entry).appendingPathComponent("new.kml")
+        try kml("Leftover").write(to: leftover)
+        let new = try prepared("New", filename: "new.kml")
+
+        let updated = try writeSnapshot(new, to: entry, storage: storage)
+
+        #expect(try Data(contentsOf: storage.originalFile(for: updated)) == new.originalData)
+        #expect(try storage.readMetadata(forFolderNamed: entry.storageFolderName)?.sourceFilename == "new.kml")
+        #expect(try names(in: storage, entry) == ["metadata.json", "new.kml"])
+    }
+
+    @Test func staleSnapshotTemps_areSwept_freshOnesKept() async throws {
+        let (storage, entry) = try await makeEntry(filename: "same.kml")
+        let folder = storage.folder(for: entry)
+        let stale = folder.appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
+        let fresh = folder.appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
+        try Data("old".utf8).write(to: stale)
+        try Data("busy".utf8).write(to: fresh)
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-3600)],
+                                              ofItemAtPath: stale.path)
+
+        _ = try writeSnapshot(prepared("New", filename: "same.kml"), to: entry, storage: storage)
+
+        #expect(!FileManager.default.fileExists(atPath: stale.path))
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+    }
+
     // MARK: - Resource reset
 
     @Test func all_isUnchangedBehaviour() async throws {

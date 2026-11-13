@@ -26,7 +26,8 @@ enum NetworkLinkSnapshotService {
 
 /// The synchronous file work that replaces an original with fetched content. Ordered so a failure at any step leaves
 /// the old original and old sidecar intact:
-/// 1. require a readable sidecar (a missing or not-yet-downloaded one aborts before any write);
+/// 1. require a readable sidecar (a missing or not-yet-downloaded one aborts before any write),
+///    and sweep temporary files a crashed earlier write left behind;
 /// 2. write the new bytes under a temporary, non-original name in the entry folder;
 /// 3. update the sidecar (throws if absent);
 /// 4. move the temporary file into place, rolling the sidecar back if that fails;
@@ -39,9 +40,10 @@ nonisolated func writeSnapshot(
     storage: StorageLocations,
     resetResources: ResourceReset = .all
 ) throws -> CatalogEntry {
-    guard case .ok = storage.readSidecar(forFolderNamed: entry.storageFolderName) else {
+    guard case let .ok(sidecar) = storage.readSidecar(forFolderNamed: entry.storageFolderName) else {
         throw CocoaError(.fileNoSuchFile)
     }
+    sweepStaleSnapshotTemps(in: storage.folder(for: entry))
     var updated = entry
     updated.sourceFilename = result.sourceFilename
     updated.pointCount = result.pointCount
@@ -66,8 +68,10 @@ nonisolated func writeSnapshot(
         }
     } else {
         // New name: publish the new file first (the old one stays until the sidecar names the
-        // new one), so a crash in between never leaves a sidecar naming a missing file.
-        try placeSnapshotFile(tempURL, as: newURL)
+        // new one), so a crash in between never leaves a sidecar naming a missing file. A file
+        // already at the new name that the sidecar does not name is what such a crash left.
+        let newIsOriginal = sidecar.sourceFilename.caseInsensitiveCompare(newURL.lastPathComponent) == .orderedSame
+        try placeSnapshotFile(tempURL, as: newURL, replacingLeftover: !newIsOriginal)
         do {
             try updateOwnedFields(of: entry, to: updated, storage: storage, discarding: nil)
         } catch {
@@ -138,10 +142,12 @@ private nonisolated func updateOwnedFields(
     }
 }
 
-/// Moves the downloaded `temp` file to the not-yet-existing `new` name (never replaces a folder).
-private nonisolated func placeSnapshotFile(_ temp: URL, as new: URL) throws {
+/// Moves the downloaded `temp` file to the `new` name. An existing file there is replaced only
+/// with `replacingLeftover` (a crash leftover nothing refers to); a folder is never replaced.
+private nonisolated func placeSnapshotFile(_ temp: URL, as new: URL, replacingLeftover: Bool) throws {
     var isDirectory: ObjCBool = false
-    if FileManager.default.fileExists(atPath: new.path, isDirectory: &isDirectory) {
+    let exists = FileManager.default.fileExists(atPath: new.path, isDirectory: &isDirectory)
+    if exists, isDirectory.boolValue || !replacingLeftover {
         try? FileManager.default.removeItem(at: temp)
         throw CocoaError(.fileWriteFileExists)
     }
@@ -150,6 +156,25 @@ private nonisolated func placeSnapshotFile(_ temp: URL, as new: URL) throws {
     } catch {
         try? FileManager.default.removeItem(at: temp)
         throw error
+    }
+}
+
+/// How old a `.snapshot-*.tmp` file must be before a write treats it as a crash leftover. A
+/// write takes seconds; a younger file may belong to a write in progress in another window.
+private let staleSnapshotTempAge: TimeInterval = 10 * 60
+
+/// Removes `.snapshot-*.tmp` files older than `staleSnapshotTempAge` from an entry folder: a
+/// crash between writing one and renaming it leaves it there (in the synced folder). Best effort.
+private nonisolated func sweepStaleSnapshotTemps(in folder: URL) {
+    let fm = FileManager.default
+    let cutoff = Date.now.addingTimeInterval(-staleSnapshotTempAge)
+    for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] {
+        guard name.hasPrefix(".snapshot-"), name.hasSuffix(".tmp") else { continue }
+        let url = folder.appendingPathComponent(name)
+        let modified = (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        if let modified, modified < cutoff {
+            try? fm.removeItem(at: url)
+        }
     }
 }
 
