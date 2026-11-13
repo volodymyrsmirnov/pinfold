@@ -11,6 +11,14 @@ enum SubscriptionContentWriter {
         category: "subscription"
     )
 
+    /// What `applyAndReindex` did.
+    struct Reindexed {
+        /// The updated entry.
+        let entry: CatalogEntry
+        /// The Spotlight items removed: placemarks the new content no longer has.
+        let deindexedIdentifiers: [String]
+    }
+
     /// Replaces `entry`'s original with `result`, off the main actor: resolves any iCloud
     /// conflict on the original first, writes the snapshot keeping the person's choices, then
     /// rebuilds the derived data. Returns the updated entry.
@@ -20,35 +28,48 @@ enum SubscriptionContentWriter {
         storage: StorageLocations,
         cache: ResourceCache
     ) async throws -> CatalogEntry {
-        try await applyOffMain(result, to: entry, storage: storage, cache: cache)
+        try await applyOffMain(result, to: entry, storage: storage, cache: cache).entry
     }
 
     /// `apply`, then refreshes what search and Spotlight hold for `entry`: drops its cached
-    /// placemark index and re-indexes it in Spotlight (a trashed list is out of Spotlight;
-    /// restoring it re-indexes). Shared by a refresh and the in-place subscribe. Safe inside a
-    /// `StorageApplyQueue` operation: it never waits on the queue. Returns the updated entry.
+    /// placemark index, removes the Spotlight items of placemarks the new content no longer has
+    /// and re-indexes the rest (a trashed list is out of Spotlight; restoring it re-indexes).
+    /// Shared by a refresh and the in-place subscribe. Safe inside a `StorageApplyQueue`
+    /// operation: it never waits on the queue.
+    @discardableResult
     static func applyAndReindex(
         _ result: ImportResult,
         to entry: CatalogEntry,
         storage: StorageLocations,
         cache: ResourceCache
-    ) async throws -> CatalogEntry {
-        let updated = try await apply(result, to: entry, storage: storage, cache: cache)
+    ) async throws -> Reindexed {
+        let applied = try await applyOffMain(result, to: entry, storage: storage, cache: cache)
         PlacemarkIndexStore.shared.invalidate(
             resourcesDir: storage.resourcesDirectory(for: entry), sidecar: storage.metadataFile(for: entry)
         )
-        if !entry.isTrashed {
-            SpotlightIndexer.index(entry: updated, indexEntries: result.indexEntries)
-        }
-        return updated
+        guard !entry.isTrashed else { return Reindexed(entry: applied.entry, deindexedIdentifiers: []) }
+        // Removed and added identifiers are disjoint, so the two fire-and-forget calls can
+        // land in any order.
+        let removed = SpotlightIndexer.removedPlacemarkIdentifiers(
+            folderName: entry.storageFolderName, previous: applied.previousIndex, current: result.indexEntries
+        )
+        SpotlightIndexer.deindex(identifiers: removed)
+        SpotlightIndexer.index(entry: applied.entry, indexEntries: result.indexEntries)
+        return Reindexed(entry: applied.entry, deindexedIdentifiers: removed)
     }
+}
+
+/// The written entry and the search index of the content it replaced (empty when there was none).
+private struct Applied {
+    let entry: CatalogEntry
+    let previousIndex: [PlacemarkIndex.Entry]
 }
 
 /// Runs the refresh write in a detached task. A `nonisolated` free function so the detached
 /// closure is compiled outside any actor-isolated caller (see FavoritesView.swift).
 private nonisolated func applyOffMain(
     _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations, cache: ResourceCache
-) async throws -> CatalogEntry {
+) async throws -> Applied {
     try await Task.detached(priority: .userInitiated) {
         try writeRefresh(result, to: entry, storage: storage, cache: cache)
     }.value
@@ -57,7 +78,9 @@ private nonisolated func applyOffMain(
 /// The synchronous file work behind `SubscriptionContentWriter.apply`.
 private nonisolated func writeRefresh(
     _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations, cache: ResourceCache
-) throws -> CatalogEntry {
+) throws -> Applied {
+    // Read before the write prunes it: Spotlight items of placemarks that leave are removed.
+    let previousIndex = PlacemarkIndex.read(from: storage.resourcesDirectory(for: entry)) ?? []
     try resolveOriginalConflicts(at: storage.originalFile(for: entry))
     let updated = try writeSnapshot(result, to: entry, storage: storage, resetResources: .derivedOnly)
     // The new original is in place, so a failure here never fails the refresh: the index is
@@ -72,7 +95,7 @@ private nonisolated func writeRefresh(
             """
         )
     }
-    return updated
+    return Applied(entry: updated, previousIndex: previousIndex)
 }
 
 /// Resolves unresolved iCloud conflicts on an original before a refresh writes over it: the

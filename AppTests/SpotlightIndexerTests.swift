@@ -143,4 +143,27 @@ extension SpotlightIndexerTests {
         #expect(SpotlightIndexer.domain(forFolderName: "a.b") != SpotlightIndexer.domain(forFolderName: "a_b"))
         #expect(SpotlightIndexer.domain(forFolderName: "é") != SpotlightIndexer.domain(forFolderName: "e"))
     }
+
+    // MARK: - Placemarks a refresh removed (F8)
+
+    @Test func removedPlacemarkIdentifiers_areTheNamedKeysThatLeft() {
+        let previous = [
+            PlacemarkIndex.Entry(key: "gone", name: "Gone", lat: nil, lon: nil),
+            PlacemarkIndex.Entry(key: "kept", name: "Kept", lat: nil, lon: nil),
+            PlacemarkIndex.Entry(key: "renamed-away", name: "Was named", lat: nil, lon: nil),
+            PlacemarkIndex.Entry(key: "nameless", name: "", lat: nil, lon: nil),
+        ]
+        let current = [
+            PlacemarkIndex.Entry(key: "kept", name: "Kept", lat: nil, lon: nil),
+            PlacemarkIndex.Entry(key: "renamed-away", name: "", lat: nil, lon: nil),
+            PlacemarkIndex.Entry(key: "new", name: "New", lat: nil, lon: nil),
+        ]
+
+        let removed = SpotlightIndexer.removedPlacemarkIdentifiers(folderName: "F", previous: previous, current: current)
+
+        #expect(Set(removed) == [
+            SpotlightID.placemark(folderName: "F", placemarkKey: "gone"),
+            SpotlightID.placemark(folderName: "F", placemarkKey: "renamed-away"),
+        ])
+    }
 }

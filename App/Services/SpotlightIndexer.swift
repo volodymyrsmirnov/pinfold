@@ -152,6 +152,26 @@ enum SpotlightIndexer {
         spotlightDeindex(identifiers: ids, domains: [domain(forFolderName: folderName)])
     }
 
+    /// The Spotlight ids of `previous`'s named placemarks that `current` no longer indexes
+    /// (gone, or now nameless): what a content refresh must remove, since `index` only adds and
+    /// updates items.
+    static func removedPlacemarkIdentifiers(
+        folderName: String, previous: [PlacemarkIndex.Entry], current: [PlacemarkIndex.Entry]
+    ) -> [String] {
+        let kept = Set(current.lazy.filter { !$0.name.isEmpty }.map(\.key))
+        var seen = Set<String>()
+        return previous.compactMap { placemark in
+            guard !placemark.name.isEmpty, !kept.contains(placemark.key), seen.insert(placemark.key).inserted
+            else { return nil }
+            return SpotlightID.placemark(folderName: folderName, placemarkKey: placemark.key)
+        }
+    }
+
+    /// Removes the given Spotlight items. Fire-and-forget.
+    static func deindex(identifiers: [String]) {
+        spotlightDeindex(identifiers: identifiers, domains: [])
+    }
+
     /// Deletes the two shared domains 1.x used. Run once, on the first 2.0 launch, before the
     /// full reindex. Fire-and-forget.
     static func clearLegacyDomains() {

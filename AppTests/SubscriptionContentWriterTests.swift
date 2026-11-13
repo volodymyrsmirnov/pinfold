@@ -184,4 +184,25 @@ struct SubscriptionContentWriterTests {
         try resolveOriginalConflicts(at: url)
         #expect(try Data(contentsOf: url) == before)
     }
+
+    // MARK: - Spotlight (F8)
+
+    @Test func applyAndReindex_deindexesPlacemarksThatLeft() async throws {
+        let env = try await makeEnvironment()
+        let previous = try #require(PlacemarkIndex.read(from: env.resourcesDir))
+        let new = try ImportService.prepare(data: kml(["Fresh"]), sourceFilename: "feed.kml")
+
+        let reindexed = try await SubscriptionContentWriter.applyAndReindex(
+            new, to: env.entry, storage: env.storage, cache: env.cache
+        )
+
+        let oldKeys = previous.map(\.key)
+        let newKeys = Set(new.indexEntries.map(\.key))
+        let expected = oldKeys.filter { !newKeys.contains($0) }.map {
+            SpotlightID.placemark(folderName: env.entry.storageFolderName, placemarkKey: $0)
+        }
+        #expect(!expected.isEmpty)
+        #expect(reindexed.deindexedIdentifiers == expected)
+        #expect(reindexed.entry.pointCount == 1)
+    }
 }
