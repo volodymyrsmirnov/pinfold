@@ -13,10 +13,35 @@ struct DocumentLoadTests {
         #expect(DocumentLoad.reportableError(Boom()) is Boom)
     }
 
-    @Test func reloadNeededOnlyWhenLiveContentDiffersFromLoaded() {
-        #expect(DocumentLoad.needsReload(loadedSHA: "a", live: "b"))
-        #expect(!DocumentLoad.needsReload(loadedSHA: "a", live: "a"))
-        #expect(DocumentLoad.needsReload(loadedSHA: nil, live: "a"))
+    // MARK: - Reload pipeline (F6)
+
+    @Test func contentAction_waitsForTheInitialLoad_thenReloadsOnlyOnADifferentHash() {
+        #expect(DocumentLoad.contentAction(loadedSHA: nil, live: "a", documentLoaded: false) == .waitForInitialLoad)
+        #expect(DocumentLoad.contentAction(loadedSHA: "a", live: "b", documentLoaded: false) == .waitForInitialLoad)
+        #expect(DocumentLoad.contentAction(loadedSHA: "a", live: "a", documentLoaded: true) == .keep)
+        #expect(DocumentLoad.contentAction(loadedSHA: "a", live: "b", documentLoaded: true) == .reload)
+    }
+
+    @Test func contentKey_changesWithTheEntryOrItsContent() {
+        let id = UUID()
+        #expect(DocumentLoad.ContentKey(entryID: id, sha: "a") == DocumentLoad.ContentKey(entryID: id, sha: "a"))
+        #expect(DocumentLoad.ContentKey(entryID: id, sha: "a") != DocumentLoad.ContentKey(entryID: id, sha: "b"))
+        #expect(DocumentLoad.ContentKey(entryID: id, sha: "a") != DocumentLoad.ContentKey(entryID: UUID(), sha: "a"))
+    }
+
+    /// The UAT failure: a refresh keeps the old document on screen until the new one is parsed,
+    /// so `documentLoaded` stays true; the outline must still rebuild for the new document even
+    /// with no search active (before, only a search's corpus reset re-triggered it).
+    @Test func outlineTrigger_changesWhenOnlyTheLoadedContentChanges() {
+        func trigger(_ sha: String?) -> KMLDetailView.ImmediateOutlineTrigger {
+            KMLDetailView.ImmediateOutlineTrigger(
+                documentID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, documentLoaded: true,
+                documentSHA: sha, collapsed: [], nearestFirst: false, corpusReady: false, notesRevision: 0,
+                locationLat: nil, locationLon: nil
+            )
+        }
+        #expect(trigger("a") != trigger("b"))
+        #expect(trigger("a") == trigger("a"))
     }
 
     @Test func cancelledParseOfLargeFileThrowsCancellation() async {

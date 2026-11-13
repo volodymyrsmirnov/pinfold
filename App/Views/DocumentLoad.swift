@@ -12,10 +12,28 @@ enum DocumentLoad {
         try KMLReader.readDocument(data: data)
     }
 
-    /// Whether the open list must be re-read: the live entry's content differs from what the
-    /// view loaded (an online refresh replaced the original), or nothing is loaded yet.
-    static func needsReload(loadedSHA: String?, live: String) -> Bool {
-        loadedSHA != live
+    /// What keys the open list's content reload: the entry and its live content hash. A change
+    /// to either restarts (and so cancels) the reload in flight.
+    struct ContentKey: Equatable {
+        let entryID: UUID
+        let sha: String
+    }
+
+    /// What the open list does about the live content hash.
+    enum ContentAction: Equatable {
+        /// The document shown is the live content.
+        case keep
+        /// The first load is still running; it reconciles with the live hash when it finishes.
+        case waitForInitialLoad
+        /// An online refresh replaced the original: re-read it.
+        case reload
+    }
+
+    /// `loadedSHA` is the hash of the content `document` was parsed from, set only together
+    /// with a successfully published document.
+    static func contentAction(loadedSHA: String?, live: String, documentLoaded: Bool) -> ContentAction {
+        guard documentLoaded else { return .waitForInitialLoad }
+        return loadedSHA == live ? .keep : .reload
     }
 
     /// The error worth showing for a failed load, or `nil` for a cancellation (the person left

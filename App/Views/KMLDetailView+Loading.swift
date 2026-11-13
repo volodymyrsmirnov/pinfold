@@ -19,7 +19,6 @@ extension KMLDetailView {
     /// been applied (`refreshNotices`), so the first outline is built from the restored state.
     func loadDocument(for target: CatalogEntry? = nil) async {
         let target = target ?? liveEntry
-        loadedSHA = target.contentSHA256
         annotations = PlacemarkAnnotations(entry: target, storage: storage)
         let fileURL = storage.originalFile(for: target)
         do {
@@ -29,7 +28,9 @@ extension KMLDetailView {
             if Task.isCancelled {
                 return
             }
+            // Published together: `loadedSHA` always names the content `document` shows.
             document = parsed
+            loadedSHA = target.contentSHA256
             consentDismissed = false
             // "Clear Downloaded Images" promises the images return the next time the entry is
             // opened; this also lets the consent banner's Allow fetch again after a clear.

@@ -23,10 +23,20 @@ extension KMLDetailView {
         }
     }
 
-    /// Called when the live content hash changes: reloads if the loaded document is stale.
+    /// The key of the content reload `.task`: this entry and its live content hash.
+    var contentKey: DocumentLoad.ContentKey {
+        DocumentLoad.ContentKey(entryID: entry.id, sha: liveEntry.contentSHA256)
+    }
+
+    /// Reloads if the loaded document is stale. Runs in the `.task` keyed by `contentKey`, so a
+    /// newer change cancels an older reload before it can publish, and again when the view
+    /// re-appears; the first load calls it once more when it finishes, so a change that landed
+    /// during that load is not lost.
     func reloadIfContentChanged(to live: CatalogEntry) async {
-        guard document != nil,
-              DocumentLoad.needsReload(loadedSHA: loadedSHA, live: live.contentSHA256) else { return }
+        let action = DocumentLoad.contentAction(
+            loadedSHA: loadedSHA, live: live.contentSHA256, documentLoaded: document != nil
+        )
+        guard action == .reload else { return }
         await reloadDocument(for: live, clearing: false)
     }
 

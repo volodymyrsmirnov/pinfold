@@ -11,6 +11,9 @@ extension KMLDetailView {
     struct ImmediateOutlineTrigger: Equatable {
         let documentID: CatalogEntry.ID
         let documentLoaded: Bool
+        /// The content hash of the published document: an online refresh swaps the document
+        /// without ever unloading it, and the new one must be shown even with no search active.
+        let documentSHA: String?
         let collapsed: Set<String>
         let nearestFirst: Bool
         /// Flips when the search index lands (or is reset), so an active search rebuilds with it.
