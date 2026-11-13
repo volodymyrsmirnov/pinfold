@@ -270,4 +270,52 @@ struct EntryMetadataTests {
         #expect(aIdx.lowerBound < zIdx.lowerBound)
         #expect(try meta.encoded() == meta.encoded())
     }
+
+    // MARK: - Subscription
+
+    private func sampleSubscription(_ path: String = "a") -> Subscription {
+        Subscription(
+            url: URL(string: "https://example.com/\(path).kml")!,
+            origin: .networkLink,
+            subscribedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            refreshMode: .onInterval,
+            refreshInterval: 900
+        )
+    }
+
+    private func sampleMetadata(subscription: Subscription? = nil) -> EntryMetadata {
+        EntryMetadata(
+            id: UUID(), displayName: "S", sourceFilename: "s.kml",
+            importDate: Date(timeIntervalSince1970: 1_700_000_000), pointCount: 1,
+            contentSHA256: "abc", trashedAt: nil, subscription: subscription
+        )
+    }
+
+    @Test func subscription_roundTrips() throws {
+        let original = sampleMetadata(subscription: sampleSubscription())
+        let decoded = try EntryMetadata.decoded(from: original.encoded())
+        #expect(decoded == original)
+        #expect(decoded.subscription == sampleSubscription())
+    }
+
+    @Test func legacySidecar_withoutSubscription_decodes() throws {
+        let json = """
+        {"id":"\(UUID().uuidString)","displayName":"Old","sourceFilename":"o.kml",
+        "importDate":1700000000,"pointCount":2,"contentSHA256":"x"}
+        """
+        let decoded = try EntryMetadata.decoded(from: Data(json.utf8))
+        #expect(decoded.subscription == nil)
+    }
+
+    @Test func nonSubscribedSidecar_hasNoSubscriptionKey() throws {
+        let text = try String(decoding: sampleMetadata().encoded(), as: UTF8.self)
+        #expect(!text.contains("\"subscription\""))
+    }
+
+    @Test func merge_keepsCurrentSubscription() {
+        let a = sampleSubscription("a")
+        let b = sampleSubscription("b")
+        #expect(sampleMetadata(subscription: a).merging(conflicts: [sampleMetadata(subscription: b)]).subscription == a)
+        #expect(sampleMetadata().merging(conflicts: [sampleMetadata(subscription: b)]).subscription == nil)
+    }
 }

@@ -32,6 +32,8 @@ struct ImportResult {
     /// the parsed document so `commit` can write the local `placemarks-index.json` without a
     /// re-parse. Backs catalogue-wide search.
     let indexEntries: [PlacemarkIndex.Entry]
+    /// Set when this import creates an online list; `commit` writes it into the new sidecar.
+    var subscription: Subscription?
 }
 
 // MARK: - ImportError
@@ -226,7 +228,8 @@ enum ImportService {
             pointCount: result.pointCount,
             contentSHA256: result.contentSHA256,
             storageFolderName: result.storageFolderName,
-            trashedAt: nil
+            trashedAt: nil,
+            subscription: result.subscription
         )
 
         // Create on-disk folders before writing any files. From here on a failure must leave

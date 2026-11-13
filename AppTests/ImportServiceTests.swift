@@ -528,4 +528,19 @@ import Testing
         #expect(upper.sourceFilename.lowercased() != "metadata.json")
         #expect(ImportFormats.originalExtensions.isSuperset(of: ["gpx", "geojson", "json"]))
     }
+
+    @Test func commit_writesSubscription() throws {
+        let storage = makeStorage()
+        let data = try AppFixture.data("Rome.kml")
+        var result = try ImportService.prepare(data: data, sourceFilename: "Rome.kml")
+        let sub = try Subscription(
+            url: #require(URL(string: "https://example.com/Rome.kml")), origin: .url,
+            subscribedAt: Date(timeIntervalSince1970: 100), refreshMode: nil, refreshInterval: nil
+        )
+        result.subscription = sub
+        let entry = try ImportService.commit(result, storage: storage, cache: stubCache())
+        #expect(entry.subscription == sub)
+        let onDisk = try EntryMetadata.decoded(from: Data(contentsOf: storage.metadataFile(for: entry)))
+        #expect(onDisk.subscription == sub)
+    }
 }

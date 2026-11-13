@@ -32,12 +32,15 @@ struct EntryMetadata: Codable, Equatable {
     /// Personal notes keyed by `KMLPlacemark.stableKey`. An empty-text note is a tombstone.
     /// Notes are kept even when their key no longer resolves (see `PlacemarkNote`).
     var notes: [String: PlacemarkNote] = [:]
+    /// Set when the list follows a URL and refreshes itself; `nil` for a normal list.
+    var subscription: Subscription?
 
     init(
         id: UUID, displayName: String, sourceFilename: String, importDate: Date,
         pointCount: Int, contentSHA256: String, trashedAt: Date?,
         favoriteKeys: Set<String> = [], visitedKeys: Set<String> = [],
-        tags: [String] = [], notes: [String: PlacemarkNote] = [:]
+        tags: [String] = [], notes: [String: PlacemarkNote] = [:],
+        subscription: Subscription? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -50,6 +53,7 @@ struct EntryMetadata: Codable, Equatable {
         self.visitedKeys = visitedKeys
         self.tags = tags
         self.notes = notes
+        self.subscription = subscription
     }
 
     // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
@@ -57,7 +61,7 @@ struct EntryMetadata: Codable, Equatable {
     // property, update CodingKeys, init(from:), encode(to:), AND the memberwise init.
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
-        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags, notes
+        case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags, notes, subscription
     }
 
     init(from decoder: any Decoder) throws {
@@ -73,6 +77,7 @@ struct EntryMetadata: Codable, Equatable {
         visitedKeys = try Set(c.decodeIfPresent([String].self, forKey: .visitedKeys) ?? [])
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         notes = try c.decodeIfPresent([String: PlacemarkNote].self, forKey: .notes) ?? [:]
+        subscription = try c.decodeIfPresent(Subscription.self, forKey: .subscription)
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -94,6 +99,7 @@ struct EntryMetadata: Codable, Equatable {
         if !notes.isEmpty {
             try c.encode(notes, forKey: .notes)
         }
+        try c.encodeIfPresent(subscription, forKey: .subscription)
     }
 
     /// Encodes to pretty-printed, key-sorted JSON for stable, diff-friendly files.
@@ -130,6 +136,7 @@ struct EntryMetadata: Codable, Equatable {
     /// - Scalar identity/content fields (`id`, `displayName`, `sourceFilename`, `importDate`,
     ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
     ///   underlying file, so the winning version is authoritative; there is nothing to merge.
+    /// - `subscription`: keeps **current's** value (the winning version is authoritative).
     /// - `trashedAt`: the **maximum** of all non-nil `trashedAt` values across current and
     ///   conflicts, or `nil` if every version is non-trashed. A trash performed on one device
     ///   therefore wins over an unaware copy (deletion is the user's most recent intent), and
