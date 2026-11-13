@@ -19,8 +19,10 @@ extension KMLDetailView {
     /// been applied (`refreshNotices`), so the first outline is built from the restored state.
     ///
     /// Every load takes a ticket (`DocumentLoad.Tickets`) and publishes only while it is the
-    /// newest, so loads started from different tasks can't publish out of order. A failure
-    /// while a document is on screen (an in-place reload) keeps that document and shows no error.
+    /// newest and, over a shown document, parsed the live content (`DocumentLoad.mayPublish`),
+    /// so loads started from different tasks can't publish out of order or bring back content
+    /// the list has since left. A failure while a document is on screen (an in-place reload)
+    /// keeps that document and shows no error.
     func loadDocument(for target: CatalogEntry? = nil) async {
         let target = target ?? liveEntry
         let ticket = loadTickets.issue()
@@ -30,7 +32,11 @@ extension KMLDetailView {
             // Materializes an iCloud placeholder first (no-op for local files), then parses the
             // document only. Off-main; a spinner shows meanwhile.
             let parsed = try await loadDocumentOffMain(fileURL)
-            if Task.isCancelled || !loadTickets.isCurrent(ticket) {
+            let mayPublish = DocumentLoad.mayPublish(
+                ticket, of: loadTickets, loadedSHA: target.contentSHA256, liveSHA: liveEntry.contentSHA256,
+                documentShown: document != nil
+            )
+            if Task.isCancelled || !mayPublish {
                 return
             }
             // Published together: `loadedSHA` always names the content `document` shows.

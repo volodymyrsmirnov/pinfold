@@ -65,6 +65,26 @@ struct DocumentLoadTests {
         #expect(DocumentLoad.failureToShow(CancellationError(), documentShown: false) == nil)
     }
 
+    /// A→B→A: A is shown and the first load's reconcile is parsing B when the live content
+    /// reverts to A. The revert is `.keep`, so it starts no load and B's ticket stays the
+    /// newest; B must still not replace A.
+    @Test func mayPublish_staleParseAfterTheContentReverted_isDropped() {
+        var tickets = DocumentLoad.Tickets()
+        _ = tickets.issue() // the first load, which published A
+        let parsingB = tickets.issue() // its reconcile, after the live content changed to B
+        #expect(DocumentLoad.contentAction(loadedSHA: "A", live: "A", documentLoaded: true) == .keep)
+        #expect(tickets.isCurrent(parsingB))
+
+        #expect(!DocumentLoad.mayPublish(parsingB, of: tickets, loadedSHA: "B", liveSHA: "A", documentShown: true))
+        #expect(DocumentLoad.mayPublish(parsingB, of: tickets, loadedSHA: "B", liveSHA: "B", documentShown: true))
+        // With nothing on screen the load publishes; the first load's reconcile then catches up.
+        #expect(DocumentLoad.mayPublish(parsingB, of: tickets, loadedSHA: "B", liveSHA: "A", documentShown: false))
+        // An older ticket never publishes.
+        let newer = tickets.issue()
+        #expect(!DocumentLoad.mayPublish(parsingB, of: tickets, loadedSHA: "B", liveSHA: "B", documentShown: true))
+        #expect(DocumentLoad.mayPublish(newer, of: tickets, loadedSHA: "B", liveSHA: "B", documentShown: true))
+    }
+
     @Test func cancelledParseOfLargeFileThrowsCancellation() async {
         let data = LargeKML.data(placemarks: 100_000)
         let task = Task.detached { () throws -> Bool in

@@ -65,6 +65,18 @@ enum DocumentLoad {
             ticket == latest
         }
     }
+
+    /// Whether a finished load may publish: it holds the newest ticket and, while a document is
+    /// on screen, it parsed the live content. The ticket alone is not enough: when the live
+    /// content reverts (A shown, the first load's reconcile parsing B, live back to A) the
+    /// content-keyed task decides `.keep` and starts no load, so B's ticket stays the newest.
+    /// With nothing on screen the load publishes anyway, and the first load's reconcile then
+    /// catches up with the live content.
+    static func mayPublish(
+        _ ticket: Int, of tickets: Tickets, loadedSHA: String, liveSHA: String, documentShown: Bool
+    ) -> Bool {
+        tickets.isCurrent(ticket) && (!documentShown || loadedSHA == liveSHA)
+    }
 }
 
 /// Reads (materializing an iCloud placeholder first) and parses `fileURL` off the main actor.

@@ -54,10 +54,13 @@ enum NetworkLinkStatus: Equatable {
     case finished(String)
     /// Some links were added and some failed; the button stays so the person can retry.
     case partial(String)
+    /// Another subscribe is adding the list; the button stays, as that one may still fail.
+    case pending(String)
     case failed(String)
 
-    /// The single link's list is already being added by another subscribe.
-    static let alreadyBeingAdded = NetworkLinkStatus.finished(String(localized: "This list is already being added."))
+    /// The single link's list is already being added by another subscribe. A retry is safe: it
+    /// finds the list being added, or the one it made.
+    static let alreadyBeingAdded = NetworkLinkStatus.pending(String(localized: "This list is already being added."))
 
     /// The status after subscribing each link of an offer: `added` new lists, `failed` links
     /// that couldn't be added (`firstError` the first reason). `nil` when nothing was added or
@@ -82,11 +85,12 @@ enum NetworkLinkStatus: Equatable {
 /// fetched until the person taps the button; the text names the hosts.
 struct NetworkLinkPrompt: View {
     /// The button is offered until a subscribe runs, and again after one failed in full or in
-    /// part (a retry finds the links already added as existing lists); once it finished,
-    /// tapping again would only subscribe the same links twice.
+    /// part (a retry finds the links already added as existing lists) or found its list being
+    /// added by another subscribe that may still fail; once it finished, tapping again would
+    /// only subscribe the same links twice.
     static func showsButton(for status: NetworkLinkStatus) -> Bool {
         switch status {
-        case .idle, .partial, .failed: true
+        case .idle, .partial, .pending, .failed: true
         case .subscribing, .finished: false
         }
     }
@@ -138,6 +142,10 @@ struct NetworkLinkPrompt: View {
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.footnote)
                 .foregroundStyle(.orange)
+        case let .pending(message):
+            Label(message, systemImage: "clock")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         case let .failed(message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.footnote)

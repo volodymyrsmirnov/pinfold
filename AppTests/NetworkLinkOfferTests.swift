@@ -96,7 +96,10 @@ struct NetworkLinkOfferTests {
 
     // MARK: - Single link already being added (G8)
 
-    @Test func singleLink_alreadyBeingAdded_saysSo() {
-        #expect(NetworkLinkStatus.alreadyBeingAdded == .finished("This list is already being added."))
+    /// The other subscribe may still fail: the button stays so the person can retry (a retry
+    /// finds the list being added, or the one it made).
+    @Test func singleLink_alreadyBeingAdded_saysSoAndKeepsTheButton() {
+        #expect(NetworkLinkStatus.alreadyBeingAdded == .pending("This list is already being added."))
+        #expect(NetworkLinkPrompt.showsButton(for: .alreadyBeingAdded))
     }
 }
