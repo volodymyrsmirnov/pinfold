@@ -16,6 +16,8 @@ struct AppCommands: Commands {
             Button("Import\u{2026}") { window?.importIfAllowed() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(!(window?.canImport ?? false))
+            Button("Subscribe to URL\u{2026}") { window?.subscribeIfAllowed() }
+                .disabled(!(window?.canImport ?? false))
         }
         CommandGroup(after: .textEditing) {
             Button("Search") { window?.search() }

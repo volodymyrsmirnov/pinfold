@@ -17,6 +17,7 @@ import Testing
         var renamed: [String] = []
         var tagged: [String] = []
         var imports = 0
+        var subscribes = 0
         var searches = 0
     }
 
@@ -25,6 +26,7 @@ import Testing
             selectedEntry: selected,
             canImport: true,
             importFiles: { rec.imports += 1 },
+            subscribeToURL: { rec.subscribes += 1 },
             focusSearch: { rec.searches += 1 },
             rename: { rec.renamed.append($0.displayName) },
             editTags: { rec.tagged.append($0.displayName) },
@@ -86,5 +88,16 @@ import Testing
         let some = PlaceCommands(toggleFavorite: nil, openInMaps: { opened += 1 })
         some.open()
         #expect(some.canOpenInMaps && opened == 1)
+    }
+
+    @Test func subscribeCommand_disabledWhileImporting() {
+        let rec = Recorder()
+        var cmds = commands(selected: nil, rec)
+        cmds.subscribeIfAllowed()
+        #expect(rec.subscribes == 1)
+
+        cmds.canImport = false
+        cmds.subscribeIfAllowed()
+        #expect(rec.subscribes == 1)
     }
 }
