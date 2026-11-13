@@ -290,9 +290,10 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             await fetchSlots.acquire()
             // Things may have changed while waiting for the slot (and, inside `fetch`, while
             // hashing the original): a skipped list is not touched.
-            if isStillEligible(folder, subscription: subscription, automatic: automatic),
-               let outcome = await fetch(subscription, for: entry, automatic: automatic)
-            {
+            let outcome = isStillEligible(folder, subscription: subscription, automatic: automatic)
+                ? await fetch(subscription, for: entry, automatic: automatic)
+                : nil
+            if let outcome {
                 result = await storageQueue.run {
                     await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt)
                 }
