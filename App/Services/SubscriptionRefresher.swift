@@ -44,11 +44,18 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
 /// active, and on an in-session timer (`SubscriptionRefresher+Timer.swift`). Never runs in the
 /// background.
 ///
-/// Fetches run in parallel (at most `maxParallelFetches`); everything that touches storage (the
-/// refresh state and content writes, Stop Updating) runs through the `StorageApplyQueue`, so it
-/// is serialised and never interleaves with a storage application. Each write re-reads the live
-/// entry and `catalog.storage` first, so a list that was deleted, stopped or re-pointed while
-/// its fetch was in flight is left alone.
+/// Fetches run in parallel (at most `maxParallelFetches`, a slot held from the request until its
+/// outcome is recorded, so at most that many responses are in memory); everything that touches
+/// storage (the refresh state and content writes, Stop Updating) runs through the
+/// `StorageApplyQueue`, so it is serialised and never interleaves with a storage application.
+/// Each write re-reads the live entry and `catalog.storage` first, so a list that was deleted,
+/// stopped or re-pointed while its fetch was in flight is left alone.
+///
+/// Known limitation: each window (scene) has its own refresher, timer and storage queue. They are
+/// not coordinated; instead the due check and `record` re-read `subscription-state.json` from
+/// disk, so a window does not fetch a list another window has just checked, and an outcome older
+/// than another window's check is dropped. Two windows can still fetch the same list at the same
+/// moment.
 @MainActor @Observable final class SubscriptionRefresher {
     enum Phase: Equatable { case idle, refreshing, failed(String) }
 
@@ -152,6 +159,18 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         return state
     }
 
+    /// The entry's refresh state re-read from disk (another window may have written it since it
+    /// was cached), updating the cache.
+    func reloadedState(for entry: CatalogEntry) -> SubscriptionState {
+        let dir = catalog.storage.resourcesDirectory(for: entry)
+        let state = SubscriptionStateStore.read(in: dir)
+        if states[dir.path] != state {
+            states[dir.path] = state
+            stateRevision &+= 1
+        }
+        return state
+    }
+
     private func store(_ state: SubscriptionState, in dir: URL) {
         SubscriptionStateStore.write(state, in: dir)
         states[dir.path] = state
@@ -216,10 +235,10 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         }
         let now = clock()
         let due = catalog.entries.filter { entry in
-            inFlight[entry.storageFolderName] == nil
-                && SubscriptionSchedule.isDue(entry, state: state(for: entry), now: now)
+            guard entry.subscription != nil, inFlight[entry.storageFolderName] == nil else { return false }
+            return SubscriptionSchedule.isDue(entry, state: reloadedState(for: entry), now: now)
         }
-        let tasks = due.map { begin($0) }
+        let tasks = due.map { begin($0, automatic: true) }
         for task in tasks {
             _ = await task.value
         }
@@ -236,34 +255,38 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         let live = liveEntry(folder) ?? entry
         guard live.isOnline else { return .success(()) }
         guard !live.isReadOnly else { return .failure(.readOnly) }
-        return await begin(live).value
+        return await begin(live, automatic: false).value
     }
 
     /// Starts refreshing `entry` (or returns its running refresh) and marks it in flight.
-    private func begin(_ entry: CatalogEntry) -> Task<Result<Void, SubscriptionError>, Never> {
+    /// `automatic` is a due check (launch, foreground, timer) rather than Refresh Now.
+    private func begin(_ entry: CatalogEntry, automatic: Bool) -> Task<Result<Void, SubscriptionError>, Never> {
         let folder = entry.storageFolderName
         if let running = inFlight[folder] {
             return running
         }
         phases[folder] = .refreshing
-        let task = Task { await self.run(entry) }
+        let task = Task { await self.run(entry, automatic: automatic) }
         inFlight[folder] = task
         return task
     }
 
-    private func run(_ entry: CatalogEntry) async -> Result<Void, SubscriptionError> {
+    private func run(_ entry: CatalogEntry, automatic: Bool) async -> Result<Void, SubscriptionError> {
         let folder = entry.storageFolderName
-        let result: Result<Void, SubscriptionError>
+        var result: Result<Void, SubscriptionError> = .success(())
         if let subscription = entry.subscription {
             let attemptAt = clock()
+            // The slot is held from the request until the outcome is recorded (including the
+            // wait for the storage queue), so at most `maxParallelFetches` responses are held.
             await fetchSlots.acquire()
-            let outcome = await fetch(subscription, for: entry)
-            fetchSlots.release()
-            result = await storageQueue.run {
-                await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt)
+            // Things may have changed while waiting for the slot: a skipped list is not touched.
+            if isStillEligible(folder, subscription: subscription, automatic: automatic) {
+                let outcome = await fetch(subscription, for: entry)
+                result = await storageQueue.run {
+                    await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt)
+                }
             }
-        } else {
-            result = .success(())
+            fetchSlots.release()
         }
         switch result {
         case .success:
@@ -279,6 +302,18 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         return result
     }
 
+    /// Whether a refresh that waited for a fetch slot should still fetch: an automatic one only
+    /// while the scene is active and the device online (Refresh Now reports being offline as its
+    /// error), and only for a live list that still follows `subscription`'s URL, is not in the
+    /// trash and can be written.
+    private func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool) -> Bool {
+        if automatic, !isSceneActive || network?.isOnline == false {
+            return false
+        }
+        guard let live = liveEntry(folder) else { return false }
+        return live.subscription?.url == subscription.url && !live.isTrashed && !live.isReadOnly
+    }
+
     /// Records a fetch outcome against the live entry; runs inside the storage queue. A list
     /// that is gone, no longer online, now follows another URL, or is read-only (sidecar not
     /// downloaded or unreadable) is left untouched: nothing is written and no error recorded.
@@ -290,7 +325,11 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         }
         let storage = catalog.storage
         let dir = storage.resourcesDirectory(for: live)
-        var state = state(for: live)
+        var state = reloadedState(for: live)
+        if let other = state.lastAttemptAt, other > attemptAt {
+            // Another window checked the list after this fetch started: its outcome stands.
+            return .success(())
+        }
         state.lastAttemptAt = attemptAt
         let failure: SubscriptionError?
         switch outcome {
@@ -320,6 +359,10 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
                 state.serverExpires = result.networkLinkControl?.expires
                 state.contentSHA256 = result.contentSHA256
             } catch {
+                if isGone(live, in: storage) {
+                    // Deleted for good while the write ran: nothing to record, nothing to show.
+                    return .success(())
+                }
                 failure = .writeFailed(error.localizedDescription)
             }
         case let .failed(error):
@@ -337,6 +380,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             await catalog.reload()
         }
         return .success(())
+    }
+
+    /// Whether `entry` was deleted: out of the catalogue, or its folder no longer on disk.
+    private func isGone(_ entry: CatalogEntry, in storage: StorageLocations) -> Bool {
+        liveEntry(entry.storageFolderName) == nil
+            || !FileManager.default.fileExists(atPath: storage.folder(for: entry).path)
     }
 
     // MARK: - Stop Updating

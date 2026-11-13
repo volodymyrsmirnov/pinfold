@@ -106,4 +106,155 @@ extension SubscriptionRefresherTests {
         #expect(try modificationDate(originalURL) == modifiedBefore)
         #expect(try resourceListing(env.resources(entry)) == resourcesBefore)
     }
+
+    // MARK: - Eligibility after waiting for a fetch slot (F3)
+
+    /// Four due lists: three fetch, the fourth waits for a slot. Returns the folder of the waiting one.
+    private func fourDueListsWithThreeInFlight(
+        _ env: Environment, _ refresher: SubscriptionRefresher, gate: FetchGate
+    ) async throws -> String {
+        var folders: [String: String] = [:]
+        for index in 0 ..< 4 {
+            let url = "https://example.test/\(index).kml"
+            folders[url] = try await addOnlineList(env, url: url)
+        }
+        env.stub.gate = gate
+        env.stub.respond(with: .notModified)
+        refresher.start()
+        await gate.waitForArrivals(3)
+        let waiting = try #require(folders.keys.first { !env.stub.urls.contains($0) })
+        return try #require(folders[waiting])
+    }
+
+    @Test func queuedFetch_stopUpdatingWhileWaiting_neverFetches() async throws {
+        let env = makeEnvironment()
+        let gate = FetchGate()
+        let refresher = env.makeRefresher()
+        let waiting = try await fourDueListsWithThreeInFlight(env, refresher, gate: gate)
+
+        try await refresher.stopUpdating(env.entry(waiting))
+        await gate.open()
+        await refresher.activationTask?.value
+
+        #expect(env.stub.calls == 3)
+        #expect(try env.storage.readMetadata(forFolderNamed: waiting)?.subscription == nil)
+    }
+
+    @Test func queuedFetch_sceneResignsWhileWaiting_neverFetches() async throws {
+        let env = makeEnvironment()
+        let gate = FetchGate()
+        let refresher = env.makeRefresher()
+        _ = try await fourDueListsWithThreeInFlight(env, refresher, gate: gate)
+
+        refresher.sceneDidResignActive()
+        await gate.open()
+        await refresher.activationTask?.value
+
+        #expect(env.stub.calls == 3)
+    }
+
+    // MARK: - Bounded fetch-through-write pipeline (F4)
+
+    @Test func fetchSlot_isHeldUntilTheWriteIsRecorded() async throws {
+        let env = makeEnvironment()
+        let gate = FetchGate()
+        let refresher = env.makeRefresher()
+        _ = try await fourDueListsWithThreeInFlight(env, refresher, gate: gate)
+        // A storage application starts while the three are downloading: their writes must wait.
+        let blocker = QueueBlocker()
+        let application = Task { await refresher.storageQueue.run { await blocker.block() } }
+        try await waitUntil { blocker.isBlocking }
+
+        await gate.open()
+        try await Task.sleep(for: .milliseconds(200))
+        // Three responses wait for the queue; the fourth must not be downloaded meanwhile.
+        #expect(env.stub.calls == 3)
+
+        blocker.release()
+        await application.value
+        await refresher.activationTask?.value
+        #expect(env.stub.calls == 4)
+    }
+
+    // MARK: - Several windows (F9)
+
+    @Test func refreshDue_rereadsStateAnotherWindowWrote() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        env.stub.respond(with: .notModified)
+        let refresher = env.makeRefresher()
+        #expect(refresher.state(for: entry).lastAttemptAt == nil) // cached: never checked
+        // Another window's refresher checks the list and records it.
+        SubscriptionStateStore.write(checkedAMinuteAgo, in: env.resources(entry))
+
+        await started(refresher)
+
+        #expect(env.stub.calls == 0)
+        #expect(refresher.lastSuccess(for: entry) == checkedAMinuteAgo.lastSuccessAt)
+        refresher.sceneDidResignActive()
+    }
+
+    @Test func record_newerCheckByAnotherWindow_discardsThisOutcome() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        let before = try env.original(entry)
+        let gate = FetchGate()
+        env.stub.gate = gate
+        env.stub.respond(with: .data(kml(["Alpha"])))
+        let refresher = env.makeRefresher()
+
+        let inFlight = Task { await refresher.refreshNow(entry) }
+        await gate.waitForArrivals(1)
+        let other = SubscriptionState(lastAttemptAt: Self.now.addingTimeInterval(1),
+                                      lastSuccessAt: Self.now.addingTimeInterval(1))
+        SubscriptionStateStore.write(other, in: env.resources(entry))
+        await gate.open()
+        let result = await inFlight.value
+
+        #expect(failure(of: result) == nil)
+        #expect(try env.original(env.entry(folder)) == before)
+        #expect(SubscriptionStateStore.read(in: env.resources(entry)) == other)
+    }
+
+    // MARK: - Deleted mid-write (F10)
+
+    @Test func refresh_listDeletedDuringWrite_failsQuietly() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        let gate = FetchGate()
+        env.stub.gate = gate
+        env.stub.respond(with: .data(kml(["Alpha"])))
+        let refresher = env.makeRefresher()
+
+        let inFlight = Task { await refresher.refreshNow(entry) }
+        await gate.waitForArrivals(1)
+        // Deleted permanently; the catalogue has not reloaded yet, so the write is attempted.
+        try FileManager.default.removeItem(at: env.storage.folder(for: entry))
+        try FileManager.default.removeItem(at: env.resources(entry))
+        await gate.open()
+        let result = await inFlight.value
+
+        #expect(failure(of: result) == nil)
+        #expect(refresher.phase(for: entry) == .idle)
+        #expect(!FileManager.default.fileExists(atPath: env.resources(entry).path))
+    }
+}
+
+/// Holds a storage-queue operation until released.
+@MainActor final class QueueBlocker {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var isBlocking = false
+
+    func block() async {
+        isBlocking = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
 }
