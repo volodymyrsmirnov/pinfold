@@ -50,7 +50,10 @@ struct RootView: View {
     /// Whether iCloud sync is doing what the user asked; shared through the environment.
     @State var syncStatus = SyncStatus()
     /// Serialises every storage application so a re-resolve cannot interleave with a toggle.
-    @State var storageQueue = StorageApplyQueue()
+    /// Shared with `refresher`, whose writes queue behind any application.
+    @State var storageQueue: StorageApplyQueue
+    /// Keeps online lists up to date while the app is open; started after `bootstrap()`.
+    @State var refresher: SubscriptionRefresher
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
@@ -126,7 +129,13 @@ struct RootView: View {
         _settings = State(initialValue: AppSettings())
         _resourceCache = State(initialValue: cache)
         _mapAppService = State(initialValue: MapAppService())
-        _catalog = State(initialValue: Catalog(storage: .applicationSupport, cache: cache))
+        let catalog = Catalog(storage: .applicationSupport, cache: cache)
+        _catalog = State(initialValue: catalog)
+        let queue = StorageApplyQueue()
+        _storageQueue = State(initialValue: queue)
+        _refresher = State(initialValue: SubscriptionRefresher(
+            catalog: catalog, cache: cache, network: NetworkStatus(), storageQueue: queue
+        ))
         let failureLog = ImportFailureLog()
         _importFailureLog = State(initialValue: failureLog)
         let coordinator = ImportCoordinator(failureLog: failureLog)
@@ -182,7 +191,7 @@ struct RootView: View {
                 catalog: catalog, settings: settings, mapAppService: mapAppService,
                 migrationAlert: migrationAlert, importFailureLog: importFailureLog,
                 resourceCache: resourceCache, router: router, importCoordinator: importCoordinator,
-                syncStatus: syncStatus
+                syncStatus: syncStatus, refresher: refresher
             ))
         }
         .navigationSplitViewStyle(.balanced)
@@ -190,7 +199,7 @@ struct RootView: View {
             catalog: catalog, settings: settings, mapAppService: mapAppService,
             migrationAlert: migrationAlert, importFailureLog: importFailureLog,
             resourceCache: resourceCache, router: router, importCoordinator: importCoordinator,
-            syncStatus: syncStatus
+            syncStatus: syncStatus, refresher: refresher
         ))
         .catalogErrorAlert(catalog)
         // Dropping .kml/.kmz files anywhere on the window imports them (C8).
@@ -205,14 +214,18 @@ struct RootView: View {
             switch newPhase {
             case .inactive:
                 saveResumeState()
+                refresher.sceneDidResignActive()
+            case .background:
+                refresher.sceneDidResignActive()
             case .active:
                 Task {
                     await reresolveStorageIfNeeded()
                     await drainInbox()
                     await drainDocumentsInbox()
                     await catalog.reload()
+                    refresher.sceneDidBecomeActive()
                 }
-            default:
+            @unknown default:
                 break
             }
         }
@@ -304,6 +317,7 @@ private struct AppEnvironmentBundle: ViewModifier {
     let router: NavigationRouter
     let importCoordinator: ImportCoordinator
     let syncStatus: SyncStatus
+    let refresher: SubscriptionRefresher
 
     func body(content: Content) -> some View {
         content
@@ -315,6 +329,7 @@ private struct AppEnvironmentBundle: ViewModifier {
             .environment(router)
             .environment(importCoordinator)
             .environment(syncStatus)
+            .environment(refresher)
             .environment(\.resourceCache, resourceCache)
             .environment(\.storageLocations, catalog.storage)
     }

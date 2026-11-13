@@ -38,6 +38,8 @@ extension RootView {
         // Last, so the first 2.0 launch (which decodes every index) never delays the replay of a
         // deep link or the session restore. Serialised with any storage application.
         await storageQueue.run { await reconcileDerivedState() }
+        // Online lists: check what is due now and arm the in-session timer.
+        refresher.start()
     }
 
     /// Resolves the active root from the current sync preference, points the catalogue at

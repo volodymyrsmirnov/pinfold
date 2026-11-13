@@ -16,7 +16,7 @@ import Observation
         self.monitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
             let online = Self.isOnline(path.status)
-            Task { @MainActor in self?.isOnline = online }
+            Task { @MainActor in self?.update(isOnline: online) }
         }
         monitor.start(queue: DispatchQueue(label: "tech.inkhorn.pinfold.network-status"))
     }
@@ -29,6 +29,12 @@ import Observation
     /// Fixed status derived from a path status (testable without a real `NWPath`).
     convenience init(pathStatus: NWPath.Status) {
         self.init(isOnline: Self.isOnline(pathStatus))
+    }
+
+    /// Publishes a new status (the path monitor's updates; tests drive it directly).
+    func update(isOnline online: Bool) {
+        guard online != isOnline else { return }
+        isOnline = online
     }
 
     nonisolated static func isOnline(_ status: NWPath.Status) -> Bool {

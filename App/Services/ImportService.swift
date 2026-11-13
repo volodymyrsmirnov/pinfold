@@ -34,6 +34,13 @@ struct ImportResult {
     let indexEntries: [PlacemarkIndex.Entry]
     /// Set when this import creates an online list; `commit` writes it into the new sidecar.
     var subscription: Subscription?
+    /// Every `<Placemark>` in the document, with or without a `<Point>`.
+    var placemarkCount = 0
+    /// How many `<NetworkLink>`s the document carries. With no placemarks, the file only links
+    /// to other files (a refresh rejects that).
+    var networkLinkCount = 0
+    /// The document's `<NetworkLinkControl>` refresh hints, recorded by a refresh.
+    var networkLinkControl: KMLNetworkLinkControl?
 }
 
 // MARK: - ImportError
@@ -161,7 +168,10 @@ enum ImportService {
             originalData: data,
             format: format,
             remoteResourceHrefs: remoteResourceHrefs,
-            indexEntries: PlacemarkIndex.entries(for: document)
+            indexEntries: PlacemarkIndex.entries(for: document),
+            placemarkCount: document.placemarkCount,
+            networkLinkCount: document.networkLinks.count,
+            networkLinkControl: document.networkLinkControl
         )
     }
 

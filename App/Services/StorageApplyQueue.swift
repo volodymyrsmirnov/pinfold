@@ -7,15 +7,16 @@ import Foundation
 @MainActor final class StorageApplyQueue {
     private var tail: Task<Void, Never>?
 
-    /// Runs `operation` after all previously queued operations complete, and returns once it
-    /// has finished. Callers must re-check any state they depend on *inside* `operation`.
-    func run(_ operation: @escaping @MainActor () async -> Void) async {
+    /// Runs `operation` after all previously queued operations complete, and returns its result
+    /// once it has finished. Callers must re-check any state they depend on *inside* `operation`.
+    @discardableResult
+    func run<T: Sendable>(_ operation: @escaping @MainActor () async -> T) async -> T {
         let previous = tail
         let task = Task { @MainActor in
             await previous?.value
-            await operation()
+            return await operation()
         }
-        tail = task
-        await task.value
+        tail = Task { _ = await task.value }
+        return await task.value
     }
 }
