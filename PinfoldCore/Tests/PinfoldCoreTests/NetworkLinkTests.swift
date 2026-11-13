@@ -79,4 +79,72 @@ struct NetworkLinkTests {
         let doc = try KMLParser.parse(data: Fixture.data("Rome.kml"))
         #expect(doc.networkLinks.isEmpty)
     }
+
+    // MARK: Refresh hints and NetworkLinkControl
+
+    @Test func refreshModeAndInterval_underLink() throws {
+        let doc = try parse("""
+        <kml><NetworkLink><Link><href>https://a/x.kml</href>\
+        <refreshMode>onInterval</refreshMode><refreshInterval>600</refreshInterval></Link></NetworkLink></kml>
+        """)
+        #expect(doc.networkLinks.first?.refreshMode == .onInterval)
+        #expect(doc.networkLinks.first?.refreshInterval == 600)
+    }
+
+    @Test func refreshHints_underLegacyUrl() throws {
+        let doc = try parse("""
+        <kml><NetworkLink><Url><href>https://a/x.kml</href>\
+        <refreshMode>onInterval</refreshMode><refreshInterval>600</refreshInterval></Url></NetworkLink></kml>
+        """)
+        #expect(doc.networkLinks.first?.refreshMode == .onInterval)
+        #expect(doc.networkLinks.first?.refreshInterval == 600)
+    }
+
+    @Test func unknownRefreshMode_isNil() throws {
+        let doc = try parse("""
+        <kml><NetworkLink><Link><href>https://a/x.kml</href>\
+        <refreshMode>sometimes</refreshMode><refreshInterval>soon</refreshInterval></Link></NetworkLink></kml>
+        """)
+        #expect(doc.networkLinks.count == 1)
+        #expect(doc.networkLinks.first?.refreshMode == nil)
+        #expect(doc.networkLinks.first?.refreshInterval == nil)
+    }
+
+    @Test func refreshHints_doNotLeakBetweenLinks() throws {
+        let doc = try parse("""
+        <kml><Document>
+        <NetworkLink><Link><href>https://a/1.kml</href><refreshMode>onExpire</refreshMode></Link></NetworkLink>
+        <NetworkLink><Link><href>https://a/2.kml</href></Link></NetworkLink>
+        </Document></kml>
+        """)
+        #expect(doc.networkLinks.map(\.refreshMode) == [.onExpire, nil])
+    }
+
+    @Test func networkLinkControl_minRefreshAndExpires() throws {
+        let doc = try parse("""
+        <kml><NetworkLinkControl><minRefreshPeriod>120</minRefreshPeriod>\
+        <expires>2026-12-01T10:00:00Z</expires></NetworkLinkControl>\
+        <Document><name>D</name></Document></kml>
+        """)
+        let expected = ISO8601DateFormatter().date(from: "2026-12-01T10:00:00Z")
+        #expect(doc.networkLinkControl?.minRefreshPeriod == 120)
+        #expect(doc.networkLinkControl?.expires == expected)
+        #expect(expected != nil)
+    }
+
+    @Test func networkLinkControl_updateBlockIgnored() throws {
+        let doc = try parse("""
+        <kml><NetworkLinkControl><Update><targetHref>x.kml</targetHref><Change>\
+        <Placemark targetId="a"><name>x</name><Point><coordinates>9,9</coordinates></Point></Placemark>\
+        </Change></Update></NetworkLinkControl>
+        <Document><Placemark><name>real</name><Point><coordinates>1,2</coordinates></Point></Placemark></Document></kml>
+        """)
+        #expect(doc.placemarkCount == 1)
+        #expect(doc.root.placemarks.first?.name == "real")
+    }
+
+    @Test func noNetworkLinkControl_isNil() throws {
+        let doc = try parse("<kml><Document><name>D</name></Document></kml>")
+        #expect(doc.networkLinkControl == nil)
+    }
 }

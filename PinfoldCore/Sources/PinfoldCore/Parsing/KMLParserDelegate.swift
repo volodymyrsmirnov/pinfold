@@ -67,7 +67,7 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     static let textBearingElements: Set<String> = [
         "name", "coordinates", "coord", "color", "width", "fill", "scale", "href",
         "key", "styleUrl", "value", "SimpleData", "Snippet", "snippet", "address", "phoneNumber",
-        "displayName",
+        "displayName", "refreshMode", "refreshInterval", "minRefreshPeriod", "expires",
     ]
 
     /// Current placemark being assembled.
@@ -142,6 +142,13 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
     /// Name and href of the open `<NetworkLink>`, flushed when it closes.
     var networkLinkName: String?
     var networkLinkHref: String?
+    var networkLinkRefreshMode: KMLRefreshMode?
+    var networkLinkRefreshInterval: TimeInterval?
+    /// `<NetworkLinkControl>` hints, and the nesting depth inside its ignored `<Update>`.
+    var controlMinRefreshPeriod: TimeInterval?
+    var controlExpires: Date?
+    var hasNetworkLinkControl = false
+    var updateDepth = 0
     /// Inline styles collected from placemarks, merged and registered by `makeDocument()`.
     var pendingInlineStyles: [PendingInlineStyle] = []
     /// Inline `<Style>` buffered by the open `<Pair>` of an inline `<StyleMap>` in a placemark.
@@ -195,7 +202,11 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         let overrides = resolveInlineStyles()
         return KMLDocument(name: effective.name, descriptionHTML: effective.description,
                            root: effective.build(styleUrlOverrides: overrides),
-                           styles: styles, styleMaps: styleMaps, networkLinks: networkLinks)
+                           styles: styles, styleMaps: styleMaps, networkLinks: networkLinks,
+                           networkLinkControl: hasNetworkLinkControl
+                               ? KMLNetworkLinkControl(minRefreshPeriod: controlMinRefreshPeriod,
+                                                       expires: controlExpires)
+                               : nil)
     }
 
     // MARK: DTD declarations (defence in depth behind the byte-level DOCTYPE guard)
@@ -265,6 +276,9 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
             return
         }
         elementStack.append(local)
+        if startNetworkLinkControlElement(local, parent: parent) {
+            return
+        }
         // Arm text accumulation only for elements whose close actually reads it.
         wantsText = Self.textBearingElements.contains(local)
         if startGeometryElement(local) {
@@ -278,6 +292,8 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         case "NetworkLink":
             networkLinkName = nil
             networkLinkHref = nil
+            networkLinkRefreshMode = nil
+            networkLinkRefreshInterval = nil
         case "Placemark":
             var builder = PlacemarkBuilder()
             builder.sourceID = attributeDict["id"]
@@ -355,6 +371,10 @@ final class KMLParserDelegate: NSObject, XMLParserDelegate {
         }
         let parent = elementStack.last
         defer { text = "" }
+        if updateDepth > 0 {
+            updateDepth -= 1
+            return
+        }
         // Delegate cohesive element groups to helpers to keep this dispatcher's complexity low.
         guard !endNetworkLinkElement(local, trimmed: trimmed),
               !endGeometryElement(local),
