@@ -67,7 +67,7 @@ extension HomeView {
                 switch try await service.subscribe(to: url, origin: .url) {
                 case let .existing(id), let .converted(id):
                     selection = id
-                case .enqueued:
+                case .enqueued, .convertedInPlace:
                     break
                 }
                 subscribePrompt.succeeded()

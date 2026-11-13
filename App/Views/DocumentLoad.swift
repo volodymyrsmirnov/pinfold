@@ -30,9 +30,12 @@ enum DocumentLoad {
     }
 
     /// `loadedSHA` is the hash of the content `document` was parsed from, set only together
-    /// with a successfully published document.
-    static func contentAction(loadedSHA: String?, live: String, documentLoaded: Bool) -> ContentAction {
-        guard documentLoaded else { return .waitForInitialLoad }
+    /// with a successfully published document. With no document and a load error showing, the
+    /// last load failed (or was overtaken by content that changed since): a reload may succeed.
+    static func contentAction(
+        loadedSHA: String?, live: String, documentLoaded: Bool, loadFailed: Bool = false
+    ) -> ContentAction {
+        guard documentLoaded else { return loadFailed ? .reload : .waitForInitialLoad }
         return loadedSHA == live ? .keep : .reload
     }
 

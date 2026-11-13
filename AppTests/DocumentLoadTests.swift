@@ -22,6 +22,18 @@ struct DocumentLoadTests {
         #expect(DocumentLoad.contentAction(loadedSHA: "a", live: "b", documentLoaded: true) == .reload)
     }
 
+    /// An in-place subscribe whose reload was overtaken left "Cannot Open File" on screen.
+    @Test func contentAction_noDocumentWithALoadError_reloads() {
+        #expect(
+            DocumentLoad.contentAction(loadedSHA: nil, live: "b", documentLoaded: false, loadFailed: true) == .reload
+        )
+        #expect(
+            DocumentLoad.contentAction(loadedSHA: nil, live: "b", documentLoaded: false, loadFailed: false)
+                == .waitForInitialLoad
+        )
+        #expect(DocumentLoad.contentAction(loadedSHA: "a", live: "a", documentLoaded: true, loadFailed: true) == .keep)
+    }
+
     @Test func contentKey_changesWithTheEntryOrItsContent() {
         let id = UUID()
         #expect(DocumentLoad.ContentKey(entryID: id, sha: "a") == DocumentLoad.ContentKey(entryID: id, sha: "a"))

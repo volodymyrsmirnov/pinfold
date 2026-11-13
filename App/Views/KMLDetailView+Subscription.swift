@@ -34,10 +34,20 @@ extension KMLDetailView {
     /// during that load is not lost.
     func reloadIfContentChanged(to live: CatalogEntry) async {
         let action = DocumentLoad.contentAction(
-            loadedSHA: loadedSHA, live: live.contentSHA256, documentLoaded: document != nil
+            loadedSHA: loadedSHA, live: live.contentSHA256, documentLoaded: document != nil,
+            loadFailed: loadError != nil
         )
         guard action == .reload else { return }
         await reloadDocument(for: live, clearing: false)
+    }
+
+    /// Raises the alert only while this screen is on top: an error that arrives after a page or
+    /// the map was pushed over it would otherwise surface on the wrong screen. The row's warning
+    /// glyph still records the failure.
+    func showRefreshError(_ message: String?) {
+        if isOnScreen {
+            refreshError = message
+        }
     }
 
     /// The ⋯ menu for an online list: Refresh Now / Copy URL / Stop Updating. While a refresh
@@ -49,7 +59,7 @@ extension KMLDetailView {
             let refreshing = refresher.phase(for: live) == .refreshing
             Menu {
                 Button {
-                    Task { refreshError = await refresher.refreshNowMessage(live) }
+                    Task { await showRefreshError(refresher.refreshNowMessage(live)) }
                 } label: {
                     Label("Refresh Now", systemImage: "arrow.clockwise")
                 }
@@ -77,7 +87,7 @@ extension KMLDetailView {
                 .frame(width: 24, height: 24)
             }
             .stopUpdatingConfirmation(target: $stopUpdatingTarget) { target in
-                Task { refreshError = await refresher.stopUpdatingMessage(target) }
+                Task { await showRefreshError(refresher.stopUpdatingMessage(target)) }
             }
             .accessibilityLabel("Online list")
         }

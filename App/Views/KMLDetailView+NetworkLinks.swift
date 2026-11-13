@@ -44,6 +44,10 @@ extension KMLDetailView {
             case let .existing(id):
                 networkLinkStatus = .idle
                 open(id)
+            case let .convertedInPlace(written):
+                // The written entry, not the catalogue's copy: its reload may have been overtaken.
+                networkLinkStatus = .idle
+                await reloadDocument(for: written)
             case .converted:
                 networkLinkStatus = .idle
                 await reloadDocument(for: liveEntry)
@@ -72,7 +76,7 @@ extension KMLDetailView {
                 case let .existing(id):
                     existing = existing ?? id
                     existingCount += 1
-                case .converted, .enqueued: added += 1
+                case .converted, .convertedInPlace, .enqueued: added += 1
                 }
             } catch {
                 failed += 1

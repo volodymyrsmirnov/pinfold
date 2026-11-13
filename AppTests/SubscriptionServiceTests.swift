@@ -246,7 +246,13 @@ struct SubscriptionServiceTests {
 
         let outcome = try await env.service.subscribeInPlace(entry, link: link)
 
-        #expect(outcome == .converted(entry.id))
+        guard case let .convertedInPlace(written) = outcome else {
+            Issue.record("expected .convertedInPlace, got \(outcome)")
+            return
+        }
+        #expect(written.id == entry.id)
+        #expect(written.contentSHA256 == ImportService.sha256Hex(fetched))
+        #expect(written.subscription?.url == feedURL)
         #expect(env.stub.urls == ["https://example.test/feed.kml"])
         let live = try env.entry(entry.id)
         #expect(try Data(contentsOf: env.storage.originalFile(for: live)) == fetched)
@@ -412,7 +418,12 @@ struct SubscriptionServiceTests {
         env.stub.respond(with: kml(["A"]))
         let overtaker = overtakeReloads(env.catalog)
 
-        #expect(try await env.service.subscribeInPlace(links, link: link) == .converted(links.id))
+        let outcome = try await env.service.subscribeInPlace(links, link: link)
+        guard case let .convertedInPlace(written) = outcome else {
+            Issue.record("expected .convertedInPlace, got \(outcome)")
+            return
+        }
+        #expect(written.id == links.id)
         overtaker.cancel()
         await overtaker.value
         // The scenario held: the subscription is on disk but not in the catalogue.

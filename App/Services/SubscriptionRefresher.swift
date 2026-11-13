@@ -117,8 +117,8 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     /// Updating does not depend on the catalogue publishing its reload, which a newer reload
     /// can overtake.
     @ObservationIgnored private var subscriptionGenerations: [String: Int] = [:]
-    /// Lists this window stopped, and whether the sidecar is written yet. The catalogue can still
-    /// show them subscribed (their reload was overtaken), so a later refresh fetches nothing.
+    /// Lists this window stopped, and whether the sidecar is written yet: the catalogue can still
+    /// show them subscribed (overtaken reload), so a later refresh fetches nothing.
     @ObservationIgnored private var stoppedFolders: [String: StopMark] = [:]
     private enum StopMark { case writing, written }
 
@@ -209,10 +209,13 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         subscriptionGenerations[folder, default: 0] &+= 1
     }
 
-    /// Whether this window stopped `folder` and it does not follow `url` again. Once the stop
-    /// is written, the sidecar on disk decides (another device may have subscribed it again);
-    /// it is read only for lists stopped here whose catalogue entry still shows a subscription.
-    private func isStopped(_ folder: String, following url: URL) -> Bool {
+    /// Whether this window stopped `folder` and it does not follow `url` again. Once written, the
+    /// sidecar decides (another device may have resubscribed), read only while the catalogue still
+    /// shows a subscription (`shown`); else the mark is dropped.
+    private func isStopped(_ folder: String, following url: URL, shown: Bool) -> Bool {
+        if !shown {
+            stoppedFolders.removeValue(forKey: folder)
+        }
         switch stoppedFolders[folder] {
         case nil:
             return false
@@ -357,19 +360,16 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         return result
     }
 
-    /// Whether a refresh that waited (for a fetch slot, or for its original to be hashed)
-    /// should still fetch: an automatic one only
-    /// while the scene is active and the device online (Refresh Now reports being offline as its
-    /// error), and only while its subscription generation is unchanged and this window has not
-    /// stopped the list, for a live list that still follows `subscription`'s URL, is not in the
-    /// trash and can be written.
+    /// Whether a refresh that waited (for a fetch slot, or for its original to be hashed) should
+    /// still fetch: an automatic one only while the scene is active and the device online (Refresh
+    /// Now reports being offline itself), and only for a live, writable, untrashed list this window
+    /// has not stopped that still follows `subscription`'s URL, at the same subscription generation.
     func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool, generation: Int) -> Bool {
         if automatic, !isSceneActive || network?.isOnline == false {
             return false
         }
         guard subscriptionGenerations[folder, default: 0] == generation,
-              !isStopped(folder, following: subscription.url),
-              let live = liveEntry(folder)
+              let live = liveEntry(folder), !isStopped(folder, following: subscription.url, shown: live.isOnline)
         else { return false }
         return live.subscription?.url == subscription.url && !live.isTrashed && !live.isReadOnly
     }

@@ -34,13 +34,7 @@ struct FileRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                // Re-evaluated each minute so "Updated 20s ago" keeps ticking.
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text(Self.secondaryLine(entry: entry, online: online, now: context.date))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                secondaryLineView
 
                 if entry.isReadOnly {
                     Label(readOnlyBadge, systemImage: "exclamationmark.triangle")
@@ -63,6 +57,26 @@ struct FileRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// Only an idle online list shows a relative time ("Updated 20s ago"); that row is
+    /// re-evaluated each minute so it keeps ticking, every other row is a plain view.
+    @ViewBuilder
+    private var secondaryLineView: some View {
+        if case .idle = online {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                secondaryText(now: context.date)
+            }
+        } else {
+            secondaryText(now: .now)
+        }
+    }
+
+    private func secondaryText(now: Date) -> some View {
+        Text(Self.secondaryLine(entry: entry, online: online, now: now))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 
     @ViewBuilder

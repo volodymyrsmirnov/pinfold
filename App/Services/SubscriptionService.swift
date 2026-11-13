@@ -31,6 +31,9 @@ enum SubscriptionURL {
         /// A normal list became the online list: one with the same content (`subscribe`), or
         /// the link file itself (`subscribeInPlace`).
         case converted(UUID)
+        /// `subscribeInPlace` converted the link file: the entry as written (new content and
+        /// subscription), for a view whose catalogue copy may lag behind.
+        case convertedInPlace(CatalogEntry)
         /// A new list is on the import queue.
         case enqueued
     }
@@ -110,15 +113,16 @@ enum SubscriptionURL {
         let fetched = try await fetch(url, filename: Self.filename(for: url, link: link))
         let subscription = makeSubscription(url, origin: .networkLink, link: link)
         let catalog = catalog, cache = cache, refresher = refresher
+        var written: CatalogEntry?
         let error: SubscriptionError? = await refresher.storageQueue.run {
             guard let live = catalog.entries.first(where: { $0.storageFolderName == folder }), !live.isReadOnly else {
                 return .readOnly
             }
             let storage = catalog.storage
             do {
-                _ = try await SubscriptionContentWriter.applyAndReindex(
+                written = try await SubscriptionContentWriter.applyAndReindex(
                     fetched.result, to: live, storage: storage, cache: cache
-                )
+                ).entry
             } catch {
                 return .writeFailed(error.localizedDescription)
             }
@@ -139,7 +143,9 @@ enum SubscriptionURL {
         }
         // Held as being added until the catalogue shows it (its reload may have been overtaken).
         coordinator.noteSubscribed(url, entry: entry, catalog: catalog)
-        return .converted(entry.id)
+        guard var written else { return .converted(entry.id) }
+        written.subscription = subscription
+        return .convertedInPlace(written)
     }
 
     // MARK: - Steps

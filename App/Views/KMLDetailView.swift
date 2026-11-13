@@ -57,6 +57,8 @@ struct KMLDetailView: View {
     /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
     @State var stopUpdatingTarget: CatalogEntry?
     @State var refreshError: String?
+    /// Whether this screen is on top; a late refresh error is dropped while a pushed page covers it.
+    @State var isOnScreen = false
     @State var loadError: Error?
     @State var searchText = ""
     @State var annotations: PlacemarkAnnotations?
@@ -168,7 +170,9 @@ struct KMLDetailView: View {
         }
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
+        .onAppear { isOnScreen = true }
         .onDisappear {
+            isOnScreen = false
             refreshError = nil
             stopUpdatingTarget = nil
         }

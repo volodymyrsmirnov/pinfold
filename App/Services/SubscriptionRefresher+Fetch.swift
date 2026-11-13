@@ -40,8 +40,10 @@ extension SubscriptionRefresher {
         } catch {
             return .failed(SubscriptionError(fetchError: error))
         }
+        // A 304 verifies something only if a validator actually went out with the request.
+        let sentValidator = validated && (state.etag != nil || state.lastModified != nil)
         guard case let .data(data) = response.body else {
-            return validated ? .unchanged(response, content: onDisk, hints: nil) : .failed(.http(304))
+            return sentValidator ? .unchanged(response, content: onDisk, hints: nil) : .failed(.http(304))
         }
         let verified = (onDisk ?? live.contentSHA256) == live.contentSHA256 ? live.contentSHA256 : nil
         // The stored server hints come from other content (a synced device that never fetched

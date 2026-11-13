@@ -165,6 +165,26 @@ extension SubscriptionRefresherTests {
         #expect(state.lastError != nil)
     }
 
+    /// Matching content but no stored validators: no conditional header goes out, so an
+    /// unrequested `304` verifies nothing and is a failure, not a check (K2).
+    @Test func refresh_304WithMatchingContentButNoValidators_isAnError() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        let state = SubscriptionState(
+            lastAttemptAt: Date(timeIntervalSince1970: 1000), contentSHA256: entry.contentSHA256
+        )
+        SubscriptionStateStore.write(state, in: env.resources(entry))
+        env.stub.respond(with: .notModified)
+        let refresher = env.makeRefresher()
+
+        let result = await refresher.refreshNow(entry)
+
+        #expect(env.stub.lastEtag == nil)
+        #expect(failure(of: result) == .http(304))
+        #expect(SubscriptionStateStore.read(in: env.resources(entry)).lastSuccessAt == nil)
+    }
+
     // MARK: - Deleted right after the content write (H5)
 
     @Test func refresh_listDeletedAfterTheContentWrite_doesNotRecreateResources() async throws {
