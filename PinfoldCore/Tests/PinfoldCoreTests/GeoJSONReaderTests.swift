@@ -247,4 +247,16 @@ struct GeoJSONReaderTests {
         }
         await #expect(throws: CancellationError.self) { try await task.value }
     }
+
+    @Test func collectionTitleOrMetadataTitleNamesTheDocument() throws {
+        let point = feature(#"{"type":"Point","coordinates":[1,2]}"#)
+        let usgs = try read(#"{"type":"FeatureCollection","metadata":{"title":"USGS All Earthquakes, Past Day"},"features":[\#(point)]}"#)
+        #expect(usgs.name == "USGS All Earthquakes, Past Day")
+        let titled = try read(#"{"type":"FeatureCollection","title":"Titled","features":[\#(point)]}"#)
+        #expect(titled.name == "Titled")
+        let named = try read(#"{"type":"FeatureCollection","name":"Named","title":"Titled","metadata":{"title":"Meta"},"features":[]}"#)
+        #expect(named.name == "Named")
+        let blank = try read(#"{"type":"FeatureCollection","name":" ","metadata":{"title":"Meta"},"features":[]}"#)
+        #expect(blank.name == "Meta")
+    }
 }

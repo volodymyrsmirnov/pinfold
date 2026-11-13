@@ -22,7 +22,7 @@ extension HomeView {
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
                     ForEach(displayedActive) { entry in
-                        FileRow(entry: entry)
+                        FileRow(entry: entry, online: onlineStatus(for: entry))
                             .tag(entry.id)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -33,6 +33,9 @@ extension HomeView {
                                 .disabled(entry.isReadOnly)
                             }
                             .contextMenu { activeRowMenu(for: entry) }
+                            .stopUpdatingConfirmation(
+                                target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
+                            )
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -45,7 +48,7 @@ extension HomeView {
                     Text("Files you trash will appear here.")
                 }
             } else {
-                TrashList(trashed: trashed)
+                TrashList(trashed: trashed, isSelecting: isSelecting)
             }
         }
     }

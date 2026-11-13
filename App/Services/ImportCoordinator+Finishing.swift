@@ -23,6 +23,11 @@ extension ImportCoordinator {
             )
         case let .prepared(_, name):
             ItemContext(filename: name, interactive: item.interactive, ownedURL: nil, pathKey: nil)
+        case let .subscribed(result):
+            ItemContext(
+                filename: result.sourceFilename, interactive: item.interactive, ownedURL: nil, pathKey: nil,
+                subscriptionURL: result.subscription?.url
+            )
         }
     }
 
@@ -34,6 +39,9 @@ extension ImportCoordinator {
         }
         if let key = context.pathKey {
             trackedPaths.remove(key)
+        }
+        if let url = context.subscriptionURL {
+            pendingSubscriptionURLs.remove(url)
         }
         completedCount += 1
     }

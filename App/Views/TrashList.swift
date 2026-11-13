@@ -4,6 +4,8 @@ import SwiftUI
 /// entry (swipe or context menu) or the whole Trash ("Empty Trash").
 struct TrashList: View {
     let trashed: [CatalogEntry]
+    /// Select mode owns the bottom bar, so the Empty Trash item steps aside while it is on.
+    var isSelecting = false
 
     @Environment(Catalog.self) private var catalog
 
@@ -13,15 +15,15 @@ struct TrashList: View {
     var body: some View {
         List {
             Section {
-                Button("Empty Trash", role: .destructive) { isConfirmingEmpty = true }
-            }
-            Section {
                 ForEach(trashed) { entry in
                     row(for: entry)
                 }
+            } footer: {
+                Text("Items in Trash can be restored or deleted permanently.")
             }
         }
         .listStyle(.insetGrouped)
+        .toolbar { emptyTrashToolbar }
         .confirmationDialog(
             "Delete permanently?",
             isPresented: isConfirmingSingle,
@@ -34,16 +36,31 @@ struct TrashList: View {
         } message: { entry in
             Text("\u{201C}\(entry.displayName)\u{201D} will be deleted and can't be recovered.")
         }
-        .confirmationDialog(
-            "Empty Trash?",
-            isPresented: $isConfirmingEmpty,
-            titleVisibility: .visible
-        ) {
-            Button("Delete \(trashed.count) Permanently", role: .destructive) {
-                Task { await catalog.emptyTrash() }
+    }
+
+    /// Files / Photos-style "Recently Deleted" control: a red plain-text item at the trailing
+    /// end of the bottom bar. The flexible spacer keeps it right-aligned and lets the import
+    /// progress label (also a bottom-bar item) sit at the leading end when both show.
+    @ToolbarContentBuilder
+    private var emptyTrashToolbar: some ToolbarContent {
+        if !trashed.isEmpty, !isSelecting {
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+                Button("Empty Trash", role: .destructive) { isConfirmingEmpty = true }
+                    .tint(.red)
+                    // On the button so the dialog anchors to it, not to the segmented control.
+                    .confirmationDialog(
+                        "Empty Trash?",
+                        isPresented: $isConfirmingEmpty,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete \(trashed.count) Permanently", role: .destructive) {
+                            Task { await catalog.emptyTrash() }
+                        }
+                    } message: {
+                        Text("Everything in Trash will be deleted and can't be recovered.")
+                    }
             }
-        } message: {
-            Text("Everything in Trash will be deleted and can't be recovered.")
         }
     }
 

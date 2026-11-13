@@ -257,10 +257,10 @@ These parse without error but have **no effect**. Including them adds noise; omi
 - `<Region>`, `<LatLonAltBox>`, `<Lod>` → ignored.
 - `<altitudeMode>` / `<gx:altitudeMode>` → ignored (altitude *values* are kept but the mode
   is not; Pinfold renders in 2D, so altitude has no visible effect).
-- `<NetworkLink>` → **never fetched automatically.** If a file contains *only* network links
-  (no placemarks of its own), Pinfold offers a one-time download of the linked http(s) files,
-  which runs only when the user confirms it; the result is a static copy that is not
-  refreshed. Prefer inlining the content into the file instead.
+- `<NetworkLink>` → not fetched until the person taps **Subscribe** on the file's link card;
+  then the file becomes an online list (see "Online lists"). Inside a *fetched* file, links are
+  not followed. `<NetworkLinkControl><Update>` (Create/Change/Delete), `viewRefreshMode`/bbox,
+  `httpQuery`, `viewFormat` and cookies are ignored.
 - `<GroundOverlay>`, `<ScreenOverlay>`, `<PhotoOverlay>` → ignored.
 - `<Model>` → not rendered (a placemark whose only geometry is a `<Model>` is dropped).
 - `<visibility>`, `<open>` → ignored.
@@ -268,6 +268,38 @@ These parse without error but have **no effect**. Including them adds noise; omi
   `<SimpleData>`/`<Data>` *values* are read).
 - IconStyle `<scale>`/`<hotSpot>`/`<heading>`, PolyStyle `<outline>`, `<colorMode>` →
   ignored.
+
+## Online lists (NetworkLink and URL subscriptions)
+
+A file whose `<NetworkLink>` the person subscribes to becomes an **online list**: Pinfold
+fetches the linked file and refreshes it at launch, on return to the foreground, and on a
+timer while the app is open (never in the background). Each URL is one list; the list's name
+is fixed when subscribed.
+
+- Honoured: the link's `refreshMode` (`onInterval`, `onExpire`, `onChange`) and
+  `refreshInterval`, plus `<NetworkLinkControl>` `minRefreshPeriod` and `expires`. Never more
+  often than every 5 minutes, whatever the file asks for.
+- Ignored: `<Update>` (Create/Change/Delete — every refresh replaces the whole file),
+  `viewRefreshMode`/bbox, `httpQuery`, `viewFormat`, cookies. Links inside the fetched file
+  are not followed, so the target must hold the placemarks itself.
+- A person can also subscribe directly to a KML, KMZ or GeoJSON URL; those (and `onChange` or
+  no mode) refresh **hourly**.
+- **Keep placemark `id`s stable across server updates.** Notes, favorites and "visited" marks
+  are keyed by `id`; a changed `id` orphans them. GeoJSON: keep feature `id`s stable.
+
+## Serving a live file
+
+If you host a file that Pinfold subscribes to:
+
+- Keep placemark (or GeoJSON feature) `id`s stable between versions.
+- Support conditional requests (`ETag` / `Last-Modified`) if you can — an unchanged file then
+  costs almost nothing. It is appreciated, not required.
+- With `refreshMode` `onExpire`, send `<NetworkLinkControl><expires>` or `Cache-Control:
+  max-age`; both are honoured.
+- Use `https`: `http` is upgraded to `https`. Redirects to a different host are refused.
+- Keep the file under 50 MB. A bad response (error, invalid file, too large) leaves the last
+  good copy in place.
+- A refresh must contain placemarks itself; a file that only links to other files is an error.
 
 ## Stable identity & good-citizen details
 
@@ -290,7 +322,8 @@ These parse without error but have **no effect**. Including them adds noise; omi
 | RGBA / `#rrggbb` colors | Use **`AABBGGRR`** hex (alpha first, then blue, green, red). |
 | Relying on remote `<img>` URLs for essential pictures | They show only if the user allows downloads. Package them in a KMZ, or use `gx_media_links` for a gallery. |
 | A `<!DOCTYPE>` with an internal subset (`[ <!ENTITY …> ]`) | Remove the DOCTYPE entirely — a subset rejects the whole file. |
-| Relying on `<NetworkLink>` / overlays / 3D | Not rendered (network links only via a one-time, user-confirmed download). Inline the content; use Point/Line/Polygon geometry. |
+| Relying on `<NetworkLink>` tricks / overlays / 3D | A network link only works as a whole-file subscription (see "Online lists"); overlays and 3D are not rendered. Use Point/Line/Polygon geometry. |
+| Changing placemark `id`s between server updates | Keep them stable, or the user's notes and favourites on that placemark are orphaned. |
 | Nameless placemarks | Every placemark needs a clear `<name>`. |
 | Places drawn only as a line or polygon | Add a `<Point>` so the place gets a pin and appears on the Favorites map. |
 

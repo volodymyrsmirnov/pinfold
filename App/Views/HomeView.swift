@@ -50,6 +50,13 @@ struct HomeView: View {
     /// Presents the `fileImporter` picker sheet. Distinct from
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
     @State var isFileImporterPresented = false
+    /// Subscribe to URL: the alert, its text, a download in flight, and the error to show.
+    @State var subscribePrompt = SubscribePrompt()
+    @State var isSubscribing = false
+    @Environment(SubscriptionRefresher.self) var refresher
+    /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
+    @State var stopUpdatingTarget: CatalogEntry?
+    @State var refreshError: String?
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State var isSettingsPresented = false
@@ -204,6 +211,10 @@ struct HomeView: View {
             handleFileImporterResult(result)
         }
         .modifier(ImportAlertsModifier(importCoordinator: importCoordinator))
+        .modifier(SubscribeAlertsModifier(
+            prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
+        ))
+        .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // Rename alert — a single TextField prefilled with the current name. `presenting` keys
         // the alert to the entry being renamed; Save commits the trimmed name via
         // `catalog.rename` (which rejects an empty/whitespace name as a no-op).

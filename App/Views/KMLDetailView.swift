@@ -38,6 +38,7 @@ struct KMLDetailView: View {
     @Environment(\.scenePhase) var scenePhase
     @Environment(\.resourceCache) var resourceCache
     @Environment(Catalog.self) var catalog: Catalog?
+    @Environment(SubscriptionRefresher.self) var refresher: SubscriptionRefresher?
     @Environment(ImportCoordinator.self) var importCoordinator: ImportCoordinator?
 
     // MARK: - State
@@ -48,6 +49,16 @@ struct KMLDetailView: View {
     /// pushed `PlacemarkDetailView` is popped. Reloading on return would nil `document`/`outline`,
     /// swap the list for the loading view, and lose the scroll position. See the `.task(id:)`.
     @State var loadedEntryID: CatalogEntry.ID?
+    /// The `contentSHA256` of the original `document` was parsed from, set only together with
+    /// `document`; a differing live value (an online refresh) triggers a reload.
+    @State var loadedSHA: String?
+    /// Orders document loads so only the newest one publishes (see `loadDocument`).
+    @State var loadTickets = DocumentLoad.Tickets()
+    /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
+    @State var stopUpdatingTarget: CatalogEntry?
+    @State var refreshError: String?
+    /// Whether this screen is on top; a late refresh error is dropped while a pushed page covers it.
+    @State var isOnScreen = false
     @State var loadError: Error?
     @State var searchText = ""
     @State var annotations: PlacemarkAnnotations?
@@ -122,6 +133,9 @@ struct KMLDetailView: View {
         .navigationTitle(entry.displayName)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            if refresher != nil, liveEntry.isOnline {
+                ToolbarItem(placement: .topBarTrailing) { onlineMenu }
+            }
             // Sort menu: Document order vs. Nearest first. "Nearest" is disabled until a
             // location fix is known (so the user isn't offered a sort that can't be applied).
             ToolbarItem(placement: .topBarTrailing) {
@@ -153,6 +167,18 @@ struct KMLDetailView: View {
                 .accessibilityLabel("Map")
                 .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
             }
+        }
+        .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
+        // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
+        .onAppear { isOnScreen = true }
+        .onDisappear {
+            isOnScreen = false
+            refreshError = nil
+            stopUpdatingTarget = nil
+        }
+        // One cancellable reload per entry and live content hash (see `reloadIfContentChanged`).
+        .task(id: contentKey) {
+            await reloadIfContentChanged(to: liveEntry)
         }
         .sheet(item: $infoSheet) { content in
             DescriptionSheet(content: content, entry: entry)
@@ -203,6 +229,10 @@ struct KMLDetailView: View {
             if let document {
                 await refreshNotices(for: document)
             }
+            // An online refresh may have replaced the original while this first load ran.
+            if !Task.isCancelled {
+                await reloadIfContentChanged(to: liveEntry)
+            }
         }
         // Second consume path: a deep link into the file that is ALREADY open. The view
         // keeps its identity (`.id(entry.id)` unchanged) so the load `.task` does NOT
@@ -250,6 +280,7 @@ struct KMLDetailView: View {
         .task(id: ImmediateOutlineTrigger(
             documentID: entry.id,
             documentLoaded: document != nil,
+            documentSHA: loadedSHA,
             collapsed: collapsedFolderIDs,
             nearestFirst: nearestFirst,
             corpusReady: isSearchActive && searchCorpus != nil,

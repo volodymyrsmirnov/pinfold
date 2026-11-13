@@ -32,6 +32,19 @@ struct ImportResult {
     /// the parsed document so `commit` can write the local `placemarks-index.json` without a
     /// re-parse. Backs catalogue-wide search.
     let indexEntries: [PlacemarkIndex.Entry]
+    /// Set when this import creates an online list; `commit` writes it into the new sidecar.
+    var subscription: Subscription?
+    /// The refresh state of the fetch that created an online list (its validators and server
+    /// hints); `commit` writes it into the new `resources/`, so the first refresh is conditional
+    /// and waits until the list is due.
+    var subscriptionState: SubscriptionState?
+    /// Every `<Placemark>` in the document, with or without a `<Point>`.
+    var placemarkCount = 0
+    /// How many `<NetworkLink>`s the document carries. With no placemarks, the file only links
+    /// to other files (a refresh rejects that).
+    var networkLinkCount = 0
+    /// The document's `<NetworkLinkControl>` refresh hints, recorded by a refresh.
+    var networkLinkControl: KMLNetworkLinkControl?
 }
 
 // MARK: - ImportError
@@ -159,7 +172,10 @@ enum ImportService {
             originalData: data,
             format: format,
             remoteResourceHrefs: remoteResourceHrefs,
-            indexEntries: PlacemarkIndex.entries(for: document)
+            indexEntries: PlacemarkIndex.entries(for: document),
+            placemarkCount: document.placemarkCount,
+            networkLinkCount: document.networkLinks.count,
+            networkLinkControl: document.networkLinkControl
         )
     }
 
@@ -226,7 +242,8 @@ enum ImportService {
             pointCount: result.pointCount,
             contentSHA256: result.contentSHA256,
             storageFolderName: result.storageFolderName,
-            trashedAt: nil
+            trashedAt: nil,
+            subscription: result.subscription
         )
 
         // Create on-disk folders before writing any files. From here on a failure must leave
@@ -249,15 +266,13 @@ enum ImportService {
         // import: drop the `resources/` directory (its existence is the scanner's
         // "materialized" marker) and let the materialisation pass rebuild it.
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        var cacheIsReady = true
         do {
-            if result.format == .kmz {
-                try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+            try writeDerivedData(for: result, to: resourcesDir, cache: cache)
+            // Only into a materialised `resources/`: a folder holding just this file would read
+            // as materialised and never be rebuilt. Without it the first refresh is a full GET.
+            if let state = result.subscriptionState {
+                SubscriptionStateStore.write(state, in: resourcesDir)
             }
-            try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
-            // Stamp at import so the scanner neither re-parses nor re-stamps a fresh entry.
-            PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
-            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
         } catch {
             ImportService.logger.error(
                 """
@@ -266,13 +281,6 @@ enum ImportService {
                 """
             )
             try? FileManager.default.removeItem(at: resourcesDir)
-            cacheIsReady = false
-        }
-
-        // Kick off remote downloads in the background — non-blocking, offline-first.
-        // Skipped when the cache write failed: the materialisation pass rebuilds it all.
-        if cacheIsReady {
-            downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
         }
 
         // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
@@ -280,6 +288,31 @@ enum ImportService {
         SpotlightIndexer.index(entry: entry, indexEntries: result.indexEntries)
 
         return entry
+    }
+}
+
+// MARK: - Derived data
+
+extension ImportService {
+    /// Writes everything in `resourcesDir` that derives from `result`'s original: a KMZ's
+    /// embedded media (with its manifest), the search index, its source stamp and the
+    /// derived-data version. Then starts the remote downloads in the background (non-blocking,
+    /// offline-first), which records `remote-hrefs.json`. Shared by `commit` and the refresh of
+    /// an online list (`SubscriptionContentWriter`).
+    ///
+    /// Throws, starting no downloads, when a write fails; the caller decides how to recover
+    /// (the index is written after the KMZ media, so a failure always leaves the index absent
+    /// and the materialisation pass rebuilds it).
+    static func writeDerivedData(for result: ImportResult, to resourcesDir: URL, cache: ResourceCache) throws {
+        try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        if result.format == .kmz {
+            try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+        }
+        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        // Stamp so the scanner neither re-parses nor re-stamps freshly written data.
+        PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+        PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+        downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
     }
 }
 

@@ -13,6 +13,8 @@ struct WindowCommands {
     /// Whether importing is allowed right now (not while an import stalls on a prompt).
     var canImport: Bool
     let importFiles: () -> Void
+    /// Opens the "Subscribe to URL" alert; gated by `canImport` like importing.
+    let subscribeToURL: () -> Void
     let focusSearch: () -> Void
     let rename: (CatalogEntry) -> Void
     let editTags: (CatalogEntry) -> Void
@@ -39,6 +41,12 @@ struct WindowCommands {
     func importIfAllowed() {
         if canImport {
             importFiles()
+        }
+    }
+
+    func subscribeIfAllowed() {
+        if canImport {
+            subscribeToURL()
         }
     }
 

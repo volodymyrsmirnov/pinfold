@@ -152,6 +152,33 @@ enum SpotlightIndexer {
         spotlightDeindex(identifiers: ids, domains: [domain(forFolderName: folderName)])
     }
 
+    /// The Spotlight ids of `previous`'s named placemarks that `current` no longer indexes
+    /// (gone, or now nameless): what a content refresh must remove, since `index` only adds and
+    /// updates items.
+    static func removedPlacemarkIdentifiers(
+        folderName: String, previous: [PlacemarkIndex.Entry], current: [PlacemarkIndex.Entry]
+    ) -> [String] {
+        let kept = Set(current.lazy.filter { !$0.name.isEmpty }.map(\.key))
+        var seen = Set<String>()
+        return previous.compactMap { placemark in
+            guard !placemark.name.isEmpty, !kept.contains(placemark.key), seen.insert(placemark.key).inserted
+            else { return nil }
+            return SpotlightID.placemark(folderName: folderName, placemarkKey: placemark.key)
+        }
+    }
+
+    /// Deletes everything in `entry`'s per-folder domain, then indexes `entry` afresh, in one
+    /// task so the delete always lands first. For a content change with no previous index to
+    /// tell which placemarks left. Fire-and-forget.
+    nonisolated static func reindexReplacingDomain(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
+        spotlightReplaceDomain(entry: entry, indexEntries: indexEntries)
+    }
+
+    /// Removes the given Spotlight items. Fire-and-forget.
+    static func deindex(identifiers: [String]) {
+        spotlightDeindex(identifiers: identifiers, domains: [])
+    }
+
     /// Deletes the two shared domains 1.x used. Run once, on the first 2.0 launch, before the
     /// full reindex. Fire-and-forget.
     static func clearLegacyDomains() {
@@ -175,6 +202,24 @@ private func spotlightIndex(entry: CatalogEntry, indexEntries: [PlacemarkIndex.E
         } catch {
             SpotlightIndexer.logger.error(
                 "Failed to index \(items.count) Spotlight item(s): \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+}
+
+/// Deletes `entry`'s domain and then indexes its items, in one detached task (so the two can't
+/// land out of order), logging any failure. A `nonisolated` free function like `spotlightIndex`.
+private func spotlightReplaceDomain(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
+    Task.detached(priority: .utility) {
+        let index = CSSearchableIndex.default()
+        let domain = SpotlightIndexer.domain(forFolderName: entry.storageFolderName)
+        let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
+        do {
+            try await index.deleteSearchableItems(withDomainIdentifiers: [domain])
+            try await index.indexSearchableItems(items)
+        } catch {
+            SpotlightIndexer.logger.error(
+                "Failed to replace a Spotlight domain: \(error.localizedDescription, privacy: .public)"
             )
         }
     }

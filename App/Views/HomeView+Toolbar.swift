@@ -6,8 +6,14 @@ extension HomeView {
     @ToolbarContentBuilder
     var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            Button {
-                isFileImporterPresented = true
+            Menu {
+                Button("Choose File\u{2026}", systemImage: "doc") {
+                    isFileImporterPresented = true
+                }
+                Button("Subscribe to URL\u{2026}", systemImage: "globe") {
+                    beginSubscribe()
+                }
+                .disabled(isSubscribing)
             } label: {
                 Label("Import", systemImage: "plus")
             }
@@ -17,7 +23,7 @@ extension HomeView {
             // Also disabled while a duplicate alert stalls the queue: the coordinator is
             // waiting on the user's decision, so offering more imports would contradict
             // the stalled state (queued URLs are kept either way).
-            .disabled(importCoordinator.isImporting || importCoordinator.pendingDuplicate != nil)
+            .disabled(importCoordinator.isImporting || importCoordinator.pendingDuplicate != nil || isSubscribing)
         }
         selectToolbarItem
         selectBottomBar
@@ -29,7 +35,14 @@ extension HomeView {
         // title intact on every size class. Hidden while select mode owns the bottom bar
         // (Tag / Trash): the two would crowd each other, and the top-bar import button is
         // already disabled during an import.
-        if importCoordinator.isImporting, !isSelecting {
+        if isSubscribing, !isSelecting {
+            ToolbarItem(placement: .bottomBar) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Downloading\u{2026}").font(.subheadline)
+                }
+            }
+        } else if importCoordinator.isImporting, !isSelecting {
             ToolbarItem(placement: .bottomBar) {
                 ImportProgressLabel(coordinator: importCoordinator)
             }
@@ -75,8 +88,10 @@ extension HomeView {
     var windowCommands: WindowCommands {
         WindowCommands(
             selectedEntry: selection.flatMap { id in active.first { $0.id == id } },
-            canImport: !importCoordinator.isImporting && importCoordinator.pendingDuplicate == nil,
+            canImport: !importCoordinator.isImporting && importCoordinator.pendingDuplicate == nil
+                && !isSubscribing,
             importFiles: { isFileImporterPresented = true },
+            subscribeToURL: { beginSubscribe() },
             focusSearch: { isSearchFocused = true },
             rename: { beginRename($0) },
             editTags: { beginEditTags($0) },

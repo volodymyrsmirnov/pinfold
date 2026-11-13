@@ -98,4 +98,67 @@ struct SnapshotWriteTests {
         #expect(try storage.readMetadata(forFolderNamed: entry.storageFolderName) == sidecarBefore)
         #expect(try !names(in: storage, entry).contains { $0.hasSuffix(".tmp") })
     }
+
+    // MARK: - Crash leftovers (F11)
+
+    @Test func differentName_leftoverFileAtNewName_isReplaced() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        // A crash after an earlier write placed the new file but before the sidecar named it.
+        let leftover = storage.folder(for: entry).appendingPathComponent("new.kml")
+        try kml("Leftover").write(to: leftover)
+        let new = try prepared("New", filename: "new.kml")
+
+        let updated = try writeSnapshot(new, to: entry, storage: storage)
+
+        #expect(try Data(contentsOf: storage.originalFile(for: updated)) == new.originalData)
+        #expect(try storage.readMetadata(forFolderNamed: entry.storageFolderName)?.sourceFilename == "new.kml")
+        #expect(try names(in: storage, entry) == ["metadata.json", "new.kml"])
+    }
+
+    @Test func staleSnapshotTemps_areSwept_freshOnesKept() async throws {
+        let (storage, entry) = try await makeEntry(filename: "same.kml")
+        let folder = storage.folder(for: entry)
+        let stale = folder.appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
+        let fresh = folder.appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
+        try Data("old".utf8).write(to: stale)
+        try Data("busy".utf8).write(to: fresh)
+        try FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-3600)],
+                                              ofItemAtPath: stale.path)
+
+        _ = try writeSnapshot(prepared("New", filename: "same.kml"), to: entry, storage: storage)
+
+        #expect(!FileManager.default.fileExists(atPath: stale.path))
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+    }
+
+    // MARK: - Resource reset
+
+    @Test func all_isUnchangedBehaviour() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        ResourceManifestStore.shared.updateState(in: resourcesDir) { $0.consent = true }
+        SubscriptionStateStore.write(SubscriptionState(etag: "\"v1\""), in: resourcesDir)
+
+        _ = try writeSnapshot(prepared("New", filename: "old.kml"), to: entry, storage: storage)
+
+        // The default drops all of resources/; it rebuilds on the next reload.
+        #expect(!FileManager.default.fileExists(atPath: resourcesDir.path))
+    }
+
+    @Test func derivedOnly_prunesDerivedButKeepsChoices() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        ResourceManifestStore.shared.updateState(in: resourcesDir) { $0.consent = true }
+        let state = SubscriptionState(etag: "\"v1\"")
+        SubscriptionStateStore.write(state, in: resourcesDir)
+        #expect(PlacemarkIndex.exists(in: resourcesDir))
+
+        _ = try writeSnapshot(prepared("New", filename: "old.kml"), to: entry, storage: storage,
+                              resetResources: .derivedOnly)
+
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: resourcesDir.path).sorted()
+        #expect(remaining == ["download-state.json", SubscriptionStateStore.filename].sorted())
+        #expect(ResourceManifestStore.shared.state(in: resourcesDir).consent)
+        #expect(SubscriptionStateStore.read(in: resourcesDir) == state)
+    }
 }

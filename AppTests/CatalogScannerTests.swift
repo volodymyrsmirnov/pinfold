@@ -520,4 +520,25 @@ import Testing
         #expect(ResourceManifestStore.shared.manifest(in: dir).isEmpty)
         #expect(scanner.cache.localURL(forHref: "images/icon-1.png", in: dir) == nil)
     }
+
+    @Test func scanner_populatesSubscription() throws {
+        let (scanner, storage) = makeScanner()
+        let dir = storage.root.appendingPathComponent("sub", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let sub = try Subscription(
+            url: #require(URL(string: "https://example.com/m.kml")), origin: .url,
+            subscribedAt: Date(timeIntervalSince1970: 5), refreshMode: nil, refreshInterval: nil
+        )
+        let meta = EntryMetadata(
+            id: UUID(), displayName: "sub", sourceFilename: "sub.kml",
+            importDate: Date(timeIntervalSince1970: 1), pointCount: 1, contentSHA256: "s",
+            trashedAt: nil, subscription: sub
+        )
+        try meta.encoded().write(to: dir.appendingPathComponent("metadata.json"))
+        try Data("<kml/>".utf8).write(to: dir.appendingPathComponent("sub.kml"))
+
+        let entry = try #require(scanner.scan().first)
+        #expect(entry.subscription == sub)
+        #expect(entry.isOnline)
+    }
 }

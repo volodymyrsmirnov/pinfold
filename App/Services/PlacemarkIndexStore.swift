@@ -138,6 +138,16 @@ final class PlacemarkIndexStore: @unchecked Sendable {
 
     // MARK: - Pruning
 
+    /// Drops the cached index of `resourcesDir` and the cached notes of `sidecar`, so the next
+    /// search re-reads them even when a rewrite left the same modification date and size (a
+    /// refreshed online list).
+    func invalidate(resourcesDir: URL, sidecar: URL) {
+        lock.withLock {
+            _ = indexes.removeValue(forKey: resourcesDir.path)
+            _ = sidecars.removeValue(forKey: sidecar.path)
+        }
+    }
+
     /// Drops cached indexes and sidecars whose resources directory / sidecar is not in the
     /// given sets (entries removed from the catalogue).
     func prune(keeping resourcesDirs: Set<URL>, sidecars keptSidecars: Set<URL> = []) {

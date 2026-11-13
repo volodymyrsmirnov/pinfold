@@ -66,6 +66,9 @@ final class ImportCoordinator {
         case owned(OwnedFile)
         /// Test seam: bytes with a filename, so tests need no file URLs.
         case prepared(data: Data, filename: String)
+        /// A fetched and prepared new online list (`result.subscription` set). Never prompts
+        /// as a duplicate.
+        case subscribed(ImportResult)
     }
 
     struct PendingImport {
@@ -82,6 +85,8 @@ final class ImportCoordinator {
         let ownedURL: URL?
         var cleanupFolder: URL?
         let pathKey: String?
+        /// The URL a new online list follows, held in `pendingSubscriptionURLs` until done.
+        var subscriptionURL: URL?
     }
 
     // MARK: - Published state
@@ -125,6 +130,15 @@ final class ImportCoordinator {
     /// path is accepted once, so the opened file and the inbox scan that later lists the same
     /// file cannot both import it.
     var trackedPaths: Set<String> = []
+    /// URLs of new online lists that are queued or being committed (and reloaded), so a second
+    /// subscribe of the same URL does not add another list (`isSubscribing(to:in:)`).
+    var pendingSubscriptionURLs: Set<URL> = []
+    /// Online lists subscribed this session (a new list committed, or a list converted by
+    /// `SubscriptionService`) that `catalog.entries` does not show following their URL yet (a
+    /// newer reload overtook the one awaited after the write), keyed by URL. Kept until the
+    /// catalogue shows that very entry following the URL, so a subscribe of the URL meanwhile
+    /// does not add a second list.
+    var committedSubscriptions: [URL: CatalogEntry] = [:]
     /// Hashes whose commit (and the reload that follows) has not finished yet.
     var inFlightHashes: Set<String> = []
     /// Hashes committed this session that `catalog.entries` may not show yet (a newer reload can
@@ -165,6 +179,7 @@ final class ImportCoordinator {
     /// the previous root, so a manual re-import of the same file must not be dropped for them.
     func storageDidChange() {
         recentlyCommittedHashes.removeAll()
+        committedSubscriptions.removeAll()
     }
 
     /// Resumes draining and starts on anything queued while held.
@@ -231,7 +246,7 @@ final class ImportCoordinator {
         append(pending, catalog: catalog, cache: cache)
     }
 
-    private func append(_ items: [PendingImport], catalog: Catalog, cache: ResourceCache) {
+    func append(_ items: [PendingImport], catalog: Catalog, cache: ResourceCache) {
         guard !items.isEmpty else { return }
         // A new batch starts when nothing is queued, running or stalled: restart the counters.
         if !isImporting, queue.isEmpty, pendingDuplicate == nil {
@@ -262,6 +277,10 @@ final class ImportCoordinator {
                 untrack(url)
             case .prepared:
                 break
+            case let .subscribed(result):
+                if let url = result.subscription?.url {
+                    pendingSubscriptionURLs.remove(url)
+                }
             }
         }
     }
@@ -359,7 +378,8 @@ final class ImportCoordinator {
             return try await readAndPrepareFile(file.url, filename: filename)
         case let .prepared(data, name):
             return try await prepareBytes(data, filename: name)
+        case let .subscribed(result):
+            return result
         }
     }
-
 }

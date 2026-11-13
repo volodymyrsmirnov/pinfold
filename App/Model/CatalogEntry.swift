@@ -19,6 +19,8 @@ struct CatalogEntry: Identifiable, Equatable {
     /// User-assigned labels (per-ENTRY), copied from the sidecar so the catalogue list can
     /// render filter chips and per-row tag text without re-reading metadata. Kept sorted.
     var tags: [String] = []
+    /// Set when the list follows a URL and refreshes itself (see `Subscription`).
+    var subscription: Subscription?
     /// Whether the entry's `metadata.json` was read normally. Anything but `.ok` means the
     /// entry was derived in memory and must not be mutated (B2, B12).
     var sidecarState: SidecarState = .ok
@@ -42,6 +44,11 @@ struct CatalogEntry: Identifiable, Equatable {
     var isTrashed: Bool {
         trashedAt != nil
     }
+
+    /// `true` when the list follows a URL.
+    var isOnline: Bool {
+        subscription != nil
+    }
 }
 
 extension CatalogEntry {
@@ -56,7 +63,8 @@ extension CatalogEntry {
             contentSHA256: metadata.contentSHA256,
             storageFolderName: storageFolderName,
             trashedAt: metadata.trashedAt,
-            tags: metadata.tags
+            tags: metadata.tags,
+            subscription: metadata.subscription
         )
     }
 
@@ -70,7 +78,8 @@ extension CatalogEntry {
             pointCount: pointCount,
             contentSHA256: contentSHA256,
             trashedAt: trashedAt,
-            tags: tags
+            tags: tags,
+            subscription: subscription
         )
     }
 }
