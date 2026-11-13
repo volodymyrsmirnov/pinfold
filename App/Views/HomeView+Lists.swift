@@ -45,7 +45,7 @@ extension HomeView {
                     Text("Files you trash will appear here.")
                 }
             } else {
-                TrashList(trashed: trashed)
+                TrashList(trashed: trashed, isSelecting: isSelecting)
             }
         }
     }
