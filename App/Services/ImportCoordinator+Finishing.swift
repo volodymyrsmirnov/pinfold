@@ -23,6 +23,8 @@ extension ImportCoordinator {
             )
         case let .prepared(_, name):
             ItemContext(filename: name, interactive: item.interactive, ownedURL: nil, pathKey: nil)
+        case let .subscribed(result):
+            ItemContext(filename: result.sourceFilename, interactive: item.interactive, ownedURL: nil, pathKey: nil)
         }
     }
 

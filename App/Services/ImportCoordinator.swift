@@ -66,6 +66,9 @@ final class ImportCoordinator {
         case owned(OwnedFile)
         /// Test seam: bytes with a filename, so tests need no file URLs.
         case prepared(data: Data, filename: String)
+        /// A fetched and prepared new online list (`result.subscription` set). Never prompts
+        /// as a duplicate.
+        case subscribed(ImportResult)
     }
 
     struct PendingImport {
@@ -231,7 +234,7 @@ final class ImportCoordinator {
         append(pending, catalog: catalog, cache: cache)
     }
 
-    private func append(_ items: [PendingImport], catalog: Catalog, cache: ResourceCache) {
+    func append(_ items: [PendingImport], catalog: Catalog, cache: ResourceCache) {
         guard !items.isEmpty else { return }
         // A new batch starts when nothing is queued, running or stalled: restart the counters.
         if !isImporting, queue.isEmpty, pendingDuplicate == nil {
@@ -260,7 +263,7 @@ final class ImportCoordinator {
                 untrack(file.url)
             case let .picker(url):
                 untrack(url)
-            case .prepared:
+            case .prepared, .subscribed:
                 break
             }
         }
@@ -359,7 +362,8 @@ final class ImportCoordinator {
             return try await readAndPrepareFile(file.url, filename: filename)
         case let .prepared(data, name):
             return try await prepareBytes(data, filename: name)
+        case let .subscribed(result):
+            return result
         }
     }
-
 }

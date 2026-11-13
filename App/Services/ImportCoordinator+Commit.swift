@@ -42,6 +42,13 @@ extension ImportCoordinator {
         catalog: Catalog,
         cache: ResourceCache
     ) async {
+        if result.subscription != nil {
+            // A new online list is its own list, whatever else has the same bytes: no duplicate
+            // prompt and no hash dedup (`SubscriptionService` has already turned a matching
+            // normal list into the online one instead of enqueueing).
+            await commitAndFinish(result, context, catalog: catalog, cache: cache)
+            return
+        }
         if inFlightHashes.contains(result.contentSHA256) {
             // The same bytes are already being committed: never start a second commit.
             finish(context, deleteOwned: true)

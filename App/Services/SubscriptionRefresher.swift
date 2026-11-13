@@ -81,7 +81,10 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored let clock: () -> Date
     @ObservationIgnored private let cache: ResourceCache
     @ObservationIgnored private let fetcher: Fetcher
-    @ObservationIgnored private let storageQueue: StorageApplyQueue
+    /// Shared with `SubscriptionService`, whose subscribe writes are serialised with refreshes.
+    /// Never call `refreshNow`, `refreshDue` or `stopUpdating` from inside one of its
+    /// operations: they wait on this queue themselves.
+    @ObservationIgnored let storageQueue: StorageApplyQueue
     @ObservationIgnored private let fetchSlots = FetchSlots(limit: maxParallelFetches)
     /// Refresh states read from `resources/`, keyed by the resources directory path.
     @ObservationIgnored private var states: [String: SubscriptionState] = [:]
@@ -152,6 +155,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         SubscriptionStateStore.write(state, in: dir)
         states[dir.path] = state
         stateRevision &+= 1
+    }
+
+    /// Records the fetch a subscribe just made for the list in `folder` (run it inside
+    /// `storageQueue`), replacing any state cached while the list was a normal one.
+    func recordSubscribed(_ state: SubscriptionState, folder: String) {
+        store(state, in: catalog.storage.resourcesDirectory(forFolderNamed: folder))
     }
 
     private func liveEntry(_ folder: String) -> CatalogEntry? {

@@ -34,6 +34,10 @@ struct ImportResult {
     let indexEntries: [PlacemarkIndex.Entry]
     /// Set when this import creates an online list; `commit` writes it into the new sidecar.
     var subscription: Subscription?
+    /// The refresh state of the fetch that created an online list (its validators and server
+    /// hints); `commit` writes it into the new `resources/`, so the first refresh is conditional
+    /// and waits until the list is due.
+    var subscriptionState: SubscriptionState?
     /// Every `<Placemark>` in the document, with or without a `<Point>`.
     var placemarkCount = 0
     /// How many `<NetworkLink>`s the document carries. With no placemarks, the file only links
@@ -264,6 +268,11 @@ enum ImportService {
         let resourcesDir = storage.resourcesDirectory(for: entry)
         do {
             try writeDerivedData(for: result, to: resourcesDir, cache: cache)
+            // Only into a materialised `resources/`: a folder holding just this file would read
+            // as materialised and never be rebuilt. Without it the first refresh is a full GET.
+            if let state = result.subscriptionState {
+                SubscriptionStateStore.write(state, in: resourcesDir)
+            }
         } catch {
             ImportService.logger.error(
                 """

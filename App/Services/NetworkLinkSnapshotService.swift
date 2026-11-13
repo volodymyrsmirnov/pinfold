@@ -84,13 +84,7 @@ struct NetworkLinkSnapshotService {
 
     /// The URL to fetch for `link`: `http(s)` only, with `http` upgraded to `https`.
     static func fetchURL(for link: KMLNetworkLink) -> URL? {
-        let trimmed = link.href.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard
-            let url = URL(string: trimmed),
-            let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
-            url.host?.isEmpty == false
-        else { return nil }
-        return ResourceCache.httpsUpgraded(url)
+        SubscriptionURL.normalise(link.href)
     }
 
     /// The filename to store a download under: the URL's own `.kml`/`.kmz` name, else the link
