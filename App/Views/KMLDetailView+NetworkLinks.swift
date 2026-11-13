@@ -63,12 +63,15 @@ extension KMLDetailView {
         var added = 0
         var failed = 0
         var existing: UUID?
+        var existingCount = 0
         var firstError: String?
         for link in offer.links {
             guard let url = NetworkLinkSnapshotService.fetchURL(for: link) else { continue }
             do {
                 switch try await service.subscribe(to: url, origin: .networkLink, link: link) {
-                case let .existing(id): existing = existing ?? id
+                case let .existing(id):
+                    existing = existing ?? id
+                    existingCount += 1
                 case .converted, .enqueued: added += 1
                 }
             } catch {
@@ -76,7 +79,9 @@ extension KMLDetailView {
                 firstError = firstError ?? error.localizedDescription
             }
         }
-        if let status = NetworkLinkStatus.afterSubscribingEach(added: added, failed: failed, firstError: firstError) {
+        if let status = NetworkLinkStatus.afterSubscribingEach(
+            added: added, failed: failed, firstError: firstError, existing: existingCount
+        ) {
             networkLinkStatus = status
         } else if let existing {
             networkLinkStatus = .idle

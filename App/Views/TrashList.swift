@@ -36,17 +36,6 @@ struct TrashList: View {
         } message: { entry in
             Text("\u{201C}\(entry.displayName)\u{201D} will be deleted and can't be recovered.")
         }
-        .confirmationDialog(
-            "Empty Trash?",
-            isPresented: $isConfirmingEmpty,
-            titleVisibility: .visible
-        ) {
-            Button("Delete \(trashed.count) Permanently", role: .destructive) {
-                Task { await catalog.emptyTrash() }
-            }
-        } message: {
-            Text("Everything in Trash will be deleted and can't be recovered.")
-        }
     }
 
     /// Files / Photos-style "Recently Deleted" control: a red plain-text item at the trailing
@@ -59,6 +48,18 @@ struct TrashList: View {
             ToolbarItem(placement: .bottomBar) {
                 Button("Empty Trash", role: .destructive) { isConfirmingEmpty = true }
                     .tint(.red)
+                    // On the button so the dialog anchors to it, not to the segmented control.
+                    .confirmationDialog(
+                        "Empty Trash?",
+                        isPresented: $isConfirmingEmpty,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete \(trashed.count) Permanently", role: .destructive) {
+                            Task { await catalog.emptyTrash() }
+                        }
+                    } message: {
+                        Text("Everything in Trash will be deleted and can't be recovered.")
+                    }
             }
         }
     }

@@ -34,10 +34,13 @@ struct FileRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(Self.secondaryLine(entry: entry, online: online, now: .now))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                // Re-evaluated each minute so "Updated 20s ago" keeps ticking.
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(Self.secondaryLine(entry: entry, online: online, now: context.date))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 if entry.isReadOnly {
                     Label(readOnlyBadge, systemImage: "exclamationmark.triangle")
@@ -68,18 +71,25 @@ struct FileRow: View {
         case .idle:
             Image(systemName: "globe")
                 .foregroundStyle(.secondary)
+                .frame(width: Self.glyphSize, height: Self.glyphSize)
                 .accessibilityLabel("Online list")
         case .refreshing:
             ProgressView()
+                .controlSize(.small)
+                .frame(width: Self.glyphSize, height: Self.glyphSize)
                 .accessibilityLabel("Updating")
         case .failed:
             Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
+                .frame(width: Self.glyphSize, height: Self.glyphSize)
                 .accessibilityLabel("Couldn't update")
         }
     }
 
     // MARK: - Private helpers
+
+    /// The online glyph's square, shared by the globe, warning and spinner so they match.
+    private static let glyphSize: CGFloat = 20
 
     private var readOnlyBadge: String {
         entry.sidecarState == .notDownloaded ? "Downloading from iCloud" : "Saved data unreadable"
@@ -111,10 +121,14 @@ struct FileRow: View {
         }
     }
 
-    private static func relative(_ date: Date, to now: Date) -> String {
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: date, relativeTo: now)
+        return formatter
+    }()
+
+    private static func relative(_ date: Date, to now: Date) -> String {
+        relativeFormatter.localizedString(for: date, relativeTo: now)
     }
 }

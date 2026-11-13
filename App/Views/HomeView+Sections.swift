@@ -268,6 +268,9 @@ extension HomeView {
                             FileRow(entry: entry, online: onlineStatus(for: entry))
                                 .tag(entry.id)
                                 .contextMenu { activeRowMenu(for: entry) }
+                                .stopUpdatingConfirmation(
+                                    target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
+                                )
                         }
                     }
                 }

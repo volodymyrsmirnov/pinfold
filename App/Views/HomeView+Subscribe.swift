@@ -163,29 +163,13 @@ extension SubscriptionRefresher {
     }
 }
 
-/// The Stop Updating confirmation and the Refresh Now failure alert.
+/// The Refresh Now / Stop Updating failure alert. Each screen owns one, so a failure shows on
+/// the screen that caused it.
 struct OnlineListDialogsModifier: ViewModifier {
-    @Binding var stopTarget: CatalogEntry?
     @Binding var refreshError: String?
-    let stop: (CatalogEntry) -> Void
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog(
-                stopTarget.map {
-                    String(localized: "Stop updating \u{201C}\($0.displayName)\u{201D}? The current copy stays as a normal list.")
-                } ?? "",
-                isPresented: Binding(get: { stopTarget != nil }, set: {
-                    if !$0 {
-                        stopTarget = nil
-                    }
-                }),
-                titleVisibility: .visible,
-                presenting: stopTarget
-            ) { entry in
-                Button("Stop Updating", role: .destructive) { stop(entry) }
-                Button("Cancel", role: .cancel) {}
-            }
             .alert(
                 "Couldn't Update",
                 isPresented: Binding(get: { refreshError != nil }, set: {
@@ -199,5 +183,33 @@ struct OnlineListDialogsModifier: ViewModifier {
             } message: { message in
                 Text(message)
             }
+    }
+}
+
+extension View {
+    /// The Stop Updating confirmation, attached to the control that triggered it so it anchors
+    /// there (a bottom action sheet on iPhone). `entryID` limits it to the one row whose menu
+    /// set the target; `nil` shows it for any target.
+    func stopUpdatingConfirmation(
+        target: Binding<CatalogEntry?>, entryID: UUID? = nil, stop: @escaping (CatalogEntry) -> Void
+    ) -> some View {
+        confirmationDialog(
+            target.wrappedValue.map {
+                String(localized: "Stop updating \u{201C}\($0.displayName)\u{201D}? The current copy stays as a normal list.")
+            } ?? "",
+            isPresented: Binding(
+                get: { target.wrappedValue != nil && (entryID == nil || target.wrappedValue?.id == entryID) },
+                set: {
+                    if !$0 {
+                        target.wrappedValue = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible,
+            presenting: target.wrappedValue
+        ) { entry in
+            Button("Stop Updating", role: .destructive) { stop(entry) }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 }

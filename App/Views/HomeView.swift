@@ -214,9 +214,7 @@ struct HomeView: View {
         .modifier(SubscribeAlertsModifier(
             prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
         ))
-        .modifier(OnlineListDialogsModifier(
-            stopTarget: $stopUpdatingTarget, refreshError: $refreshError, stop: runStopUpdating
-        ))
+        .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // Rename alert — a single TextField prefilled with the current name. `presenting` keys
         // the alert to the entry being renamed; Save commits the trimmed name via
         // `catalog.rename` (which rejects an empty/whitespace name as a no-op).

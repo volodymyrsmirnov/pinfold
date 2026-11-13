@@ -33,6 +33,9 @@ extension HomeView {
                                 .disabled(entry.isReadOnly)
                             }
                             .contextMenu { activeRowMenu(for: entry) }
+                            .stopUpdatingConfirmation(
+                                target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
+                            )
                     }
                 }
                 .listStyle(.insetGrouped)

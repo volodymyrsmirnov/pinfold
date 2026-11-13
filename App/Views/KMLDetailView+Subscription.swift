@@ -66,11 +66,18 @@ extension KMLDetailView {
                 }
                 .disabled(live.isReadOnly)
             } label: {
-                if refreshing {
-                    ProgressView()
-                } else {
-                    Image(systemName: "ellipsis.circle")
+                // Fixed frame so the toolbar pill keeps its size when the glyph becomes a spinner.
+                Group {
+                    if refreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
+                .frame(width: 24, height: 24)
+            }
+            .stopUpdatingConfirmation(target: $stopUpdatingTarget) { target in
+                Task { refreshError = await refresher.stopUpdatingMessage(target) }
             }
             .accessibilityLabel("Online list")
         }

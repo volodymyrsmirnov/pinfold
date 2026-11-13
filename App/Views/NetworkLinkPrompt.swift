@@ -65,8 +65,15 @@ enum NetworkLinkStatus: Equatable {
     /// The status after subscribing each link of an offer: `added` new lists, `failed` links
     /// that couldn't be added (`firstError` the first reason). `nil` when nothing was added or
     /// failed, so the caller opens a list that already follows a link, or goes idle.
-    static func afterSubscribingEach(added: Int, failed: Int, firstError: String?) -> NetworkLinkStatus? {
-        let addedText = added == 1 ? String(localized: "Added 1 list.") : String(localized: "Added \(added) lists.")
+    static func afterSubscribingEach(
+        added: Int, failed: Int, firstError: String?, existing: Int = 0
+    ) -> NetworkLinkStatus? {
+        var addedText = added == 1 ? String(localized: "Added 1 list.") : String(localized: "Added \(added) lists.")
+        if added > 0, existing > 0 {
+            addedText += " " + (existing == 1
+                ? String(localized: "1 was already in your lists.")
+                : String(localized: "\(existing) were already in your lists."))
+        }
         switch (added > 0, failed > 0) {
         case (true, false):
             return .finished(addedText)

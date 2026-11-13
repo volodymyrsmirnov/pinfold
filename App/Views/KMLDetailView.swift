@@ -166,10 +166,12 @@ struct KMLDetailView: View {
                 .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
             }
         }
-        .modifier(OnlineListDialogsModifier(
-            stopTarget: $stopUpdatingTarget, refreshError: $refreshError,
-            stop: { target in Task { refreshError = await refresher?.stopUpdatingMessage(target) } }
-        ))
+        .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
+        // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
+        .onDisappear {
+            refreshError = nil
+            stopUpdatingTarget = nil
+        }
         // One cancellable reload per entry and live content hash (see `reloadIfContentChanged`).
         .task(id: contentKey) {
             await reloadIfContentChanged(to: liveEntry)

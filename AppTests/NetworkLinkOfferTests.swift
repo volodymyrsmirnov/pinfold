@@ -89,6 +89,13 @@ struct NetworkLinkOfferTests {
             == .partial("Added 1 list. 2 couldn't be added: Boom"))
     }
 
+    @Test func eachLink_addedWithSomeAlreadyFollowed_saysSo() {
+        let one = NetworkLinkStatus.afterSubscribingEach(added: 1, failed: 0, firstError: nil, existing: 1)
+        #expect(one == .finished("Added 1 list. 1 was already in your lists."))
+        let many = NetworkLinkStatus.afterSubscribingEach(added: 1, failed: 0, firstError: nil, existing: 2)
+        #expect(many == .finished("Added 1 list. 2 were already in your lists."))
+    }
+
     @Test func eachLink_nothingAdded_failsOrDefersToTheCaller() {
         #expect(NetworkLinkStatus.afterSubscribingEach(added: 0, failed: 2, firstError: "Boom") == .failed("Boom"))
         #expect(NetworkLinkStatus.afterSubscribingEach(added: 0, failed: 0, firstError: nil) == nil)
