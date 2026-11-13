@@ -120,6 +120,61 @@ struct SubscriptionContentWriterTests {
         #expect(updated.sourceFilename == "feed.kmz")
     }
 
+    // MARK: - Remote image cache
+
+    /// A KML whose icon styles reference `hrefs` (gathered by `prepare` as remote hrefs).
+    private func kml(icons hrefs: [String]) -> Data {
+        let styles = hrefs.enumerated().map { index, href in
+            "<Style id=\"s\(index)\"><IconStyle><Icon><href>\(href)</href></Icon></IconStyle></Style>"
+        }.joined()
+        return Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Feed</name>\(styles)
+        <Placemark><name>New</name><Point><coordinates>1,2,0</coordinates></Point></Placemark>
+        </Document></kml>
+        """.utf8)
+    }
+
+    @Test func derivedOnly_keepsRemoteImageCacheForHrefsStillListed() async throws {
+        let env = try await makeEnvironment()
+        let dir = env.resourcesDir
+        let store = ResourceManifestStore.shared
+        let kept = "https://img.test/kept.png"
+        let skipped = "https://img.test/skipped.png"
+        let pending = "https://img.test/pending.png"
+        let dropped = "https://img.test/dropped.png"
+        let keptFile = env.cache.cachedFilename(for: kept)
+        let droppedFile = env.cache.cachedFilename(for: dropped)
+        try Data("kept".utf8).write(to: dir.appendingPathComponent(keptFile))
+        try Data("dropped".utf8).write(to: dir.appendingPathComponent(droppedFile))
+        try store.updateManifest(in: dir) { manifest in
+            manifest[kept] = keptFile
+            manifest[skipped] = "" // permanent skip marker
+            manifest[dropped] = droppedFile
+        }
+        let backoff = DownloadState.HrefState(attempts: 2, nextAttemptAt: Date(timeIntervalSince1970: 4_000_000_000))
+        store.updateState(in: dir) { state in
+            state.consent = true
+            state.hrefs[pending] = backoff
+            state.hrefs[dropped] = backoff
+        }
+
+        let new = try ImportService.prepare(data: kml(icons: [kept, skipped, pending]), sourceFilename: "feed.kml")
+        #expect(Set(new.remoteResourceHrefs) == [kept, skipped, pending])
+        _ = try await SubscriptionContentWriter.apply(new, to: env.entry, storage: env.storage, cache: env.cache)
+
+        let manifest = store.manifest(in: dir)
+        #expect(manifest[kept] == keptFile)
+        #expect(try Data(contentsOf: dir.appendingPathComponent(keptFile)) == Data("kept".utf8))
+        #expect(manifest[skipped] == "")
+        #expect(manifest[dropped] == nil)
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(droppedFile).path))
+        let state = store.state(in: dir)
+        #expect(state.consent)
+        #expect(state.hrefs[pending] == backoff)
+        #expect(state.hrefs[dropped] == nil)
+    }
+
     // MARK: - Conflicts on the original
 
     @Test func resolveOriginalConflicts_withoutConflicts_leavesFileAlone() async throws {

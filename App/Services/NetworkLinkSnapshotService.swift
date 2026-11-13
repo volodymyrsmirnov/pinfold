@@ -284,7 +284,7 @@ nonisolated func writeSnapshot(
         // Everything under `resources/` derives from the original; it rebuilds on the next reload.
         try? fm.removeItem(at: resourcesDir)
     case .derivedOnly:
-        pruneDerivedResources(in: resourcesDir)
+        pruneDerivedResources(in: resourcesDir, keepingRemote: Set(result.remoteResourceHrefs))
     }
     return updated
 }
@@ -293,22 +293,29 @@ nonisolated func writeSnapshot(
 enum ResourceReset {
     /// Remove the whole folder; the next reload rebuilds it (the one-time snapshot).
     case all
-    /// Remove only what derives from the original, keeping the files that hold the person's
-    /// choices and the refresh state (`ResourceReset.keptFilenames`). Nothing is rebuilt here:
+    /// Remove only what derives from the original's bytes (KMZ media, the search index and its
+    /// stamps, the parse marker, `remote-hrefs.json`), keeping the files that hold the person's
+    /// choices and the refresh state (`ResourceReset.keptFilenames`), the manifest, and the
+    /// downloaded images of remote hrefs the new original still lists. Nothing is rebuilt here:
     /// the caller rebuilds (see `SubscriptionContentWriter`).
     case derivedOnly
 
-    /// The files `.derivedOnly` keeps: the refresh state and the download state, which holds the
-    /// person's remote-image consent.
-    static let keptFilenames: Set<String> = [SubscriptionStateStore.filename, ResourceManifestStore.stateFilename]
+    /// The files `.derivedOnly` always keeps: the refresh state, the download state (which holds
+    /// the person's remote-image consent) and the manifest (trimmed by `pruneForRefresh`).
+    static let keptFilenames: Set<String> = [
+        SubscriptionStateStore.filename, ResourceManifestStore.stateFilename, ResourceManifestStore.manifestFilename,
+    ]
 }
 
-/// Removes everything in `resourcesDir` except `ResourceReset.keptFilenames`. Best effort, like
-/// the `.all` removal: what survives is derivable and rebuilds from the source stamp.
-private nonisolated func pruneDerivedResources(in resourcesDir: URL) {
+/// Trims the remote image cache to `hrefs` (`ResourceManifestStore.pruneForRefresh`), then removes
+/// everything else in `resourcesDir` except `ResourceReset.keptFilenames` and the images still in
+/// use. Best effort, like the `.all` removal: what goes is derivable and rebuilds.
+private nonisolated func pruneDerivedResources(in resourcesDir: URL, keepingRemote hrefs: Set<String>) {
+    let inUse = ResourceManifestStore.shared.pruneForRefresh(keepingRemote: hrefs, in: resourcesDir)
+    let keep = ResourceReset.keptFilenames.union(inUse)
     let fm = FileManager.default
     let names = (try? fm.contentsOfDirectory(atPath: resourcesDir.path)) ?? []
-    for name in names where !ResourceReset.keptFilenames.contains(name) {
+    for name in names where !keep.contains(name) {
         try? fm.removeItem(at: resourcesDir.appendingPathComponent(name))
     }
 }

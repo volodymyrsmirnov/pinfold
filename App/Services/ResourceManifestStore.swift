@@ -75,6 +75,8 @@ final class ResourceManifestStore: Sendable {
 
     /// The download-state file. It holds the person's remote-image consent, so a refresh keeps it.
     static let stateFilename = "download-state.json"
+    /// The href-to-cached-filename manifest.
+    static let manifestFilename = "manifest.json"
 
     private let locks = OSAllocatedUnfairLock<[String: NSLock]>(initialState: [:])
 
@@ -101,17 +103,17 @@ final class ResourceManifestStore: Sendable {
 
     /// The href-to-filename manifest.
     func manifest(in dir: URL) -> [String: String] {
-        withLock(dir) { read([String: String].self, "manifest.json", in: dir) ?? [:] }
+        withLock(dir) { read([String: String].self, Self.manifestFilename, in: dir) ?? [:] }
     }
 
     /// Atomically mutates the manifest. Skips the write when `body` changes nothing.
     func updateManifest(in dir: URL, _ body: (inout [String: String]) -> Void) throws {
         try withLock(dir) {
-            let old = read([String: String].self, "manifest.json", in: dir) ?? [:]
+            let old = read([String: String].self, Self.manifestFilename, in: dir) ?? [:]
             var new = old
             body(&new)
-            if new != old || !fileExists("manifest.json", in: dir) {
-                try write(new, "manifest.json", in: dir)
+            if new != old || !fileExists(Self.manifestFilename, in: dir) {
+                try write(new, Self.manifestFilename, in: dir)
             }
         }
     }
@@ -149,6 +151,38 @@ final class ResourceManifestStore: Sendable {
             body(&new)
             guard new != old else { return }
             try? write(new, Self.stateFilename, in: dir)
+        }
+    }
+
+    // MARK: - Refresh
+
+    /// Prepares `dir` for a refresh whose new original lists the remote hrefs `hrefs`, in one
+    /// locked pass. Downloaded images are an href-keyed cache, not data derived from the
+    /// original's bytes, so they survive: a manifest entry stays only if its href is remote and
+    /// still listed (permanent-skip markers included). Every other entry (KMZ media, which the
+    /// rebuild extracts again, and remote hrefs that left the list) is dropped with its file,
+    /// so rotating image URLs never pile up. The download state's per-href backoff is trimmed to
+    /// `hrefs`; consent is kept.
+    ///
+    /// - Returns: The cached filenames still in use, which the caller must not delete.
+    func pruneForRefresh(keepingRemote hrefs: Set<String>, in dir: URL) -> Set<String> {
+        withLock(dir) {
+            let manifest = read([String: String].self, Self.manifestFilename, in: dir) ?? [:]
+            let kept = manifest.filter { href, _ in ResourceCache.isRemoteHref(href) && hrefs.contains(href) }
+            let inUse = Set(kept.values.filter { !$0.isEmpty })
+            for filename in Set(manifest.values).subtracting(inUse) where !filename.isEmpty {
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent(filename))
+            }
+            if kept != manifest {
+                try? write(kept, Self.manifestFilename, in: dir)
+            }
+            let state = read(DownloadState.self, Self.stateFilename, in: dir) ?? DownloadState()
+            var trimmed = state
+            trimmed.hrefs = state.hrefs.filter { hrefs.contains($0.key) }
+            if trimmed != state {
+                try? write(trimmed, Self.stateFilename, in: dir)
+            }
+            return inUse
         }
     }
 
