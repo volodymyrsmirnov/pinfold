@@ -252,15 +252,8 @@ enum ImportService {
         // import: drop the `resources/` directory (its existence is the scanner's
         // "materialized" marker) and let the materialisation pass rebuild it.
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        var cacheIsReady = true
         do {
-            if result.format == .kmz {
-                try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
-            }
-            try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
-            // Stamp at import so the scanner neither re-parses nor re-stamps a fresh entry.
-            PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
-            PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+            try writeDerivedData(for: result, to: resourcesDir, cache: cache)
         } catch {
             ImportService.logger.error(
                 """
@@ -269,13 +262,6 @@ enum ImportService {
                 """
             )
             try? FileManager.default.removeItem(at: resourcesDir)
-            cacheIsReady = false
-        }
-
-        // Kick off remote downloads in the background — non-blocking, offline-first.
-        // Skipped when the cache write failed: the materialisation pass rebuilds it all.
-        if cacheIsReady {
-            downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
         }
 
         // Make the new entry and its placemarks reachable from system (Core Spotlight) search.
@@ -283,6 +269,31 @@ enum ImportService {
         SpotlightIndexer.index(entry: entry, indexEntries: result.indexEntries)
 
         return entry
+    }
+}
+
+// MARK: - Derived data
+
+extension ImportService {
+    /// Writes everything in `resourcesDir` that derives from `result`'s original: a KMZ's
+    /// embedded media (with its manifest), the search index, its source stamp and the
+    /// derived-data version. Then starts the remote downloads in the background (non-blocking,
+    /// offline-first), which records `remote-hrefs.json`. Shared by `commit` and the refresh of
+    /// an online list (`SubscriptionContentWriter`).
+    ///
+    /// Throws, starting no downloads, when a write fails; the caller decides how to recover
+    /// (the index is written after the KMZ media, so a failure always leaves the index absent
+    /// and the materialisation pass rebuilds it).
+    static func writeDerivedData(for result: ImportResult, to resourcesDir: URL, cache: ResourceCache) throws {
+        try FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
+        if result.format == .kmz {
+            try cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+        }
+        try PlacemarkIndex.write(result.indexEntries, to: resourcesDir)
+        // Stamp so the scanner neither re-parses nor re-stamps freshly written data.
+        PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)
+        PlacemarkIndex.writeDerivedDataVersion(to: resourcesDir)
+        downloadRemoteResources(result.remoteResourceHrefs, cache: cache, to: resourcesDir)
     }
 }
 

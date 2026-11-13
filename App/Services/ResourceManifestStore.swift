@@ -73,6 +73,9 @@ final class ResourceManifestStore: Sendable {
     /// The process-wide store; every `ResourceCache` uses it so locks are shared.
     static let shared = ResourceManifestStore()
 
+    /// The download-state file. It holds the person's remote-image consent, so a refresh keeps it.
+    static let stateFilename = "download-state.json"
+
     private let locks = OSAllocatedUnfairLock<[String: NSLock]>(initialState: [:])
 
     // MARK: - Locking
@@ -135,17 +138,17 @@ final class ResourceManifestStore: Sendable {
 
     /// The current download state (defaults when the file is absent).
     func state(in dir: URL) -> DownloadState {
-        withLock(dir) { read(DownloadState.self, "download-state.json", in: dir) ?? DownloadState() }
+        withLock(dir) { read(DownloadState.self, Self.stateFilename, in: dir) ?? DownloadState() }
     }
 
     /// Atomically mutates the download state. Writes only when the state changed.
     func updateState(in dir: URL, _ body: (inout DownloadState) -> Void) {
         withLock(dir) {
-            let old = read(DownloadState.self, "download-state.json", in: dir) ?? DownloadState()
+            let old = read(DownloadState.self, Self.stateFilename, in: dir) ?? DownloadState()
             var new = old
             body(&new)
             guard new != old else { return }
-            try? write(new, "download-state.json", in: dir)
+            try? write(new, Self.stateFilename, in: dir)
         }
     }
 

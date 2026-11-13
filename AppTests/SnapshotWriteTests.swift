@@ -98,4 +98,35 @@ struct SnapshotWriteTests {
         #expect(try storage.readMetadata(forFolderNamed: entry.storageFolderName) == sidecarBefore)
         #expect(try !names(in: storage, entry).contains { $0.hasSuffix(".tmp") })
     }
+
+    // MARK: - Resource reset
+
+    @Test func all_isUnchangedBehaviour() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        ResourceManifestStore.shared.updateState(in: resourcesDir) { $0.consent = true }
+        SubscriptionStateStore.write(SubscriptionState(etag: "\"v1\""), in: resourcesDir)
+
+        _ = try writeSnapshot(prepared("New", filename: "old.kml"), to: entry, storage: storage)
+
+        // The default drops all of resources/; it rebuilds on the next reload.
+        #expect(!FileManager.default.fileExists(atPath: resourcesDir.path))
+    }
+
+    @Test func derivedOnly_prunesDerivedButKeepsChoices() async throws {
+        let (storage, entry) = try await makeEntry(filename: "old.kml")
+        let resourcesDir = storage.resourcesDirectory(for: entry)
+        ResourceManifestStore.shared.updateState(in: resourcesDir) { $0.consent = true }
+        let state = SubscriptionState(etag: "\"v1\"")
+        SubscriptionStateStore.write(state, in: resourcesDir)
+        #expect(PlacemarkIndex.exists(in: resourcesDir))
+
+        _ = try writeSnapshot(prepared("New", filename: "old.kml"), to: entry, storage: storage,
+                              resetResources: .derivedOnly)
+
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: resourcesDir.path).sorted()
+        #expect(remaining == ["download-state.json", SubscriptionStateStore.filename].sorted())
+        #expect(ResourceManifestStore.shared.state(in: resourcesDir).consent)
+        #expect(SubscriptionStateStore.read(in: resourcesDir) == state)
+    }
 }

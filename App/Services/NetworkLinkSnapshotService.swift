@@ -233,9 +233,13 @@ private nonisolated func applySnapshot(
 /// 3. update the sidecar (throws if absent);
 /// 4. move the temporary file into place, rolling the sidecar back if that fails;
 /// 5. only then remove a differently named old original (never when both names are the same
-///    file, as with a case-only rename on a case-insensitive volume).
+///    file, as with a case-only rename on a case-insensitive volume);
+/// 6. reset `resources/` as `resetResources` says.
 nonisolated func writeSnapshot(
-    _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations
+    _ result: ImportResult,
+    to entry: CatalogEntry,
+    storage: StorageLocations,
+    resetResources: ResourceReset = .all
 ) throws -> CatalogEntry {
     guard case .ok = storage.readSidecar(forFolderNamed: entry.storageFolderName) else {
         throw CocoaError(.fileNoSuchFile)
@@ -274,9 +278,39 @@ nonisolated func writeSnapshot(
         }
         try? fm.removeItem(at: oldURL)
     }
-    // Everything under `resources/` derives from the original; it rebuilds on the next reload.
-    try? fm.removeItem(at: storage.resourcesDirectory(for: entry))
+    let resourcesDir = storage.resourcesDirectory(for: entry)
+    switch resetResources {
+    case .all:
+        // Everything under `resources/` derives from the original; it rebuilds on the next reload.
+        try? fm.removeItem(at: resourcesDir)
+    case .derivedOnly:
+        pruneDerivedResources(in: resourcesDir)
+    }
     return updated
+}
+
+/// How much of an entry's `resources/` a snapshot write resets.
+enum ResourceReset {
+    /// Remove the whole folder; the next reload rebuilds it (the one-time snapshot).
+    case all
+    /// Remove only what derives from the original, keeping the files that hold the person's
+    /// choices and the refresh state (`ResourceReset.keptFilenames`). Nothing is rebuilt here:
+    /// the caller rebuilds (see `SubscriptionContentWriter`).
+    case derivedOnly
+
+    /// The files `.derivedOnly` keeps: the refresh state and the download state, which holds the
+    /// person's remote-image consent.
+    static let keptFilenames: Set<String> = [SubscriptionStateStore.filename, ResourceManifestStore.stateFilename]
+}
+
+/// Removes everything in `resourcesDir` except `ResourceReset.keptFilenames`. Best effort, like
+/// the `.all` removal: what survives is derivable and rebuilds from the source stamp.
+private nonisolated func pruneDerivedResources(in resourcesDir: URL) {
+    let fm = FileManager.default
+    let names = (try? fm.contentsOfDirectory(atPath: resourcesDir.path)) ?? []
+    for name in names where !ResourceReset.keptFilenames.contains(name) {
+        try? fm.removeItem(at: resourcesDir.appendingPathComponent(name))
+    }
 }
 
 /// Updates only the content fields a snapshot owns (`sourceFilename`, `pointCount`,
