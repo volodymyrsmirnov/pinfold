@@ -126,7 +126,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored var timerTask: Task<Void, Never>?
     /// When the armed timer fires; `nil` when no timer is armed.
     @ObservationIgnored var nextFireDate: Date?
-    /// Identifies the latest catalogue/network observation; older ones are ignored.
+    @ObservationIgnored var lastDueCheck: Date?
     @ObservationIgnored var observationGeneration = 0
     @ObservationIgnored var lastSeenOnline = true
 
@@ -280,7 +280,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             rearm()
             return
         }
-        let now = clock()
+        let now = markDueCheck()
         let due = catalog.entries.filter { entry in
             guard entry.subscription != nil, inFlight[entry.storageFolderName] == nil else { return false }
             return SubscriptionSchedule.isDue(entry, state: reloadedState(for: entry), now: now)

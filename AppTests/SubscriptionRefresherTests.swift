@@ -488,6 +488,39 @@ struct SubscriptionRefresherTests {
         #expect(refresher.nextFireDate == Self.now.addingTimeInterval(SubscriptionSchedule.floor))
     }
 
+    @Test func timer_catalogueReloads_doNotPostponeTheDeadline() async throws {
+        let env = makeEnvironment()
+        // Failed 4 minutes ago: due again in 1 minute; the timer waits for the floor.
+        try await addOnlineList(env, state: SubscriptionState(
+            lastAttemptAt: Self.now.addingTimeInterval(-240), lastError: "offline"
+        ))
+        let clock = TestClock(Self.now)
+        let refresher = env.makeRefresher(clock: { clock.now })
+        await started(refresher)
+        let deadline = Self.now.addingTimeInterval(SubscriptionSchedule.floor)
+        #expect(refresher.nextFireDate == deadline)
+
+        // Unrelated catalogue activity every 2 minutes (e.g. a list syncing in) re-arms the timer.
+        for minutes in [2, 4] {
+            clock.now = Self.now.addingTimeInterval(Double(minutes) * 60)
+            let generation = refresher.observationGeneration
+            try await addOnlineList(env, url: "https://example.test/other-\(minutes).kml", state: checkedAMinuteAgo)
+            try await waitUntil { refresher.observationGeneration != generation && refresher.isTimerArmed }
+            #expect(refresher.nextFireDate == deadline)
+        }
+    }
+
+    @Test func earliestFire_isMeasuredFromTheLastDueCheck() {
+        let floor = SubscriptionSchedule.floor
+        let check = Self.now
+        let later = Self.now.addingTimeInterval(200)
+        #expect(SubscriptionRefresher.earliestFire(lastDueCheck: check, now: later) == check.addingTimeInterval(floor))
+        #expect(SubscriptionRefresher.earliestFire(lastDueCheck: nil, now: later) == later.addingTimeInterval(floor))
+        // A check stored in the future (the clock went back) counts from now.
+        let future = Self.now.addingTimeInterval(9999)
+        #expect(SubscriptionRefresher.earliestFire(lastDueCheck: future, now: check) == check.addingTimeInterval(floor))
+    }
+
     @Test func offline_skipsAndRearmsOnline() async throws {
         let env = makeEnvironment()
         try await addOnlineList(env)
