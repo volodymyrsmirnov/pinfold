@@ -95,6 +95,7 @@
 		66D0A707CCCC4B0B152A6D76 /* SearchTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BD65708229AACE02DC570D5 /* SearchTextTests.swift */; };
 		67500BF9BAA1734E6E4A798B /* RootView+Import.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0D64EBEA18BDF1C28CAD77 /* RootView+Import.swift */; };
 		686E2690CFCAC20DC82F4ECB /* StorageUsageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FB491D28E3FD50438856AF3 /* StorageUsageTests.swift */; };
+		6AE92E70CCD38180D2FDFEB0 /* SubscriptionRefresher+Fetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB76074FD8A2A45C19C12F2 /* SubscriptionRefresher+Fetch.swift */; };
 		6C210314449EF164E533F59C /* PlacemarkAnnotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE64585772ECAAD18A2E4E0 /* PlacemarkAnnotations.swift */; };
 		6E06F4CC96D6B13BEE4016AD /* MapPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30D4AF5FF811F307432DF239 /* MapPickerSheet.swift */; };
 		6F63E151D4B12D9480AADF7C /* SearchCorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AB33D12A0A5AC2AA89EFB3 /* SearchCorpusTests.swift */; };
@@ -401,6 +402,7 @@
 		7BE64585772ECAAD18A2E4E0 /* PlacemarkAnnotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacemarkAnnotations.swift; sourceTree = "<group>"; };
 		7D0D64EBEA18BDF1C28CAD77 /* RootView+Import.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RootView+Import.swift"; sourceTree = "<group>"; };
 		7D36965BE01F02C77804E0E3 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
+		7DB76074FD8A2A45C19C12F2 /* SubscriptionRefresher+Fetch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SubscriptionRefresher+Fetch.swift"; sourceTree = "<group>"; };
 		806608E7F75E5F912958AE36 /* HomeView+Toolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeView+Toolbar.swift"; sourceTree = "<group>"; };
 		80F516AEE81277A43FC64026 /* PlacemarkIndexStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacemarkIndexStore.swift; sourceTree = "<group>"; };
 		8232CF9A073A8F8A9BEE8836 /* PlacemarkMapRepresentable+Camera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlacemarkMapRepresentable+Camera.swift"; sourceTree = "<group>"; };
@@ -766,6 +768,7 @@
 				48979243A124D5FA3883B2D6 /* StorageUsage.swift */,
 				C84C19C3BB891D1FE502DB91 /* SubscriptionContentWriter.swift */,
 				B403D47B605B79B3F9A2EBD2 /* SubscriptionRefresher.swift */,
+				7DB76074FD8A2A45C19C12F2 /* SubscriptionRefresher+Fetch.swift */,
 				447746EEC78BE943811C17DA /* SubscriptionRefresher+Timer.swift */,
 				DF01C9603389731FFB2171A3 /* SubscriptionSchedule.swift */,
 				9AB9E1EB5AFAFC8FD191A8D1 /* SubscriptionService.swift */,
@@ -1136,6 +1139,7 @@
 				79FE9CC4DAD4E6AC71F61C7C /* StyleIcon.swift in Sources */,
 				B73BB950BE7AB2E81D164AFF /* Subscription.swift in Sources */,
 				B8BDF36CA42EC7871427C903 /* SubscriptionContentWriter.swift in Sources */,
+				6AE92E70CCD38180D2FDFEB0 /* SubscriptionRefresher+Fetch.swift in Sources */,
 				4196FE5149311FD5344C2752 /* SubscriptionRefresher+Timer.swift in Sources */,
 				9BA0B23CA7802AD19671D464 /* SubscriptionRefresher.swift in Sources */,
 				D9267621A71A909A897028E6 /* SubscriptionSchedule.swift in Sources */,

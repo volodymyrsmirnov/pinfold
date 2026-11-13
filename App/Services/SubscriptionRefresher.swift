@@ -81,12 +81,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored let network: NetworkStatus?
     @ObservationIgnored let clock: () -> Date
     @ObservationIgnored private let cache: ResourceCache
-    @ObservationIgnored private let fetcher: Fetcher
+    @ObservationIgnored let fetcher: Fetcher
     /// Shared with `SubscriptionService`, whose subscribe writes are serialised with refreshes.
     /// Never call `refreshNow`, `refreshDue` or `stopUpdating` from inside one of its
     /// operations: they wait on this queue themselves.
     @ObservationIgnored let storageQueue: StorageApplyQueue
-    @ObservationIgnored private let fetchSlots = FetchSlots(limit: maxParallelFetches)
+    @ObservationIgnored let fetchSlots = FetchSlots(limit: maxParallelFetches)
     /// Refresh states read from `resources/`, keyed by the resources directory path.
     @ObservationIgnored private var states: [String: SubscriptionState] = [:]
     /// The running refresh of each list, keyed by `storageFolderName`.
@@ -164,7 +164,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         store(state, in: catalog.storage.resourcesDirectory(forFolderNamed: folder))
     }
 
-    private func liveEntry(_ folder: String) -> CatalogEntry? {
+    func liveEntry(_ folder: String) -> CatalogEntry? {
         catalog.entries.first { $0.storageFolderName == folder }
     }
 
@@ -279,24 +279,6 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         return result
     }
 
-    /// Fetches the subscription with the stored validators and classifies the response.
-    private func fetch(_ subscription: Subscription, for entry: CatalogEntry) async -> FetchOutcome {
-        let validators = state(for: entry)
-        let response: ConditionalResponse
-        do {
-            response = try await fetcher(subscription.url, validators.etag, validators.lastModified)
-        } catch {
-            return .failed(SubscriptionError(fetchError: error))
-        }
-        guard case let .data(data) = response.body else { return .unchanged(response) }
-        let currentSHA = liveEntry(entry.storageFolderName)?.contentSHA256 ?? entry.contentSHA256
-        switch await classifyOffMain(data, filename: entry.sourceFilename, currentSHA: currentSHA) {
-        case .same: return .unchanged(response)
-        case let .changed(result): return .changed(result, response)
-        case let .failed(error): return .failed(error)
-        }
-    }
-
     /// Records a fetch outcome against the live entry; runs inside the storage queue. A list
     /// that is gone, no longer online, now follows another URL, or is read-only (sidecar not
     /// downloaded or unreadable) is left untouched: nothing is written and no error recorded.
@@ -312,11 +294,18 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         state.lastAttemptAt = attemptAt
         let failure: SubscriptionError?
         switch outcome {
-        case let .unchanged(response):
+        case let .unchanged(response, content, hints):
             // A 304 often omits the validators: keep the stored ones then.
             state.etag = response.etag ?? state.etag
             state.lastModified = response.lastModified ?? state.lastModified
             state.httpExpires = response.httpExpires
+            if let content {
+                state.contentSHA256 = content
+            }
+            if let hints {
+                state.serverMinRefreshPeriod = KMLRefreshHint.sanitised(hints.minRefreshPeriod)
+                state.serverExpires = hints.expires
+            }
             failure = nil
         case let .changed(result, response):
             do {
@@ -329,6 +318,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
                 state.httpExpires = response.httpExpires
                 state.serverMinRefreshPeriod = KMLRefreshHint.sanitised(result.networkLinkControl?.minRefreshPeriod)
                 state.serverExpires = result.networkLinkControl?.expires
+                state.contentSHA256 = result.contentSHA256
             } catch {
                 failure = .writeFailed(error.localizedDescription)
             }
@@ -378,69 +368,5 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             throw error
         }
         rearm()
-    }
-}
-
-// MARK: - Fetch outcome
-
-private enum FetchOutcome {
-    /// `304`, or a `200` whose bytes match the current original.
-    case unchanged(ConditionalResponse)
-    case changed(ImportResult, ConditionalResponse)
-    case failed(SubscriptionError)
-}
-
-private enum Classified: Sendable {
-    case same
-    case changed(ImportResult)
-    case failed(SubscriptionError)
-}
-
-/// Hashes and validates fetched bytes off the main actor. Bytes equal to the current original
-/// are `.same` and never parsed. A `nonisolated` free function so the detached closure is
-/// compiled outside any actor-isolated caller (see FavoritesView.swift).
-private nonisolated func classifyOffMain(_ data: Data, filename: String, currentSHA: String) async -> Classified {
-    await Task.detached(priority: .utility) {
-        if ImportService.sha256Hex(data) == currentSHA {
-            return .same
-        }
-        let result: ImportResult
-        do {
-            result = try ImportService.prepare(data: data, sourceFilename: filename)
-        } catch {
-            return .failed(.notSupported)
-        }
-        if result.placemarkCount == 0, result.networkLinkCount > 0 {
-            return .failed(.linkOnly)
-        }
-        return .changed(result)
-    }.value
-}
-
-// MARK: - Fetch slots
-
-/// A main-actor counting semaphore bounding how many fetches run at once.
-@MainActor private final class FetchSlots {
-    private var available: Int
-    private var waiting: [CheckedContinuation<Void, Never>] = []
-
-    init(limit: Int) {
-        available = limit
-    }
-
-    func acquire() async {
-        if available > 0 {
-            available -= 1
-            return
-        }
-        await withCheckedContinuation { waiting.append($0) }
-    }
-
-    func release() {
-        if waiting.isEmpty {
-            available += 1
-        } else {
-            waiting.removeFirst().resume()
-        }
     }
 }

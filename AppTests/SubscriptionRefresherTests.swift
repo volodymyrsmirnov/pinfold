@@ -116,10 +116,13 @@ struct SubscriptionRefresherTests {
 
     @Test func refresh_304_updatesStateOnly() async throws {
         let env = makeEnvironment()
-        let old = SubscriptionState(lastAttemptAt: Self.now.addingTimeInterval(-7200), etag: "\"v1\"",
-                                    lastModified: "Wed, 21 Oct 2026 07:28:00 GMT")
-        let folder = try await addOnlineList(env, state: old)
+        let folder = try await addOnlineList(env)
         let entry = try env.entry(folder)
+        // The validators describe the original on disk, so they are sent.
+        let old = SubscriptionState(lastAttemptAt: Self.now.addingTimeInterval(-7200), etag: "\"v1\"",
+                                    lastModified: "Wed, 21 Oct 2026 07:28:00 GMT",
+                                    contentSHA256: entry.contentSHA256)
+        SubscriptionStateStore.write(old, in: env.resources(entry))
         let before = try env.original(entry)
         env.stub.respond(with: .notModified)
         let refresher = env.makeRefresher()

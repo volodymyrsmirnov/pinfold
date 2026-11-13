@@ -155,7 +155,8 @@ enum SubscriptionURL {
             lastAttemptAt: attemptAt, lastSuccessAt: refresher.clock(), etag: response.etag,
             lastModified: response.lastModified,
             serverMinRefreshPeriod: KMLRefreshHint.sanitised(result.networkLinkControl?.minRefreshPeriod),
-            serverExpires: result.networkLinkControl?.expires, httpExpires: response.httpExpires
+            serverExpires: result.networkLinkControl?.expires, httpExpires: response.httpExpires,
+            contentSHA256: result.contentSHA256
         )
         return Fetched(result: result, state: state)
     }

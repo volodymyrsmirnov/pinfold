@@ -14,6 +14,10 @@ struct SubscriptionState: Codable, Equatable, Sendable {
     var serverExpires: Date?
     /// `Cache-Control: max-age` or `Expires` header, resolved to a date.
     var httpExpires: Date?
+    /// SHA-256 of the original the validators (`etag`, `lastModified`) and the server hints
+    /// describe. Validators are sent only while it equals the original actually on disk, so a
+    /// crash or an iCloud conflict that left other bytes there is repaired by a full fetch.
+    var contentSHA256: String?
 }
 
 extension SubscriptionState {
