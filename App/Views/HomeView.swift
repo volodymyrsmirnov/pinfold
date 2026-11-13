@@ -51,10 +51,8 @@ struct HomeView: View {
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
     @State var isFileImporterPresented = false
     /// Subscribe to URL: the alert, its text, a download in flight, and the error to show.
-    @State var isSubscribeAlertPresented = false
-    @State var subscribeText = ""
+    @State var subscribePrompt = SubscribePrompt()
     @State var isSubscribing = false
-    @State var subscribeError: String?
     @Environment(SubscriptionRefresher.self) var refresher
     /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
     @State var stopUpdatingTarget: CatalogEntry?
@@ -214,8 +212,7 @@ struct HomeView: View {
         }
         .modifier(ImportAlertsModifier(importCoordinator: importCoordinator))
         .modifier(SubscribeAlertsModifier(
-            isPresented: $isSubscribeAlertPresented, text: $subscribeText,
-            error: $subscribeError, isSubscribing: isSubscribing, subscribe: runSubscribe
+            prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
         ))
         .modifier(OnlineListDialogsModifier(
             stopTarget: $stopUpdatingTarget, refreshError: $refreshError, stop: runStopUpdating

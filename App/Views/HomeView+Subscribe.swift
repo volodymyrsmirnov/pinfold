@@ -1,22 +1,62 @@
 import SwiftUI
 
-extension HomeView {
-    /// Opens the "Subscribe to URL" alert with an empty field.
-    func beginSubscribe() {
-        guard !isSubscribing else { return }
-        subscribeText = ""
-        isSubscribeAlertPresented = true
+/// The "Subscribe to URL" alert's state. What the person typed survives an error: an address
+/// that isn't valid reopens the alert with it once the error is dismissed, and after a failed
+/// subscribe the next alert starts with it. Only a subscribe that went through clears it.
+struct SubscribePrompt: Equatable {
+    var text = ""
+    var isPresented = false
+    var error: String?
+    /// Reopen the alert when the error is dismissed (the address itself was refused).
+    private var reopensAfterError = false
+
+    /// Opens the alert, keeping the text of an attempt that did not go through.
+    mutating func begin() {
+        isPresented = true
     }
 
-    /// Normalises the typed address and subscribes. Invalid input shows the error alert; a list
-    /// that already follows the URL (or was converted) is selected. A new list goes on the
-    /// import queue, which commits it.
-    func runSubscribe() {
-        guard !isSubscribing else { return }
-        guard let url = SubscriptionURL.normalise(subscribeText) else {
-            subscribeError = String(localized: "Enter a web address that starts with https://")
-            return
+    /// The typed address as an `https` URL, or `nil` with the error set (and the alert to
+    /// reopen with the same text once the person dismisses it).
+    mutating func submit() -> URL? {
+        guard let url = SubscriptionURL.normalise(text) else {
+            error = String(localized: "Enter a web address that starts with https://")
+            reopensAfterError = true
+            return nil
         }
+        return url
+    }
+
+    /// The subscribe failed: show why. The text stays for the next attempt.
+    mutating func failed(_ message: String) {
+        error = message
+    }
+
+    /// The subscribe went through: the next alert starts empty.
+    mutating func succeeded() {
+        text = ""
+    }
+
+    mutating func dismissError() {
+        error = nil
+        if reopensAfterError {
+            reopensAfterError = false
+            isPresented = true
+        }
+    }
+}
+
+extension HomeView {
+    /// Opens the "Subscribe to URL" alert.
+    func beginSubscribe() {
+        guard !isSubscribing else { return }
+        subscribePrompt.begin()
+    }
+
+    /// Normalises the typed address and subscribes. Invalid input shows the error alert, then
+    /// the alert again with the text; a list that already follows the URL (or was converted)
+    /// is selected. A new list goes on the import queue, which commits it.
+    func runSubscribe() {
+        guard !isSubscribing, let url = subscribePrompt.submit() else { return }
         isSubscribing = true
         let service = SubscriptionService(
             catalog: catalog, coordinator: importCoordinator, cache: resourceCache, refresher: refresher
@@ -30,8 +70,9 @@ extension HomeView {
                 case .enqueued:
                     break
                 }
+                subscribePrompt.succeeded()
             } catch {
-                subscribeError = error.localizedDescription
+                subscribePrompt.failed(error.localizedDescription)
             }
         }
     }
@@ -40,16 +81,17 @@ extension HomeView {
 /// The "Subscribe to URL" alert and its error alert. A `ViewModifier` so `HomeView.body` stays
 /// small for the type-checker.
 struct SubscribeAlertsModifier: ViewModifier {
-    @Binding var isPresented: Bool
-    @Binding var text: String
-    @Binding var error: String?
+    @Binding var prompt: SubscribePrompt
     let isSubscribing: Bool
     let subscribe: () -> Void
 
     func body(content: Content) -> some View {
         content
-            .alert("Subscribe to URL", isPresented: $isPresented) {
-                TextField("https://example.com/map.kml", text: $text)
+            .alert("Subscribe to URL", isPresented: $prompt.isPresented) {
+                // A `String` title, not a `LocalizedStringKey`: a key is parsed as Markdown,
+                // which turns the example URL into a link drawn in the tint colour, so the
+                // placeholder looked like a pre-filled value.
+                TextField(String(localized: "https://example.com/map.kml"), text: $prompt.text)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -64,12 +106,12 @@ struct SubscribeAlertsModifier: ViewModifier {
             }
             .alert(
                 "Couldn't Subscribe",
-                isPresented: Binding(get: { error != nil }, set: {
+                isPresented: Binding(get: { prompt.error != nil }, set: {
                     if !$0 {
-                        error = nil
+                        prompt.dismissError()
                     }
                 }),
-                presenting: error
+                presenting: prompt.error
             ) { _ in
                 Button("OK", role: .cancel) {}
             } message: { message in
