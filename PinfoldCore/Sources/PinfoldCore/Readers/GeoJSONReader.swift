@@ -3,9 +3,9 @@ import Foundation
 /// Reads RFC 7946 GeoJSON into the same `KMLDocument` model the KML parser produces.
 ///
 /// A `FeatureCollection`, a single `Feature` or a bare geometry becomes one flat root container
-/// (`id` "root") holding one placemark per feature; a collection's `name` and `description`
-/// become the document's. Placemark ids are `p1`, `p2`, ... in file order, and synthesized
-/// style ids are `geojson-style-1`, ... in order of first use.
+/// (`id` "root") holding one placemark per feature; a collection's `name` (else `title`, else
+/// `metadata.title`) and `description` become the document's. Placemark ids are `p1`, `p2`, ...
+/// in file order, and synthesized style ids are `geojson-style-1`, ... in order of first use.
 enum GeoJSONReader {
     /// Geometry nesting (`GeometryCollection` inside `GeometryCollection`) deeper than this is
     /// refused as `geoJSONTooComplex`.
@@ -32,7 +32,7 @@ enum GeoJSONReader {
         var description: String?
         switch type {
         case "FeatureCollection":
-            name = (top["name"] as? String).flatMap(GeoJSONProperties.nonEmpty)
+            name = collectionName(top)
             description = GeoJSONProperties.text(top["description"]).map(GeoJSONProperties.html)
             for case let feature as [String: Any] in top["features"] as? [Any] ?? [] {
                 try builder.addFeature(feature)
@@ -45,6 +45,14 @@ enum GeoJSONReader {
             throw KMLReadError.unsupportedFormat
         }
         return builder.makeDocument(name: name, descriptionHTML: description)
+    }
+
+    /// A collection's `name`, else its `title`, else `metadata.title` (the USGS feeds name
+    /// themselves there); blank values are skipped.
+    private static func collectionName(_ top: [String: Any]) -> String? {
+        let metadata = top["metadata"] as? [String: Any]
+        let candidates = [top["name"], top["title"], metadata?["title"]]
+        return candidates.lazy.compactMap { ($0 as? String).flatMap(GeoJSONProperties.nonEmpty) }.first
     }
 
     private static func parseJSON(_ data: Data) throws -> Any {
