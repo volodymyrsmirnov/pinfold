@@ -22,7 +22,7 @@ extension HomeView {
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
                     ForEach(displayedActive) { entry in
-                        FileRow(entry: entry)
+                        FileRow(entry: entry, online: onlineStatus(for: entry))
                             .tag(entry.id)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {

@@ -171,10 +171,35 @@ extension HomeView {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
         }
+        if let subscription = entry.subscription {
+            onlineRowMenu(for: entry, url: subscription.url)
+        }
         Button(role: .destructive) {
             Task { await catalog.moveToTrash(entry) }
         } label: {
             Label("Trash", systemImage: "trash")
+        }
+        .disabled(entry.isReadOnly)
+    }
+
+    /// Refresh Now / Copy URL / Stop Updating, for online lists only.
+    @ViewBuilder
+    private func onlineRowMenu(for entry: CatalogEntry, url: URL) -> some View {
+        Button {
+            runRefreshNow(entry)
+        } label: {
+            Label("Refresh Now", systemImage: "arrow.clockwise")
+        }
+        .disabled(entry.isReadOnly || refresher.phase(for: entry) == .refreshing)
+        Button {
+            UIPasteboard.general.url = url
+        } label: {
+            Label("Copy URL", systemImage: "link")
+        }
+        Button {
+            stopUpdatingTarget = entry
+        } label: {
+            Label("Stop Updating", systemImage: "xmark.circle")
         }
         .disabled(entry.isReadOnly)
     }
@@ -240,7 +265,7 @@ extension HomeView {
                 if !files.isEmpty {
                     Section("Files") {
                         ForEach(files) { entry in
-                            FileRow(entry: entry)
+                            FileRow(entry: entry, online: onlineStatus(for: entry))
                                 .tag(entry.id)
                                 .contextMenu { activeRowMenu(for: entry) }
                         }

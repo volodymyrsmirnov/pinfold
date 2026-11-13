@@ -56,6 +56,9 @@ struct HomeView: View {
     @State var isSubscribing = false
     @State var subscribeError: String?
     @Environment(SubscriptionRefresher.self) var refresher
+    /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
+    @State var stopUpdatingTarget: CatalogEntry?
+    @State var refreshError: String?
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State var isSettingsPresented = false
@@ -213,6 +216,9 @@ struct HomeView: View {
         .modifier(SubscribeAlertsModifier(
             isPresented: $isSubscribeAlertPresented, text: $subscribeText,
             error: $subscribeError, isSubscribing: isSubscribing, subscribe: runSubscribe
+        ))
+        .modifier(OnlineListDialogsModifier(
+            stopTarget: $stopUpdatingTarget, refreshError: $refreshError, stop: runStopUpdating
         ))
         // Rename alert — a single TextField prefilled with the current name. `presenting` keys
         // the alert to the entry being renamed; Save commits the trimmed name via

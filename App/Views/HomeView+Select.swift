@@ -20,7 +20,7 @@ extension HomeView {
     var selectionList: some View {
         List(selection: $bulkSelection) {
             ForEach(displayedActive) { entry in
-                FileRow(entry: entry)
+                FileRow(entry: entry, online: onlineStatus(for: entry))
                     .tag(entry.id)
             }
         }

@@ -77,3 +77,74 @@ struct SubscribeAlertsModifier: ViewModifier {
             }
     }
 }
+
+extension HomeView {
+    /// The row's trailing status for an online list; `nil` for a normal list.
+    func onlineStatus(for entry: CatalogEntry) -> FileRow.OnlineStatus? {
+        guard entry.isOnline else { return nil }
+        switch refresher.phase(for: entry) {
+        case .idle: return .idle(lastSuccess: refresher.lastSuccess(for: entry))
+        case .refreshing: return .refreshing
+        case .failed: return .failed
+        }
+    }
+
+    /// Row menu "Refresh Now". A plain `Task`, never inside a storage-queue operation.
+    func runRefreshNow(_ entry: CatalogEntry) {
+        Task {
+            if case let .failure(error) = await refresher.refreshNow(entry) {
+                refreshError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Confirmed "Stop Updating": the list stays as a normal one.
+    func runStopUpdating(_ entry: CatalogEntry) {
+        Task {
+            do {
+                try await refresher.stopUpdating(entry)
+            } catch {
+                refreshError = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// The Stop Updating confirmation and the Refresh Now failure alert.
+struct OnlineListDialogsModifier: ViewModifier {
+    @Binding var stopTarget: CatalogEntry?
+    @Binding var refreshError: String?
+    let stop: (CatalogEntry) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                stopTarget.map {
+                    String(localized: "Stop updating \u{201C}\($0.displayName)\u{201D}? The current copy stays as a normal list.")
+                } ?? "",
+                isPresented: Binding(get: { stopTarget != nil }, set: {
+                    if !$0 {
+                        stopTarget = nil
+                    }
+                }),
+                titleVisibility: .visible,
+                presenting: stopTarget
+            ) { entry in
+                Button("Stop Updating", role: .destructive) { stop(entry) }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert(
+                "Couldn't Update",
+                isPresented: Binding(get: { refreshError != nil }, set: {
+                    if !$0 {
+                        refreshError = nil
+                    }
+                }),
+                presenting: refreshError
+            ) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { message in
+                Text(message)
+            }
+    }
+}
