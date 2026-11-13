@@ -50,15 +50,4 @@ extension KMLDetailView {
             networkLinkStatus = .idle
         }
     }
-
-    /// Re-reads the document from the entry's (just replaced) original and rebuilds the list.
-    private func reloadDocument(for updated: CatalogEntry) async {
-        loadedEntryID = updated.id
-        document = nil
-        outline = nil
-        await loadDocument(for: updated)
-        if let document, !Task.isCancelled {
-            await refreshNotices(for: document)
-        }
-    }
 }

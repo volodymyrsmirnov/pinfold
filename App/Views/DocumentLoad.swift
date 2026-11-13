@@ -12,6 +12,12 @@ enum DocumentLoad {
         try KMLReader.readDocument(data: data)
     }
 
+    /// Whether the open list must be re-read: the live entry's content differs from what the
+    /// view loaded (an online refresh replaced the original), or nothing is loaded yet.
+    static func needsReload(loadedSHA: String?, live: String) -> Bool {
+        loadedSHA != live
+    }
+
     /// The error worth showing for a failed load, or `nil` for a cancellation (the person left
     /// the screen; nothing went wrong).
     static func reportableError(_ error: Error) -> Error? {

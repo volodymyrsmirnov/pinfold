@@ -18,7 +18,8 @@ extension KMLDetailView {
     /// Deliberately does not refresh notices: the caller does that after any session restore has
     /// been applied (`refreshNotices`), so the first outline is built from the restored state.
     func loadDocument(for target: CatalogEntry? = nil) async {
-        let target = target ?? entry
+        let target = target ?? liveEntry
+        loadedSHA = target.contentSHA256
         annotations = PlacemarkAnnotations(entry: target, storage: storage)
         let fileURL = storage.originalFile(for: target)
         do {

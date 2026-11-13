@@ -13,6 +13,12 @@ struct DocumentLoadTests {
         #expect(DocumentLoad.reportableError(Boom()) is Boom)
     }
 
+    @Test func reloadNeededOnlyWhenLiveContentDiffersFromLoaded() {
+        #expect(DocumentLoad.needsReload(loadedSHA: "a", live: "b"))
+        #expect(!DocumentLoad.needsReload(loadedSHA: "a", live: "a"))
+        #expect(DocumentLoad.needsReload(loadedSHA: nil, live: "a"))
+    }
+
     @Test func cancelledParseOfLargeFileThrowsCancellation() async {
         let data = LargeKML.data(placemarks: 100_000)
         let task = Task.detached { () throws -> Bool in

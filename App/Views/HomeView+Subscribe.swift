@@ -91,21 +91,32 @@ extension HomeView {
 
     /// Row menu "Refresh Now". A plain `Task`, never inside a storage-queue operation.
     func runRefreshNow(_ entry: CatalogEntry) {
-        Task {
-            if case let .failure(error) = await refresher.refreshNow(entry) {
-                refreshError = error.localizedDescription
-            }
-        }
+        Task { refreshError = await refresher.refreshNowMessage(entry) }
     }
 
     /// Confirmed "Stop Updating": the list stays as a normal one.
     func runStopUpdating(_ entry: CatalogEntry) {
-        Task {
-            do {
-                try await refresher.stopUpdating(entry)
-            } catch {
-                refreshError = error.localizedDescription
-            }
+        Task { refreshError = await refresher.stopUpdatingMessage(entry) }
+    }
+}
+
+extension SubscriptionRefresher {
+    /// Refreshes now and returns the failure text to show, or `nil` on success. Shared by the
+    /// catalogue row menu and the list screen's ⋯ menu.
+    func refreshNowMessage(_ entry: CatalogEntry) async -> String? {
+        if case let .failure(error) = await refreshNow(entry) {
+            return error.localizedDescription
+        }
+        return nil
+    }
+
+    /// Stops updating and returns the failure text to show, or `nil` on success.
+    func stopUpdatingMessage(_ entry: CatalogEntry) async -> String? {
+        do {
+            try await stopUpdating(entry)
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 }
