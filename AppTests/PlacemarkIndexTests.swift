@@ -256,7 +256,7 @@ struct PlacemarkIndexTests {
             id: "p1", name: "Camp", descriptionHTML: "<p>Quiet <b>riverside</b> spot</p>", styleUrl: nil,
             coordinate: Coordinate(longitude: 1, latitude: 2),
             extendedData: [KMLDataItem(name: "owner", value: "Ranger Anna")], photoLinks: [],
-            snippet: "Teaser line", address: "12 Mill Road"
+            snippet: "Teaser line", address: "12 Mill Road", phoneNumber: "+44 20 7946 0000"
         )
         let lineOnly = KMLPlacemark(
             id: "p2", name: "Trail", descriptionHTML: nil, styleUrl: nil,
@@ -272,6 +272,7 @@ struct PlacemarkIndexTests {
         #expect(text.contains("Ranger Anna"))
         #expect(text.contains("Teaser line"))
         #expect(text.contains("12 Mill Road"))
+        #expect(text.contains("+44 20 7946 0000"))
         let trail = entries.first { $0.name == "Trail" }
         #expect(trail?.hasPoint == false)
         #expect(trail?.text == nil)

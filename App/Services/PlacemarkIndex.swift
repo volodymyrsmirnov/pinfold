@@ -144,7 +144,7 @@ enum PlacemarkIndex {
     }
 
     /// The unfolded searchable body of a placemark besides its name: description plain text
-    /// (capped), extended-data values, snippet and address. `nil` when there is none.
+    /// (capped), extended-data values, snippet, address and phone number. `nil` when there is none.
     static func searchableText(for placemark: KMLPlacemark) -> String? {
         var parts: [String] = []
         if let html = placemark.descriptionHTML, !html.isEmpty {
@@ -159,6 +159,9 @@ enum PlacemarkIndex {
         }
         if let address = placemark.address, !address.isEmpty {
             parts.append(address)
+        }
+        if let phone = placemark.phoneNumber, !phone.isEmpty {
+            parts.append(phone)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " \u{2022} ")
     }
