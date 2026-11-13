@@ -49,18 +49,19 @@ extension KMLDetailView {
                 await reloadDocument(for: liveEntry)
             case .enqueued:
                 // Another subscribe of the same URL is adding the list; this file stays as is.
-                networkLinkStatus = .idle
+                networkLinkStatus = .alreadyBeingAdded
             }
         } catch {
             networkLinkStatus = .failed(error.localizedDescription)
         }
     }
 
-    /// Subscribes the links sequentially. Links a list already follows aren't counted; the
-    /// first failure is shown only when nothing was added.
+    /// Subscribes the links sequentially. Links a list already follows aren't counted; a
+    /// failure is shown alongside what was added (`NetworkLinkStatus.afterSubscribingEach`).
     @MainActor
     private func subscribeEach(_ service: SubscriptionService, offer: NetworkLinkOffer) async {
         var added = 0
+        var failed = 0
         var existing: UUID?
         var firstError: String?
         for link in offer.links {
@@ -71,13 +72,12 @@ extension KMLDetailView {
                 case .converted, .enqueued: added += 1
                 }
             } catch {
+                failed += 1
                 firstError = firstError ?? error.localizedDescription
             }
         }
-        if added > 0 {
-            networkLinkStatus = .finished(added == 1 ? "Added 1 list." : "Added \(added) lists.")
-        } else if let firstError {
-            networkLinkStatus = .failed(firstError)
+        if let status = NetworkLinkStatus.afterSubscribingEach(added: added, failed: failed, firstError: firstError) {
+            networkLinkStatus = status
         } else if let existing {
             networkLinkStatus = .idle
             open(existing)

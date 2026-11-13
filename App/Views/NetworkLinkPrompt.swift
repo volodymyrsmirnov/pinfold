@@ -52,17 +52,41 @@ enum NetworkLinkStatus: Equatable {
     case idle
     case subscribing
     case finished(String)
+    /// Some links were added and some failed; the button stays so the person can retry.
+    case partial(String)
     case failed(String)
+
+    /// The single link's list is already being added by another subscribe.
+    static let alreadyBeingAdded = NetworkLinkStatus.finished(String(localized: "This list is already being added."))
+
+    /// The status after subscribing each link of an offer: `added` new lists, `failed` links
+    /// that couldn't be added (`firstError` the first reason). `nil` when nothing was added or
+    /// failed, so the caller opens a list that already follows a link, or goes idle.
+    static func afterSubscribingEach(added: Int, failed: Int, firstError: String?) -> NetworkLinkStatus? {
+        let addedText = added == 1 ? String(localized: "Added 1 list.") : String(localized: "Added \(added) lists.")
+        switch (added > 0, failed > 0) {
+        case (true, false):
+            return .finished(addedText)
+        case (true, true):
+            let reason = firstError ?? ""
+            return .partial(String(localized: "\(addedText) \(failed) couldn't be added: \(reason)"))
+        case (false, true):
+            return firstError.map { .failed($0) }
+        case (false, false):
+            return nil
+        }
+    }
 }
 
 /// A card offering to subscribe to the files a network-link document points at. Nothing is
 /// fetched until the person taps the button; the text names the hosts.
 struct NetworkLinkPrompt: View {
-    /// The button is offered until a subscribe runs, and again after one failed; once it
-    /// finished, tapping again would only subscribe the same links twice.
+    /// The button is offered until a subscribe runs, and again after one failed in full or in
+    /// part (a retry finds the links already added as existing lists); once it finished,
+    /// tapping again would only subscribe the same links twice.
     static func showsButton(for status: NetworkLinkStatus) -> Bool {
         switch status {
-        case .idle, .failed: true
+        case .idle, .partial, .failed: true
         case .subscribing, .finished: false
         }
     }
@@ -110,6 +134,10 @@ struct NetworkLinkPrompt: View {
             Label(message, systemImage: "checkmark.circle")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        case let .partial(message):
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(.orange)
         case let .failed(message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.footnote)

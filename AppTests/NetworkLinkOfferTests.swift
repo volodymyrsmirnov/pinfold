@@ -71,4 +71,32 @@ struct NetworkLinkOfferTests {
         #expect(!NetworkLinkPrompt.showsButton(for: .subscribing))
         #expect(!NetworkLinkPrompt.showsButton(for: .finished("Added 2 lists.")))
     }
+
+    // MARK: - Status after subscribing each link (G11)
+
+    @Test func eachLink_allAdded_finishes() {
+        #expect(NetworkLinkStatus.afterSubscribingEach(added: 1, failed: 0, firstError: nil) == .finished("Added 1 list."))
+        #expect(NetworkLinkStatus.afterSubscribingEach(added: 3, failed: 0, firstError: nil) == .finished("Added 3 lists."))
+    }
+
+    /// Some links failed: say so and keep the button, so the person can retry (links already
+    /// added come back as existing lists and aren't added twice).
+    @Test func eachLink_partialFailure_showsTheErrorAndKeepsTheButton() {
+        let status = NetworkLinkStatus.afterSubscribingEach(added: 2, failed: 1, firstError: "HTTP 404")
+        #expect(status == .partial("Added 2 lists. 1 couldn't be added: HTTP 404"))
+        #expect(NetworkLinkPrompt.showsButton(for: .partial("x")))
+        #expect(NetworkLinkStatus.afterSubscribingEach(added: 1, failed: 2, firstError: "Boom")
+            == .partial("Added 1 list. 2 couldn't be added: Boom"))
+    }
+
+    @Test func eachLink_nothingAdded_failsOrDefersToTheCaller() {
+        #expect(NetworkLinkStatus.afterSubscribingEach(added: 0, failed: 2, firstError: "Boom") == .failed("Boom"))
+        #expect(NetworkLinkStatus.afterSubscribingEach(added: 0, failed: 0, firstError: nil) == nil)
+    }
+
+    // MARK: - Single link already being added (G8)
+
+    @Test func singleLink_alreadyBeingAdded_saysSo() {
+        #expect(NetworkLinkStatus.alreadyBeingAdded == .finished("This list is already being added."))
+    }
 }
