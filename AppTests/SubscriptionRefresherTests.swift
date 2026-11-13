@@ -297,6 +297,50 @@ struct SubscriptionRefresherTests {
         #expect(!FileManager.default.fileExists(atPath: stateFile.path))
     }
 
+    @Test func refresh_readOnlyMidFlight_discardsSilently() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        let before = try env.original(entry)
+        let gate = FetchGate()
+        env.stub.gate = gate
+        env.stub.respond(with: .data(kml(["Alpha", "Beta"])))
+        let refresher = env.makeRefresher()
+
+        let inFlight = Task { await refresher.refreshNow(entry) }
+        await gate.waitForArrivals(1)
+        // The sidecar becomes unreadable (e.g. a newer schema synced in): the entry is read-only.
+        try Data("{".utf8).write(to: env.storage.metadataFile(for: entry))
+        await env.catalog.reload()
+        #expect(try env.entry(folder).isReadOnly)
+        await gate.open()
+        let result = await inFlight.value
+
+        #expect(failure(of: result) == nil)
+        #expect(refresher.phase(for: entry) == .idle)
+        #expect(try env.original(entry) == before)
+        let stateFile = env.resources(entry).appendingPathComponent(SubscriptionStateStore.filename)
+        #expect(!FileManager.default.fileExists(atPath: stateFile.path))
+    }
+
+    @Test func refreshNow_readOnly_returnsErrorWithoutFetchingOrFailing() async throws {
+        let env = makeEnvironment()
+        let refresher = env.makeRefresher()
+        let placeholder = try CatalogEntry(
+            id: UUID(), displayName: "Synced", sourceFilename: "feed.kml", importDate: .now, pointCount: 0,
+            contentSHA256: "", storageFolderName: UUID().uuidString, trashedAt: nil,
+            subscription: Subscription(url: #require(URL(string: "https://example.test/feed.kml")),
+                                       origin: .url, subscribedAt: .now),
+            sidecarState: .notDownloaded
+        )
+
+        let result = await refresher.refreshNow(placeholder)
+
+        #expect(failure(of: result) == .readOnly)
+        #expect(env.stub.calls == 0)
+        #expect(refresher.phase(for: placeholder) == .idle)
+    }
+
     // MARK: - In flight
 
     @Test func refreshDue_twiceConcurrently_fetchesOnce() async throws {
@@ -394,6 +438,32 @@ struct SubscriptionRefresherTests {
 
         refresher.sceneDidBecomeActive()
         await refresher.activationTask?.value
+        #expect(refresher.isTimerArmed)
+    }
+
+    @Test func staleActivation_afterResign_armsNothingAndFetchesNothing() async throws {
+        let env = makeEnvironment()
+        try await addOnlineList(env, url: "https://example.test/recent.kml", state: checkedAMinuteAgo)
+        env.stub.respond(with: .notModified)
+        let refresher = env.makeRefresher()
+        await started(refresher)
+        #expect(refresher.isTimerArmed)
+        refresher.sceneDidResignActive() // the app goes to the background
+        try await addOnlineList(env, url: "https://example.test/due.kml") // a due list syncs in
+
+        let token = refresher.activationToken // `.active` arrives; RootView reads the token
+        refresher.sceneDidResignActive() // a quick swipe before the deferred activation runs
+        refresher.sceneDidBecomeActive(token: token)
+        await refresher.activationTask?.value
+
+        #expect(env.stub.calls == 0)
+        #expect(!refresher.isTimerArmed)
+        #expect(refresher.nextFireDate == nil)
+
+        // A current token activates as usual.
+        refresher.sceneDidBecomeActive(token: refresher.activationToken)
+        await refresher.activationTask?.value
+        #expect(env.stub.urls == ["https://example.test/due.kml"])
         #expect(refresher.isTimerArmed)
     }
 

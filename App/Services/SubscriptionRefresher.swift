@@ -89,6 +89,9 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored private var inFlight: [String: Task<Result<Void, SubscriptionError>, Never>] = [:]
     @ObservationIgnored private(set) var isStarted = false
     @ObservationIgnored var isSceneActive = true
+    /// Bumped by every `sceneDidResignActive`. Capture it when the scene becomes active and pass
+    /// it to the deferred `sceneDidBecomeActive(token:)`, which ignores it once it is stale.
+    @ObservationIgnored private(set) var activationToken = 0
     /// The due check started by `start`, `sceneDidBecomeActive` or the device coming back online.
     @ObservationIgnored var activationTask: Task<Void, Never>?
 
@@ -165,7 +168,15 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     }
 
     /// Checks due lists and arms the timer (the app came to the foreground).
-    func sceneDidBecomeActive() {
+    ///
+    /// - Parameter token: The `activationToken` read when the scene became active, for a call
+    ///   made after other work (re-resolve, inbox drains, reload). If the scene resigned
+    ///   meanwhile, the call is stale and does nothing, so no timer or fetch starts outside
+    ///   the foreground.
+    func sceneDidBecomeActive(token: Int? = nil) {
+        if let token, token != activationToken {
+            return
+        }
         isSceneActive = true
         guard isStarted else { return }
         activationTask = Task { await refreshDue() }
@@ -174,6 +185,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     /// Cancels the timer (the app left the foreground). In-flight refreshes finish.
     func sceneDidResignActive() {
         isSceneActive = false
+        activationToken &+= 1
         observationGeneration &+= 1
         cancelTimer()
     }
@@ -186,6 +198,8 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         guard isStarted else { return }
         // Never pick lists while a storage application is running: wait for it to finish.
         await storageQueue.run {}
+        // The app may have left the foreground while waiting: start no fetch then.
+        guard isSceneActive else { return }
         guard network?.isOnline != false else {
             rearm()
             return
@@ -211,10 +225,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         }
         let live = liveEntry(folder) ?? entry
         guard live.isOnline else { return .success(()) }
-        guard !live.isReadOnly else {
-            phases[folder] = .failed(SubscriptionError.readOnly.localizedDescription)
-            return .failure(.readOnly)
-        }
+        guard !live.isReadOnly else { return .failure(.readOnly) }
         return await begin(live).value
     }
 
@@ -277,11 +288,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     }
 
     /// Records a fetch outcome against the live entry; runs inside the storage queue. A list
-    /// that is gone, no longer online, or now follows another URL is left untouched.
+    /// that is gone, no longer online, now follows another URL, or is read-only (sidecar not
+    /// downloaded or unreadable) is left untouched: nothing is written and no error recorded.
     private func record(
         _ outcome: FetchOutcome, folder: String, subscription: Subscription, attemptAt: Date
     ) async -> Result<Void, SubscriptionError> {
-        guard let live = liveEntry(folder), live.subscription?.url == subscription.url else {
+        guard let live = liveEntry(folder), live.subscription?.url == subscription.url, !live.isReadOnly else {
             return .success(())
         }
         let storage = catalog.storage
@@ -289,31 +301,27 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         var state = state(for: live)
         state.lastAttemptAt = attemptAt
         let failure: SubscriptionError?
-        if live.isReadOnly {
-            failure = .readOnly
-        } else {
-            switch outcome {
-            case let .unchanged(response):
-                // A 304 often omits the validators: keep the stored ones then.
-                state.etag = response.etag ?? state.etag
-                state.lastModified = response.lastModified ?? state.lastModified
-                state.httpExpires = response.httpExpires
+        switch outcome {
+        case let .unchanged(response):
+            // A 304 often omits the validators: keep the stored ones then.
+            state.etag = response.etag ?? state.etag
+            state.lastModified = response.lastModified ?? state.lastModified
+            state.httpExpires = response.httpExpires
+            failure = nil
+        case let .changed(result, response):
+            do {
+                try await write(result, to: live, in: storage)
                 failure = nil
-            case let .changed(result, response):
-                do {
-                    try await write(result, to: live, in: storage)
-                    failure = nil
-                    state.etag = response.etag
-                    state.lastModified = response.lastModified
-                    state.httpExpires = response.httpExpires
-                    state.serverMinRefreshPeriod = result.networkLinkControl?.minRefreshPeriod
-                    state.serverExpires = result.networkLinkControl?.expires
-                } catch {
-                    failure = .writeFailed(error.localizedDescription)
-                }
-            case let .failed(error):
-                failure = error
+                state.etag = response.etag
+                state.lastModified = response.lastModified
+                state.httpExpires = response.httpExpires
+                state.serverMinRefreshPeriod = result.networkLinkControl?.minRefreshPeriod
+                state.serverExpires = result.networkLinkControl?.expires
+            } catch {
+                failure = .writeFailed(error.localizedDescription)
             }
+        case let .failed(error):
+            failure = error
         }
         if let failure {
             state.lastError = failure.localizedDescription

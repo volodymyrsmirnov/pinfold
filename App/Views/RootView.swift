@@ -218,12 +218,14 @@ struct RootView: View {
             case .background:
                 refresher.sceneDidResignActive()
             case .active:
+                // Read now: a resign during the awaits below makes the activation stale.
+                let token = refresher.activationToken
                 Task {
                     await reresolveStorageIfNeeded()
                     await drainInbox()
                     await drainDocumentsInbox()
                     await catalog.reload()
-                    refresher.sceneDidBecomeActive()
+                    refresher.sceneDidBecomeActive(token: token)
                 }
             @unknown default:
                 break
