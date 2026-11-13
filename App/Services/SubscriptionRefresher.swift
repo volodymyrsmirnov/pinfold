@@ -319,7 +319,9 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             failure = nil
         case let .changed(result, response):
             do {
-                try await write(result, to: live, in: storage)
+                _ = try await SubscriptionContentWriter.applyAndReindex(
+                    result, to: live, storage: storage, cache: cache
+                )
                 failure = nil
                 state.etag = response.etag
                 state.lastModified = response.lastModified
@@ -344,18 +346,6 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             await catalog.reload()
         }
         return .success(())
-    }
-
-    /// Replaces the live entry's content, then refreshes what search and Spotlight hold for it.
-    private func write(_ result: ImportResult, to live: CatalogEntry, in storage: StorageLocations) async throws {
-        let updated = try await SubscriptionContentWriter.apply(result, to: live, storage: storage, cache: cache)
-        PlacemarkIndexStore.shared.invalidate(
-            resourcesDir: storage.resourcesDirectory(for: live), sidecar: storage.metadataFile(for: live)
-        )
-        // A trashed list is out of Spotlight; restoring it re-indexes.
-        if !live.isTrashed {
-            SpotlightIndexer.index(entry: updated, indexEntries: result.indexEntries)
-        }
     }
 
     // MARK: - Stop Updating

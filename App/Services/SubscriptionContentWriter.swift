@@ -22,6 +22,26 @@ enum SubscriptionContentWriter {
     ) async throws -> CatalogEntry {
         try await applyOffMain(result, to: entry, storage: storage, cache: cache)
     }
+
+    /// `apply`, then refreshes what search and Spotlight hold for `entry`: drops its cached
+    /// placemark index and re-indexes it in Spotlight (a trashed list is out of Spotlight;
+    /// restoring it re-indexes). Shared by a refresh and the in-place subscribe. Safe inside a
+    /// `StorageApplyQueue` operation: it never waits on the queue. Returns the updated entry.
+    static func applyAndReindex(
+        _ result: ImportResult,
+        to entry: CatalogEntry,
+        storage: StorageLocations,
+        cache: ResourceCache
+    ) async throws -> CatalogEntry {
+        let updated = try await apply(result, to: entry, storage: storage, cache: cache)
+        PlacemarkIndexStore.shared.invalidate(
+            resourcesDir: storage.resourcesDirectory(for: entry), sidecar: storage.metadataFile(for: entry)
+        )
+        if !entry.isTrashed {
+            SpotlightIndexer.index(entry: updated, indexEntries: result.indexEntries)
+        }
+        return updated
+    }
 }
 
 /// Runs the refresh write in a detached task. A `nonisolated` free function so the detached

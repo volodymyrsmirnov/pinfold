@@ -244,8 +244,9 @@ struct SubscriptionServiceTests {
         let fetched = kml(["A", "B"])
         env.stub.respond(with: fetched, etag: "\"v2\"")
 
-        try await env.service.subscribeInPlace(entry, link: link)
+        let outcome = try await env.service.subscribeInPlace(entry, link: link)
 
+        #expect(outcome == .converted(entry.id))
         #expect(env.stub.urls == ["https://example.test/feed.kml"])
         let live = try env.entry(entry.id)
         #expect(try Data(contentsOf: env.storage.originalFile(for: live)) == fetched)
@@ -260,6 +261,25 @@ struct SubscriptionServiceTests {
         #expect(env.catalog.entries.count == 1)
         let state = SubscriptionStateStore.read(in: env.storage.resourcesDirectory(for: live))
         #expect(state.etag == "\"v2\"")
+    }
+
+    @Test func subscribeInPlace_urlAlreadyFollowed_returnsExisting_leavesEntryUntouched() async throws {
+        let env = makeEnvironment()
+        let online = try await addList(env, data: kml(["A"]), subscription: Subscription(
+            url: feedURL, origin: .url, subscribedAt: Date(timeIntervalSince1970: 1000)
+        ))
+        let entry = try await addList(env, data: linkFile(["http://example.test/feed.kml"]), filename: "links.kml")
+        let originalBefore = try Data(contentsOf: env.storage.originalFile(for: entry))
+        let sidecarBefore = try env.sidecar(entry.storageFolderName)
+        let link = KMLNetworkLink(name: "Feed", href: "http://example.test/feed.kml")
+
+        let outcome = try await env.service.subscribeInPlace(entry, link: link)
+
+        #expect(outcome == .existing(online.id))
+        #expect(env.stub.calls == 0)
+        #expect(try Data(contentsOf: env.storage.originalFile(for: entry)) == originalBefore)
+        #expect(try env.sidecar(entry.storageFolderName) == sidecarBefore)
+        #expect(env.catalog.entries.count == 2)
     }
 
     @Test func subscribeInPlace_readOnly_throwsWithoutFetching() async throws {

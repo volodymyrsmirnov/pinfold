@@ -28,7 +28,8 @@ enum SubscriptionURL {
     enum Outcome: Equatable {
         /// A list already follows the URL; nothing was fetched.
         case existing(UUID)
-        /// A normal list with the same content became the online list.
+        /// A normal list became the online list: one with the same content (`subscribe`), or
+        /// the link file itself (`subscribeInPlace`).
         case converted(UUID)
         /// A new list is on the import queue.
         case enqueued
@@ -62,7 +63,7 @@ enum SubscriptionURL {
     func subscribe(
         to url: URL, origin: Subscription.Origin, link: KMLNetworkLink? = nil
     ) async throws(SubscriptionError) -> Outcome {
-        if let existing = catalog.entries.first(where: { !$0.isTrashed && $0.subscription?.url == url }) {
+        if let existing = following(url) {
             return .existing(existing.id)
         }
         let fetched = try await fetch(url, filename: Self.filename(for: url, link: link))
@@ -83,9 +84,17 @@ enum SubscriptionURL {
     /// The single-link card: `entry` (a file holding just this link) becomes the online list.
     /// Its original is replaced by the fetched file, keeping its name, notes and other
     /// annotations, and it follows `link` from now on.
-    func subscribeInPlace(_ entry: CatalogEntry, link: KMLNetworkLink) async throws(SubscriptionError) {
+    ///
+    /// - Returns: `.existing(id)` when a non-trashed list already follows the link's URL
+    ///   (nothing is fetched and `entry` is left untouched; select that list), else
+    ///   `.converted(entry.id)`.
+    @discardableResult
+    func subscribeInPlace(_ entry: CatalogEntry, link: KMLNetworkLink) async throws(SubscriptionError) -> Outcome {
         let folder = entry.storageFolderName
         guard let url = NetworkLinkSnapshotService.fetchURL(for: link) else { throw .notSupported }
+        if let existing = following(url) {
+            return .existing(existing.id)
+        }
         guard !(liveEntry(folder) ?? entry).isReadOnly else { throw .readOnly }
         let fetched = try await fetch(url, filename: Self.filename(for: url, link: link))
         let subscription = makeSubscription(url, origin: .networkLink, link: link)
@@ -95,19 +104,12 @@ enum SubscriptionURL {
                 return .readOnly
             }
             let storage = catalog.storage
-            let updated: CatalogEntry
             do {
-                updated = try await SubscriptionContentWriter.apply(
+                _ = try await SubscriptionContentWriter.applyAndReindex(
                     fetched.result, to: live, storage: storage, cache: cache
                 )
             } catch {
                 return .writeFailed(error.localizedDescription)
-            }
-            PlacemarkIndexStore.shared.invalidate(
-                resourcesDir: storage.resourcesDirectory(for: live), sidecar: storage.metadataFile(for: live)
-            )
-            if !live.isTrashed {
-                SpotlightIndexer.index(entry: updated, indexEntries: fetched.result.indexEntries)
             }
             // The content is in place either way; a failed subscription write leaves a normal
             // list holding the fetched copy.
@@ -124,6 +126,7 @@ enum SubscriptionURL {
         if let error {
             throw error
         }
+        return .converted(entry.id)
     }
 
     // MARK: - Steps
@@ -191,6 +194,11 @@ enum SubscriptionURL {
             return .success(true)
         }
         return try outcome.get()
+    }
+
+    /// The non-trashed list that already follows `url`, if any.
+    private func following(_ url: URL) -> CatalogEntry? {
+        catalog.entries.first { !$0.isTrashed && $0.subscription?.url == url }
     }
 
     private func liveEntry(_ folder: String) -> CatalogEntry? {
