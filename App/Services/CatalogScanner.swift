@@ -218,7 +218,7 @@ struct CatalogScanner {
     /// window (an update landing before that first stamping pass) is small and accepted.
     private func needsRefresh(forFolderNamed name: String, resourcesDir: URL) -> Bool {
         guard PlacemarkIndex.exists(in: resourcesDir) else { return true }
-        // Built by an older build (before description images were gathered): refresh once; the
+        // Built by an older derived-data generation (see `currentDerivedDataVersion`): refresh once; the
         // refresh writes the current version, so this never repeats.
         guard PlacemarkIndex.derivedDataIsCurrent(in: resourcesDir) else { return true }
         guard case let .ok(meta) = storage.readSidecar(forFolderNamed: name), !meta.contentSHA256.isEmpty

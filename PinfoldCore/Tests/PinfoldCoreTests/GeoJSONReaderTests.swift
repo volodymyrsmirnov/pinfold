@@ -116,6 +116,27 @@ struct GeoJSONReaderTests {
         #expect(doc.root.placemarks[0].descriptionHTML == "<b>bold</b>")
     }
 
+    private func description(_ text: String) throws -> String? {
+        let encoded = try JSONSerialization.data(withJSONObject: ["description": text])
+        let properties = try #require(String(bytes: encoded, encoding: .utf8))
+        return try read(feature(#"{"type":"Point","coordinates":[1,2]}"#, properties: properties))
+            .root.placemarks[0].descriptionHTML
+    }
+
+    @Test func angleBracketWordsInPlainTextAreEscaped() throws {
+        #expect(try description("Walk <checked> & done") == "Walk &lt;checked&gt; &amp; done")
+        #expect(try description("x<y and a>b") == "x&lt;y and a&gt;b")
+        #expect(try description("Bring <your-own> cup") == "Bring &lt;your-own&gt; cup")
+    }
+
+    @Test func realHTMLTagsAreKeptInAnyCase() throws {
+        #expect(try description("<P>Hi</P>") == "<P>Hi</P>")
+        #expect(try description(#"<img src="https://a.example/x.png">"#) == #"<img src="https://a.example/x.png">"#)
+        #expect(try description("Line<br/>break") == "Line<br/>break")
+        #expect(try description("<!-- note -->Text") == "<!-- note -->Text")
+        #expect(try description("<a href=\"https://a.example\">link</a>") == "<a href=\"https://a.example\">link</a>")
+    }
+
     @Test func simplestyleBecomesStyles() throws {
         let doc = try KMLReader.readDocument(data: Fixture.data("sample.geojson"))
         let marker = try #require(doc.resolvedStyle(forStyleUrl: doc.root.placemarks[0].styleUrl))
