@@ -17,29 +17,37 @@ extension KMLDetailView {
     ///
     /// Deliberately does not refresh notices: the caller does that after any session restore has
     /// been applied (`refreshNotices`), so the first outline is built from the restored state.
+    ///
+    /// Every load takes a ticket (`DocumentLoad.Tickets`) and publishes only while it is the
+    /// newest, so loads started from different tasks can't publish out of order. A failure
+    /// while a document is on screen (an in-place reload) keeps that document and shows no error.
     func loadDocument(for target: CatalogEntry? = nil) async {
         let target = target ?? liveEntry
+        let ticket = loadTickets.issue()
         annotations = PlacemarkAnnotations(entry: target, storage: storage)
         let fileURL = storage.originalFile(for: target)
         do {
             // Materializes an iCloud placeholder first (no-op for local files), then parses the
             // document only. Off-main; a spinner shows meanwhile.
             let parsed = try await loadDocumentOffMain(fileURL)
-            if Task.isCancelled {
+            if Task.isCancelled || !loadTickets.isCurrent(ticket) {
                 return
             }
             // Published together: `loadedSHA` always names the content `document` shows.
             document = parsed
             loadedSHA = target.contentSHA256
+            loadError = nil
             consentDismissed = false
             // "Clear Downloaded Images" promises the images return the next time the entry is
             // opened; this also lets the consent banner's Allow fetch again after a clear.
             resumeDeferredDownloads(resourceCache, in: storage.resourcesDirectory(for: target))
         } catch {
-            if Task.isCancelled {
+            if Task.isCancelled || !loadTickets.isCurrent(ticket) {
                 return
             }
-            loadError = DocumentLoad.reportableError(error)
+            if let shown = DocumentLoad.failureToShow(error, documentShown: document != nil) {
+                loadError = shown
+            }
         }
     }
 }

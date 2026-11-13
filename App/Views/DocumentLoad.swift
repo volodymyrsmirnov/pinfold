@@ -41,6 +41,30 @@ enum DocumentLoad {
     static func reportableError(_ error: Error) -> Error? {
         error is CancellationError ? nil : error
     }
+
+    /// The error to show for a failed load: `nil` while a document is still on screen (an
+    /// in-place reload after a refresh keeps the working list rather than replacing it with
+    /// "Cannot Open File"), else `reportableError`.
+    static func failureToShow(_ error: Error, documentShown: Bool) -> Error? {
+        documentShown ? nil : reportableError(error)
+    }
+
+    /// Orders the open list's document loads. The first load, its reconcile, the content-keyed
+    /// reload and a replaced network-link original each take a ticket when they start, and
+    /// only the newest may publish (or report an error), so an older parse that finishes last
+    /// never overwrites a newer document.
+    struct Tickets {
+        private(set) var latest = 0
+
+        mutating func issue() -> Int {
+            latest &+= 1
+            return latest
+        }
+
+        func isCurrent(_ ticket: Int) -> Bool {
+            ticket == latest
+        }
+    }
 }
 
 /// Reads (materializing an iCloud placeholder first) and parses `fileURL` off the main actor.

@@ -44,6 +44,27 @@ struct DocumentLoadTests {
         #expect(trigger("a") == trigger("a"))
     }
 
+    /// A→B→C: the first load's reconcile parses B, a content-keyed reload parses C, and B's
+    /// parse finishes last. Only the newest load may publish, so C stays on screen.
+    @Test func tickets_onlyTheNewestLoadPublishes_evenWhenAnOlderOneFinishesLast() {
+        var tickets = DocumentLoad.Tickets()
+        let loadA = tickets.issue()
+        #expect(tickets.isCurrent(loadA))
+        let loadB = tickets.issue() // the initial task reconciles with B
+        let loadC = tickets.issue() // the keyed task reloads for C
+        #expect(tickets.isCurrent(loadC)) // C finishes first: it publishes
+        #expect(!tickets.isCurrent(loadB)) // B finishes last: dropped
+        #expect(!tickets.isCurrent(loadA))
+    }
+
+    /// A content reload that fails while the old document is on screen keeps it there.
+    @Test func failureToShow_keepsAShownDocument_andReportsOnlyWhenNothingIsShown() {
+        struct Boom: Error {}
+        #expect(DocumentLoad.failureToShow(Boom(), documentShown: true) == nil)
+        #expect(DocumentLoad.failureToShow(Boom(), documentShown: false) is Boom)
+        #expect(DocumentLoad.failureToShow(CancellationError(), documentShown: false) == nil)
+    }
+
     @Test func cancelledParseOfLargeFileThrowsCancellation() async {
         let data = LargeKML.data(placemarks: 100_000)
         let task = Task.detached { () throws -> Bool in

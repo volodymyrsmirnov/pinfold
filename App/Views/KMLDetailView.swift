@@ -52,6 +52,8 @@ struct KMLDetailView: View {
     /// The `contentSHA256` of the original `document` was parsed from, set only together with
     /// `document`; a differing live value (an online refresh) triggers a reload.
     @State var loadedSHA: String?
+    /// Orders document loads so only the newest one publishes (see `loadDocument`).
+    @State var loadTickets = DocumentLoad.Tickets()
     /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
     @State var stopUpdatingTarget: CatalogEntry?
     @State var refreshError: String?
