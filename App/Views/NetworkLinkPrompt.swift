@@ -35,6 +35,16 @@ struct NetworkLinkOffer: Equatable {
     var replacesThisList: Bool {
         isSingle && placemarkCount == 0
     }
+
+    /// "Subscribe" when this list becomes the online list, else how many new lists it makes.
+    var buttonTitle: String {
+        if replacesThisList {
+            return String(localized: "Subscribe")
+        }
+        return links.count == 1
+            ? String(localized: "Subscribe to 1 List")
+            : String(localized: "Subscribe to \(links.count) Lists")
+    }
 }
 
 /// Where an in-progress subscribe stands.
@@ -48,6 +58,15 @@ enum NetworkLinkStatus: Equatable {
 /// A card offering to subscribe to the files a network-link document points at. Nothing is
 /// fetched until the person taps the button; the text names the hosts.
 struct NetworkLinkPrompt: View {
+    /// The button is offered until a subscribe runs, and again after one failed; once it
+    /// finished, tapping again would only subscribe the same links twice.
+    static func showsButton(for status: NetworkLinkStatus) -> Bool {
+        switch status {
+        case .idle, .failed: true
+        case .subscribing, .finished: false
+        }
+    }
+
     let offer: NetworkLinkOffer
     let status: NetworkLinkStatus
     let isReadOnly: Bool
@@ -61,8 +80,8 @@ struct NetworkLinkPrompt: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             statusView
-            if status != .subscribing {
-                Button(buttonTitle, action: onSubscribe)
+            if Self.showsButton(for: status) {
+                Button(offer.buttonTitle, action: onSubscribe)
                     .buttonStyle(.borderedProminent)
                     .disabled(isReadOnly)
             }
@@ -78,12 +97,6 @@ struct NetworkLinkPrompt: View {
         Subscribe to keep it updated from \(hosts). Pinfold checks for changes while the app is open. \
         The host can see this device's IP address.
         """)
-    }
-
-    private var buttonTitle: String {
-        offer.isSingle
-            ? String(localized: "Subscribe")
-            : String(localized: "Subscribe to \(offer.links.count) Lists")
     }
 
     @ViewBuilder

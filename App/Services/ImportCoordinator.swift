@@ -85,6 +85,8 @@ final class ImportCoordinator {
         let ownedURL: URL?
         var cleanupFolder: URL?
         let pathKey: String?
+        /// The URL a new online list follows, held in `pendingSubscriptionURLs` until done.
+        var subscriptionURL: URL?
     }
 
     // MARK: - Published state
@@ -128,6 +130,9 @@ final class ImportCoordinator {
     /// path is accepted once, so the opened file and the inbox scan that later lists the same
     /// file cannot both import it.
     var trackedPaths: Set<String> = []
+    /// URLs of new online lists that are queued or being committed (and reloaded), so a second
+    /// subscribe of the same URL does not add another list (`isSubscribing(to:)`).
+    var pendingSubscriptionURLs: Set<URL> = []
     /// Hashes whose commit (and the reload that follows) has not finished yet.
     var inFlightHashes: Set<String> = []
     /// Hashes committed this session that `catalog.entries` may not show yet (a newer reload can
@@ -263,8 +268,12 @@ final class ImportCoordinator {
                 untrack(file.url)
             case let .picker(url):
                 untrack(url)
-            case .prepared, .subscribed:
+            case .prepared:
                 break
+            case let .subscribed(result):
+                if let url = result.subscription?.url {
+                    pendingSubscriptionURLs.remove(url)
+                }
             }
         }
     }

@@ -5,6 +5,14 @@ extension ImportCoordinator {
     /// subscription into the sidecar. Interactive (the person tapped Subscribe), so a failure
     /// raises the error alert; it never prompts as a duplicate.
     func enqueueSubscribed(_ result: ImportResult, catalog: Catalog, cache: ResourceCache) {
+        if let url = result.subscription?.url {
+            pendingSubscriptionURLs.insert(url)
+        }
         append([PendingImport(source: .subscribed(result), interactive: true)], catalog: catalog, cache: cache)
+    }
+
+    /// Whether a new online list following `url` is queued or being committed.
+    func isSubscribing(to url: URL) -> Bool {
+        pendingSubscriptionURLs.contains(url)
     }
 }

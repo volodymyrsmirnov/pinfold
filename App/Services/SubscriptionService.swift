@@ -57,14 +57,19 @@ enum SubscriptionURL {
 
     // MARK: - Subscribe
 
-    /// Subscribes to `url` (already normalised): selects a list that already follows it, else
-    /// fetches it, then turns a normal list with the same content into the online list, else
-    /// enqueues a new list. `link`'s refresh hints are copied into the subscription.
+    /// Subscribes to `url` (already normalised): selects a list that already follows it (or
+    /// reports `.enqueued` for one still on the import queue), else fetches it, then turns a
+    /// normal list with the same content into the online list, else enqueues a new list.
+    /// `link`'s refresh hints are copied into the subscription. The URL is reserved throughout
+    /// (`SubscriptionRefresher+Reservations.swift`), so overlapping subscribes of one URL from
+    /// the link card and the URL alert make one list.
     func subscribe(
         to url: URL, origin: Subscription.Origin, link: KMLNetworkLink? = nil
     ) async throws(SubscriptionError) -> Outcome {
-        if let existing = following(url) {
-            return .existing(existing.id)
+        await refresher.reserveSubscription(url)
+        defer { refresher.releaseSubscription(url) }
+        if let followed = alreadyFollowed(url) {
+            return followed
         }
         let fetched = try await fetch(url, filename: Self.filename(for: url, link: link))
         let subscription = makeSubscription(url, origin: origin, link: link)
@@ -86,14 +91,17 @@ enum SubscriptionURL {
     /// annotations, and it follows `link` from now on.
     ///
     /// - Returns: `.existing(id)` when a non-trashed list already follows the link's URL
-    ///   (nothing is fetched and `entry` is left untouched; select that list), else
+    ///   (nothing is fetched and `entry` is left untouched; select that list), `.enqueued` when
+    ///   a new list following it is still on the import queue (`entry` is left untouched), else
     ///   `.converted(entry.id)`.
     @discardableResult
     func subscribeInPlace(_ entry: CatalogEntry, link: KMLNetworkLink) async throws(SubscriptionError) -> Outcome {
         let folder = entry.storageFolderName
         guard let url = NetworkLinkSnapshotService.fetchURL(for: link) else { throw .notSupported }
-        if let existing = following(url) {
-            return .existing(existing.id)
+        await refresher.reserveSubscription(url)
+        defer { refresher.releaseSubscription(url) }
+        if let followed = alreadyFollowed(url) {
+            return followed
         }
         guard !(liveEntry(folder) ?? entry).isReadOnly else { throw .readOnly }
         let fetched = try await fetch(url, filename: Self.filename(for: url, link: link))
@@ -195,6 +203,16 @@ enum SubscriptionURL {
             return .success(true)
         }
         return try outcome.get()
+    }
+
+    /// `.existing` when a list follows `url`, `.enqueued` when one following it is on the import
+    /// queue, else `nil`. Checked while the URL is reserved, so no other subscribe of it is
+    /// between this check and its own hand-off.
+    private func alreadyFollowed(_ url: URL) -> Outcome? {
+        if let existing = following(url) {
+            return .existing(existing.id)
+        }
+        return coordinator.isSubscribing(to: url) ? .enqueued : nil
     }
 
     /// The non-trashed list that already follows `url`, if any.

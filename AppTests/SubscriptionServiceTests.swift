@@ -309,6 +309,55 @@ struct SubscriptionServiceTests {
         #expect(env.stub.calls == 0)
         #expect(env.catalog.entries.count == 1)
     }
+
+    // MARK: - Overlapping subscribes (F7)
+
+    @Test func subscribe_overlappingSameURL_makesOneList() async throws {
+        let env = makeEnvironment()
+        env.stub.respond(with: kml(["A"]))
+        let service = env.service
+
+        let first = Task { try await service.subscribe(to: feedURL, origin: .url) }
+        let second = Task { try await service.subscribe(to: feedURL, origin: .url) }
+        _ = try await first.value
+        _ = try await second.value
+        await env.coordinator.drainForTesting()
+
+        #expect(env.catalog.entries.count == 1)
+        #expect(env.catalog.entries.first?.subscription?.url == feedURL)
+        #expect(env.stub.calls == 1)
+    }
+
+    @Test func subscribe_linkCardAndURLAlertOverlapping_makesOneOnlineList() async throws {
+        let env = makeEnvironment()
+        let links = try await addList(env, data: linkFile([feedURL.absoluteString]), filename: "links.kml")
+        let link = KMLNetworkLink(name: "Feed", href: feedURL.absoluteString)
+        env.stub.respond(with: kml(["A"]))
+        let service = env.service
+
+        let card = Task { try await service.subscribeInPlace(links, link: link) }
+        let alert = Task { try await service.subscribe(to: feedURL, origin: .url) }
+        _ = try await card.value
+        _ = try await alert.value
+        await env.coordinator.drainForTesting()
+
+        #expect(env.catalog.entries.count { $0.subscription?.url == feedURL } == 1)
+        #expect(env.stub.calls == 1)
+    }
+
+    @Test func subscribe_whileTheSameURLIsOnTheImportQueue_doesNotEnqueueAgain() async throws {
+        let env = makeEnvironment()
+        env.stub.respond(with: kml(["A"]))
+        env.coordinator.hold() // e.g. a storage application is running: the item waits queued
+
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        #expect(try await env.service.subscribe(to: feedURL, origin: .url) == .enqueued)
+        env.coordinator.release(catalog: env.catalog, cache: env.cache)
+        await env.coordinator.drainForTesting()
+
+        #expect(env.catalog.entries.count == 1)
+        #expect(env.stub.calls == 1)
+    }
 }
 
 // MARK: - Stub fetcher

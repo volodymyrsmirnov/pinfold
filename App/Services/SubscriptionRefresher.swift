@@ -103,6 +103,9 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     /// Bumped by every `sceneDidResignActive`. Capture it when the scene becomes active and pass
     /// it to the deferred `sceneDidBecomeActive(token:)`, which ignores it once it is stale.
     @ObservationIgnored private(set) var activationToken = 0
+    /// URLs a subscribe is working on, each with the subscribes waiting for it
+    /// (`SubscriptionRefresher+Reservations.swift`).
+    @ObservationIgnored var subscribeReservations: [URL: [CheckedContinuation<Void, Never>]] = [:]
     /// The due check started by `start`, `sceneDidBecomeActive` or the device coming back online.
     @ObservationIgnored var activationTask: Task<Void, Never>?
 

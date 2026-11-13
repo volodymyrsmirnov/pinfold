@@ -49,4 +49,26 @@ struct NetworkLinkOfferTests {
         let plain = try Self.document(links: [], placemarks: 1)
         #expect(NetworkLinkOffer(document: plain) == nil)
     }
+
+    // MARK: - Card button (F12, F7)
+
+    @Test func buttonTitle_followsWhatSubscribingDoes() throws {
+        let replacing = try #require(NetworkLinkOffer(document: Self.document(links: ["https://one.test/a.kml"],
+                                                                              placemarks: 0)))
+        #expect(replacing.buttonTitle == "Subscribe")
+        let mixed = try #require(NetworkLinkOffer(document: Self.document(links: ["https://one.test/a.kml"],
+                                                                          placemarks: 2)))
+        #expect(mixed.buttonTitle == "Subscribe to 1 List")
+        let several = try #require(NetworkLinkOffer(document: Self.document(
+            links: ["https://one.test/a.kml", "https://two.test/b.kml"], placemarks: 0
+        )))
+        #expect(several.buttonTitle == "Subscribe to 2 Lists")
+    }
+
+    @Test func button_isHiddenWhileSubscribingAndOnceFinished() {
+        #expect(NetworkLinkPrompt.showsButton(for: .idle))
+        #expect(NetworkLinkPrompt.showsButton(for: .failed("x")))
+        #expect(!NetworkLinkPrompt.showsButton(for: .subscribing))
+        #expect(!NetworkLinkPrompt.showsButton(for: .finished("Added 2 lists.")))
+    }
 }

@@ -44,9 +44,12 @@ extension KMLDetailView {
             case let .existing(id):
                 networkLinkStatus = .idle
                 open(id)
-            case .converted, .enqueued:
+            case .converted:
                 networkLinkStatus = .idle
                 await reloadDocument(for: liveEntry)
+            case .enqueued:
+                // Another subscribe of the same URL is adding the list; this file stays as is.
+                networkLinkStatus = .idle
             }
         } catch {
             networkLinkStatus = .failed(error.localizedDescription)
