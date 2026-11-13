@@ -2,52 +2,91 @@ import PinfoldCore
 import SwiftUI
 
 extension KMLDetailView {
-    /// The snapshot offer for the loaded document, when it has no placemarks but fetchable links.
+    /// The subscribe offer for the loaded document, when it has fetchable links and isn't
+    /// itself an online list already.
     var networkLinkOffer: NetworkLinkOffer? {
-        document.flatMap { NetworkLinkOffer(document: $0) }
+        guard !liveEntry.isOnline else { return nil }
+        return document.flatMap { NetworkLinkOffer(document: $0) }
     }
 
-    /// The list section hosting the prompt. Nothing is downloaded until its button is tapped.
+    /// The list section hosting the card. Nothing is fetched until its button is tapped.
     func networkLinkSection(_ offer: NetworkLinkOffer) -> some View {
         Section {
             NetworkLinkPrompt(
                 offer: offer,
                 status: networkLinkStatus,
                 isReadOnly: entry.isReadOnly,
-                onDownload: { Task { await runSnapshot(offer) } }
+                onSubscribe: { Task { await runSubscribe(offer) } }
             )
         }
     }
 
-    /// Runs the confirmed snapshot: one link replaces this file's original, several are
-    /// enqueued as new entries.
+    /// Runs the tapped Subscribe: a link-only file with one link becomes the online list; any
+    /// other offer subscribes each link as a new list, one after another.
     @MainActor
-    func runSnapshot(_ offer: NetworkLinkOffer) async {
-        guard let catalog else { return }
-        networkLinkStatus = .downloading
-        let service = NetworkLinkSnapshotService()
-        if offer.isSingle, let link = offer.links.first {
-            do {
-                let updated = try await service.replaceOriginal(
-                    of: entry, with: link, storage: storage, catalog: catalog
-                )
+    func runSubscribe(_ offer: NetworkLinkOffer) async {
+        guard let catalog, let importCoordinator, let refresher else { return }
+        networkLinkStatus = .subscribing
+        let service = SubscriptionService(
+            catalog: catalog, coordinator: importCoordinator, cache: resourceCache, refresher: refresher
+        )
+        if offer.replacesThisList, let link = offer.links.first {
+            await subscribeInPlace(service, link: link)
+        } else {
+            await subscribeEach(service, offer: offer)
+        }
+    }
+
+    @MainActor
+    private func subscribeInPlace(_ service: SubscriptionService, link: KMLNetworkLink) async {
+        do {
+            switch try await service.subscribeInPlace(entry, link: link) {
+            case let .existing(id):
                 networkLinkStatus = .idle
-                await reloadDocument(for: updated)
+                open(id)
+            case .converted, .enqueued:
+                networkLinkStatus = .idle
+                await reloadDocument(for: liveEntry)
+            }
+        } catch {
+            networkLinkStatus = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Subscribes the links sequentially. Links a list already follows aren't counted; the
+    /// first failure is shown only when nothing was added.
+    @MainActor
+    private func subscribeEach(_ service: SubscriptionService, offer: NetworkLinkOffer) async {
+        var added = 0
+        var existing: UUID?
+        var firstError: String?
+        for link in offer.links {
+            guard let url = NetworkLinkSnapshotService.fetchURL(for: link) else { continue }
+            do {
+                switch try await service.subscribe(to: url, origin: .networkLink, link: link) {
+                case let .existing(id): existing = existing ?? id
+                case .converted, .enqueued: added += 1
+                }
             } catch {
-                networkLinkStatus = .failed(error.localizedDescription)
+                firstError = firstError ?? error.localizedDescription
             }
-        } else if let importCoordinator {
-            let outcome = await service.enqueueSnapshots(
-                for: offer.links, coordinator: importCoordinator, catalog: catalog, cache: resourceCache
-            )
-            if outcome.enqueued > 0 {
-                let count = outcome.enqueued
-                networkLinkStatus = .finished(count == 1 ? "Added 1 file." : "Added \(count) files.")
-            } else {
-                networkLinkStatus = .failed(outcome.failures.first?.localizedDescription ?? "Nothing was downloaded.")
-            }
+        }
+        if added > 0 {
+            networkLinkStatus = .finished(added == 1 ? "Added 1 list." : "Added \(added) lists.")
+        } else if let firstError {
+            networkLinkStatus = .failed(firstError)
+        } else if let existing {
+            networkLinkStatus = .idle
+            open(existing)
         } else {
             networkLinkStatus = .idle
         }
+    }
+
+    /// Selects another list, through the router `RootView` observes.
+    @MainActor
+    private func open(_ id: UUID) {
+        guard let folder = catalog?.entries.first(where: { $0.id == id })?.storageFolderName else { return }
+        router?.openEntry(folderName: folder)
     }
 }

@@ -1,15 +1,16 @@
 import PinfoldCore
 import SwiftUI
 
-/// What the file screen offers for a document that only points at other files: the links that
-/// can actually be fetched (`http(s)`), and the hosts they live on. Building an offer never
+/// What the file screen offers for a document that points at other files: the links that can
+/// actually be fetched (`http(s)`), and the hosts they live on. Building an offer never
 /// touches the network.
 struct NetworkLinkOffer: Equatable {
     let links: [KMLNetworkLink]
+    /// The document's own placemarks. A file with none and a single link is replaced by it.
+    let placemarkCount: Int
 
-    /// `nil` unless the document has no placemarks and at least one fetchable network link.
+    /// `nil` unless the document has at least one fetchable network link.
     init?(document: KMLDocument) {
-        guard document.placemarkCount == 0 else { return nil }
         var seen = Set<URL>()
         let fetchable = document.networkLinks.filter { link in
             guard let url = NetworkLinkSnapshotService.fetchURL(for: link) else { return false }
@@ -17,6 +18,7 @@ struct NetworkLinkOffer: Equatable {
         }
         guard !fetchable.isEmpty else { return nil }
         links = fetchable
+        placemarkCount = document.placemarkCount
     }
 
     /// Distinct lowercase hosts of the links, sorted.
@@ -28,34 +30,39 @@ struct NetworkLinkOffer: Equatable {
     var isSingle: Bool {
         links.count == 1
     }
+
+    /// Subscribing turns this very list into the online list: its only content is the one link.
+    var replacesThisList: Bool {
+        isSingle && placemarkCount == 0
+    }
 }
 
-/// Where an in-progress snapshot stands.
+/// Where an in-progress subscribe stands.
 enum NetworkLinkStatus: Equatable {
     case idle
-    case downloading
+    case subscribing
     case finished(String)
     case failed(String)
 }
 
-/// A card asking whether to download a one-time copy of the files a network-link document
-/// points at. Nothing is downloaded until the person taps the button; the text names the hosts.
+/// A card offering to subscribe to the files a network-link document points at. Nothing is
+/// fetched until the person taps the button; the text names the hosts.
 struct NetworkLinkPrompt: View {
     let offer: NetworkLinkOffer
     let status: NetworkLinkStatus
     let isReadOnly: Bool
-    let onDownload: () -> Void
+    let onSubscribe: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("This file links to online data", systemImage: "icloud.and.arrow.down")
+            Label("This file links to online data", systemImage: "globe")
                 .font(.headline)
             Text(detail)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             statusView
-            if status != .downloading {
-                Button(buttonTitle, action: onDownload)
+            if status != .subscribing {
+                Button(buttonTitle, action: onSubscribe)
                     .buttonStyle(.borderedProminent)
                     .disabled(isReadOnly)
             }
@@ -67,15 +74,16 @@ struct NetworkLinkPrompt: View {
 
     private var detail: String {
         let hosts = offer.hosts.joined(separator: ", ")
-        let action = offer.isSingle
-            ? "Download a one-time copy from \(hosts) to replace this file with its contents."
-            : "Download one-time copies of its \(offer.links.count) files from \(hosts), each added as a new file."
-        let privacy = "Downloading reveals this device's IP address to the host."
-        return "Pinfold never fetches this automatically. \(action) \(privacy)"
+        return String(localized: """
+        Subscribe to keep it updated from \(hosts). Pinfold checks for changes while the app is open. \
+        The host can see this device's IP address.
+        """)
     }
 
     private var buttonTitle: String {
-        offer.isSingle ? "Download Copy" : "Download \(offer.links.count) Files"
+        offer.isSingle
+            ? String(localized: "Subscribe")
+            : String(localized: "Subscribe to \(offer.links.count) Lists")
     }
 
     @ViewBuilder
@@ -83,8 +91,8 @@ struct NetworkLinkPrompt: View {
         switch status {
         case .idle:
             EmptyView()
-        case .downloading:
-            ProgressView("Downloading\u{2026}")
+        case .subscribing:
+            ProgressView("Subscribing\u{2026}")
         case let .finished(message):
             Label(message, systemImage: "checkmark.circle")
                 .font(.footnote)
