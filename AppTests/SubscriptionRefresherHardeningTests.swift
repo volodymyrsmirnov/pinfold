@@ -203,13 +203,15 @@ extension SubscriptionRefresherTests {
         let gate = FetchGate()
         env.stub.gate = gate
         env.stub.respond(with: .data(kml(["Alpha"])))
-        let refresher = env.makeRefresher()
+        let clock = TestClock(Self.now)
+        let refresher = env.makeRefresher(clock: { clock.now })
 
         let inFlight = Task { await refresher.refreshNow(entry) }
         await gate.waitForArrivals(1)
         let other = SubscriptionState(lastAttemptAt: Self.now.addingTimeInterval(1),
                                       lastSuccessAt: Self.now.addingTimeInterval(1))
         SubscriptionStateStore.write(other, in: env.resources(entry))
+        clock.now = Self.now.addingTimeInterval(2)
         await gate.open()
         let result = await inFlight.value
 

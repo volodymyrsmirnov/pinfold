@@ -38,12 +38,16 @@ struct SubscriptionRefresherTests {
             try Data(contentsOf: storage.originalFile(for: entry))
         }
 
-        func makeRefresher(network: NetworkStatus? = nil) -> SubscriptionRefresher {
+        func makeRefresher(
+            network: NetworkStatus? = nil, clock: (() -> Date)? = nil,
+            hasher: SubscriptionRefresher.OriginalHasher? = nil
+        ) -> SubscriptionRefresher {
             let stub = stub
             return SubscriptionRefresher(
                 catalog: catalog, cache: cache, network: network,
                 fetcher: { url, etag, lastModified in try await stub.fetch(url, etag: etag, lastModified: lastModified) },
-                clock: { SubscriptionRefresherTests.now }
+                clock: clock ?? { SubscriptionRefresherTests.now },
+                hashOriginal: hasher
             )
         }
     }

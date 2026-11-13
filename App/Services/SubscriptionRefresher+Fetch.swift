@@ -3,16 +3,28 @@ import PinfoldCore
 
 /// The fetch half of a refresh: the conditional GET and the classification of its response.
 extension SubscriptionRefresher {
+    /// Reads and hashes the original off the main actor.
+    nonisolated static let liveOriginalHasher: OriginalHasher = { url in await sha256OfFileOffMain(url) }
+
     /// Fetches the subscription and classifies the response. Everything is checked against the
     /// original actually on disk, not only the sidecar: the stored validators are sent only when
     /// they describe those bytes (`SubscriptionState.contentSHA256`), and a `200` is unchanged
     /// only when its bytes equal them and the sidecar agrees. A crash between the sidecar update
     /// and the rename, or an iCloud conflict won by older bytes, is so repaired by the next
-    /// refresh instead of hidden behind a `304` or a matching sidecar hash.
-    func fetch(_ subscription: Subscription, for entry: CatalogEntry) async -> FetchOutcome {
+    /// refresh instead of hidden behind a `304` or a matching sidecar hash. An original that
+    /// can't be read (an iCloud placeholder) is compared through the sidecar's hash instead, so
+    /// unchanged bytes are not written again.
+    ///
+    /// - Returns: `nil` when the refresh should no longer run once the original is hashed (see
+    ///   `isStillEligible`): nothing was requested.
+    func fetch(_ subscription: Subscription, for entry: CatalogEntry, automatic: Bool) async -> FetchOutcome? {
         let live = liveEntry(entry.storageFolderName) ?? entry
         let state = state(for: live)
-        let onDisk = await sha256OfFileOffMain(catalog.storage.originalFile(for: live))
+        let onDisk = await hashOriginal(catalog.storage.originalFile(for: live))
+        // Hashing suspends: the scene may have left the foreground, or Stop Updating finished.
+        guard isStillEligible(live.storageFolderName, subscription: subscription, automatic: automatic) else {
+            return nil
+        }
         let validated = onDisk != nil && state.contentSHA256 == onDisk
         let response: ConditionalResponse
         do {
@@ -25,7 +37,7 @@ extension SubscriptionRefresher {
         guard case let .data(data) = response.body else {
             return .unchanged(response, content: validated ? onDisk : nil, hints: nil)
         }
-        let verified = onDisk == live.contentSHA256 ? onDisk : nil
+        let verified = (onDisk ?? live.contentSHA256) == live.contentSHA256 ? live.contentSHA256 : nil
         // The stored server hints come from other content (a synced device that never fetched
         // this file, or a state from before the content hash was kept): read them from the
         // bytes even when they are unchanged, so `minRefreshPeriod` is honoured.

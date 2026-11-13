@@ -60,6 +60,8 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     enum Phase: Equatable { case idle, refreshing, failed(String) }
 
     typealias Fetcher = @Sendable (URL, _ etag: String?, _ lastModified: String?) async throws -> ConditionalResponse
+    /// Hashes an original on disk: its SHA-256, or `nil` when it can't be read.
+    typealias OriginalHasher = @Sendable (URL) async -> String?
 
     nonisolated static let maxBytes = 50 * 1024 * 1024
     nonisolated static let timeout: TimeInterval = 30
@@ -89,6 +91,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored let clock: () -> Date
     @ObservationIgnored private let cache: ResourceCache
     @ObservationIgnored let fetcher: Fetcher
+    @ObservationIgnored let hashOriginal: OriginalHasher
     /// Shared with `SubscriptionService`, whose subscribe writes are serialised with refreshes.
     /// Never call `refreshNow`, `refreshDue` or `stopUpdating` from inside one of its
     /// operations: they wait on this queue themselves.
@@ -119,18 +122,21 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
 
     /// - Parameter storageQueue: The app's storage queue, so refresh writes never interleave
     ///   with a storage application. Tests get a private one.
+    /// - Parameter hashOriginal: Reads and hashes an original before its fetch; tests hold it.
     init(
         catalog: Catalog,
         cache: ResourceCache,
         network: NetworkStatus?,
         fetcher: Fetcher? = nil,
         clock: @escaping () -> Date = { .now },
-        storageQueue: StorageApplyQueue = StorageApplyQueue()
+        storageQueue: StorageApplyQueue = StorageApplyQueue(),
+        hashOriginal: OriginalHasher? = nil
     ) {
         self.catalog = catalog
         self.cache = cache
         self.network = network
         self.fetcher = fetcher ?? Self.liveFetcher
+        self.hashOriginal = hashOriginal ?? Self.liveOriginalHasher
         self.clock = clock
         self.storageQueue = storageQueue
     }
@@ -282,9 +288,11 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             // The slot is held from the request until the outcome is recorded (including the
             // wait for the storage queue), so at most `maxParallelFetches` responses are held.
             await fetchSlots.acquire()
-            // Things may have changed while waiting for the slot: a skipped list is not touched.
-            if isStillEligible(folder, subscription: subscription, automatic: automatic) {
-                let outcome = await fetch(subscription, for: entry)
+            // Things may have changed while waiting for the slot (and, inside `fetch`, while
+            // hashing the original): a skipped list is not touched.
+            if isStillEligible(folder, subscription: subscription, automatic: automatic),
+               let outcome = await fetch(subscription, for: entry, automatic: automatic)
+            {
                 result = await storageQueue.run {
                     await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt)
                 }
@@ -305,11 +313,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         return result
     }
 
-    /// Whether a refresh that waited for a fetch slot should still fetch: an automatic one only
+    /// Whether a refresh that waited (for a fetch slot, or for its original to be hashed)
+    /// should still fetch: an automatic one only
     /// while the scene is active and the device online (Refresh Now reports being offline as its
     /// error), and only for a live list that still follows `subscription`'s URL, is not in the
     /// trash and can be written.
-    private func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool) -> Bool {
+    func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool) -> Bool {
         if automatic, !isSceneActive || network?.isOnline == false {
             return false
         }
@@ -318,8 +327,9 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     }
 
     /// Records a fetch outcome against the live entry; runs inside the storage queue. A list
-    /// that is gone, no longer online, now follows another URL, or is read-only (sidecar not
-    /// downloaded or unreadable) is left untouched: nothing is written and no error recorded.
+    /// that is gone (out of the catalogue, or its folder deleted while the fetch ran), no longer
+    /// online, now follows another URL, or is read-only (sidecar not downloaded or unreadable)
+    /// is left untouched: nothing is written and no error recorded.
     private func record(
         _ outcome: FetchOutcome, folder: String, subscription: Subscription, attemptAt: Date
     ) async -> Result<Void, SubscriptionError> {
@@ -327,10 +337,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             return .success(())
         }
         let storage = catalog.storage
+        guard !isGone(live, in: storage) else { return .success(()) }
         let dir = storage.resourcesDirectory(for: live)
         var state = reloadedState(for: live)
-        if let other = state.lastAttemptAt, other > attemptAt {
-            // Another window checked the list after this fetch started: its outcome stands.
+        if let other = state.lastAttemptAt, other > attemptAt, other <= clock() {
+            // Another window checked the list after this fetch started: its outcome stands. A
+            // time still in the future is not such a check (the clock was set back since).
             return .success(())
         }
         state.lastAttemptAt = attemptAt

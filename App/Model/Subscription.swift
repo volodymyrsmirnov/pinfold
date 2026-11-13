@@ -20,6 +20,11 @@ struct Subscription: Codable, Equatable, Sendable {
 
     /// `refreshInterval` is sanitised (`KMLRefreshHint`): a non-finite value cannot be written
     /// to the sidecar, and a huge one would overflow the refresh timer.
+    ///
+    /// Decoding does not go through this initialiser: the synthesised `init(from:)` takes a
+    /// sidecar's `refreshInterval` as it is (one written by another device or an older build).
+    /// So the clamps where the interval is used, `SubscriptionSchedule`'s cap and the timer's
+    /// `timerDelay(until:now:)`, are not redundant and must stay.
     init(
         url: URL, origin: Origin, subscribedAt: Date, refreshMode: KMLRefreshMode? = nil,
         refreshInterval: TimeInterval? = nil
