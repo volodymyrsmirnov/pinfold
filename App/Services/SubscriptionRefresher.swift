@@ -111,6 +111,16 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored var subscribeReservations: [URL: [CheckedContinuation<Void, Never>]] = [:]
     /// The due check started by `start`, `sceneDidBecomeActive` or the device coming back online.
     @ObservationIgnored var activationTask: Task<Void, Never>?
+    /// Each list's subscription generation, keyed by `storageFolderName`. Bumped at once, before
+    /// any await, when this window stops a list or subscribes one (`recordSubscribed`). A refresh
+    /// captures it when it begins and neither fetches nor records once it changed, so Stop
+    /// Updating does not depend on the catalogue publishing its reload, which a newer reload
+    /// can overtake.
+    @ObservationIgnored private var subscriptionGenerations: [String: Int] = [:]
+    /// Lists this window stopped, and whether the sidecar is written yet. The catalogue can still
+    /// show them subscribed (their reload was overtaken), so a later refresh fetches nothing.
+    @ObservationIgnored private var stoppedFolders: [String: StopMark] = [:]
+    private enum StopMark { case writing, written }
 
     /// Timer state, owned by `SubscriptionRefresher+Timer.swift`.
     @ObservationIgnored var timerTask: Task<Void, Never>?
@@ -187,9 +197,34 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     }
 
     /// Records the fetch a subscribe just made for the list in `folder` (run it inside
-    /// `storageQueue`), replacing any state cached while the list was a normal one.
+    /// `storageQueue`), replacing any state cached while the list was a normal one. Refreshes
+    /// that began before are dropped, and a stop made earlier in this window no longer applies.
     func recordSubscribed(_ state: SubscriptionState, folder: String) {
+        subscriptionChanged(folder)
+        stoppedFolders.removeValue(forKey: folder)
         store(state, in: catalog.storage.resourcesDirectory(forFolderNamed: folder))
+    }
+
+    private func subscriptionChanged(_ folder: String) {
+        subscriptionGenerations[folder, default: 0] &+= 1
+    }
+
+    /// Whether this window stopped `folder` and it does not follow `url` again. Once the stop
+    /// is written, the sidecar on disk decides (another device may have subscribed it again);
+    /// it is read only for lists stopped here whose catalogue entry still shows a subscription.
+    private func isStopped(_ folder: String, following url: URL) -> Bool {
+        switch stoppedFolders[folder] {
+        case nil:
+            return false
+        case .writing:
+            return true
+        case .written:
+            guard case let .ok(sidecar) = catalog.storage.readSidecar(forFolderNamed: folder),
+                  sidecar.subscription?.url == url
+            else { return true }
+            stoppedFolders.removeValue(forKey: folder)
+            return false
+        }
     }
 
     func liveEntry(_ folder: String) -> CatalogEntry? {
@@ -275,12 +310,16 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             return running
         }
         phases[folder] = .refreshing
-        let task = Task { await self.run(entry, automatic: automatic) }
+        let generation = subscriptionGenerations[folder, default: 0]
+        let task = Task { await self.run(entry, automatic: automatic, generation: generation) }
         inFlight[folder] = task
         return task
     }
 
-    private func run(_ entry: CatalogEntry, automatic: Bool) async -> Result<Void, SubscriptionError> {
+    /// - Parameter generation: The list's subscription generation when the refresh began.
+    private func run(
+        _ entry: CatalogEntry, automatic: Bool, generation: Int
+    ) async -> Result<Void, SubscriptionError> {
         let folder = entry.storageFolderName
         var result: Result<Void, SubscriptionError> = .success(())
         if let subscription = entry.subscription {
@@ -290,12 +329,16 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             await fetchSlots.acquire()
             // Things may have changed while waiting for the slot (and, inside `fetch`, while
             // hashing the original): a skipped list is not touched.
-            let outcome = isStillEligible(folder, subscription: subscription, automatic: automatic)
-                ? await fetch(subscription, for: entry, automatic: automatic)
+            let eligible = isStillEligible(
+                folder, subscription: subscription, automatic: automatic, generation: generation
+            )
+            let outcome = eligible
+                ? await fetch(subscription, for: entry, automatic: automatic, generation: generation)
                 : nil
             if let outcome {
                 result = await storageQueue.run {
-                    await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt)
+                    await self.record(outcome, folder: folder, subscription: subscription, attemptAt: attemptAt,
+                                      generation: generation)
                 }
             }
             fetchSlots.release()
@@ -317,27 +360,35 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     /// Whether a refresh that waited (for a fetch slot, or for its original to be hashed)
     /// should still fetch: an automatic one only
     /// while the scene is active and the device online (Refresh Now reports being offline as its
-    /// error), and only for a live list that still follows `subscription`'s URL, is not in the
+    /// error), and only while its subscription generation is unchanged and this window has not
+    /// stopped the list, for a live list that still follows `subscription`'s URL, is not in the
     /// trash and can be written.
-    func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool) -> Bool {
+    func isStillEligible(_ folder: String, subscription: Subscription, automatic: Bool, generation: Int) -> Bool {
         if automatic, !isSceneActive || network?.isOnline == false {
             return false
         }
-        guard let live = liveEntry(folder) else { return false }
+        guard subscriptionGenerations[folder, default: 0] == generation,
+              !isStopped(folder, following: subscription.url),
+              let live = liveEntry(folder)
+        else { return false }
         return live.subscription?.url == subscription.url && !live.isTrashed && !live.isReadOnly
     }
 
-    /// Records a fetch outcome against the live entry; runs inside the storage queue. A list
-    /// that is gone (out of the catalogue, or its folder deleted while the fetch ran), no longer
-    /// online, now follows another URL, or is read-only (sidecar not downloaded or unreadable)
-    /// is left untouched: nothing is written and no error recorded.
+    /// Records a fetch outcome; runs inside the storage queue. The list is read from its sidecar
+    /// on disk, not the catalogue, which can lag behind (a reload overtaken by a newer one does
+    /// not publish). A list that is gone (out of the catalogue, or its folder deleted while the
+    /// fetch ran), stopped or re-subscribed since the refresh began, no longer online, now
+    /// following another URL, in the trash, or read-only (sidecar not downloaded or
+    /// unreadable) is left untouched: nothing is written and no error recorded.
     private func record(
-        _ outcome: FetchOutcome, folder: String, subscription: Subscription, attemptAt: Date
+        _ outcome: FetchOutcome, folder: String, subscription: Subscription, attemptAt: Date, generation: Int
     ) async -> Result<Void, SubscriptionError> {
-        guard let live = liveEntry(folder), live.subscription?.url == subscription.url, !live.isReadOnly else {
-            return .success(())
-        }
         let storage = catalog.storage
+        guard subscriptionGenerations[folder, default: 0] == generation, liveEntry(folder) != nil,
+              case let .ok(sidecar) = storage.readSidecar(forFolderNamed: folder),
+              sidecar.subscription?.url == subscription.url, sidecar.trashedAt == nil
+        else { return .success(()) }
+        let live = CatalogEntry(metadata: sidecar, storageFolderName: folder)
         guard !isGone(live, in: storage) else { return .success(()) }
         let dir = storage.resourcesDirectory(for: live)
         var state = reloadedState(for: live)
@@ -389,6 +440,10 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
             store(state, in: dir)
             return .failure(failure)
         }
+        if isGone(live, in: storage) {
+            // Deleted for good while the content was written: recreate nothing.
+            return .success(())
+        }
         state.lastError = nil
         state.lastSuccessAt = clock()
         store(state, in: dir)
@@ -409,18 +464,26 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     /// Turns the online list back into a normal list: clears the synced subscription, removes
     /// this device's refresh state, reloads and re-arms. Serialised with refresh writes, so an
     /// in-flight refresh finishing afterwards finds no subscription and writes nothing.
+    ///
+    /// Refreshes in flight are invalidated at once, before anything is awaited, and none starts
+    /// for the list afterwards, even while the catalogue still shows it subscribed.
     func stopUpdating(_ entry: CatalogEntry) async throws {
         let folder = entry.storageFolderName
+        subscriptionChanged(folder)
+        stoppedFolders[folder] = .writing
         let error: SubscriptionError? = await storageQueue.run {
             let storage = self.catalog.storage
             if (self.liveEntry(folder) ?? entry).isReadOnly {
+                self.stoppedFolders.removeValue(forKey: folder)
                 return .readOnly
             }
             do {
                 try storage.updateExistingMetadata(forFolderNamed: folder) { $0.subscription = nil }
             } catch {
+                self.stoppedFolders.removeValue(forKey: folder)
                 return .writeFailed(error.localizedDescription)
             }
+            self.stoppedFolders[folder] = .written
             let dir = storage.resourcesDirectory(forFolderNamed: folder)
             SubscriptionStateStore.remove(in: dir)
             self.states.removeValue(forKey: dir.path)

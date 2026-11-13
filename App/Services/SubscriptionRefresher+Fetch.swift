@@ -13,16 +13,22 @@ extension SubscriptionRefresher {
     /// and the rename, or an iCloud conflict won by older bytes, is so repaired by the next
     /// refresh instead of hidden behind a `304` or a matching sidecar hash. An original that
     /// can't be read (an iCloud placeholder) is compared through the sidecar's hash instead, so
-    /// unchanged bytes are not written again.
+    /// unchanged bytes are not written again. A `304` to a request that sent no validators
+    /// verifies nothing and is an error, as on the subscribe path.
     ///
+    /// - Parameter generation: The list's subscription generation when the refresh began.
     /// - Returns: `nil` when the refresh should no longer run once the original is hashed (see
     ///   `isStillEligible`): nothing was requested.
-    func fetch(_ subscription: Subscription, for entry: CatalogEntry, automatic: Bool) async -> FetchOutcome? {
+    func fetch(
+        _ subscription: Subscription, for entry: CatalogEntry, automatic: Bool, generation: Int
+    ) async -> FetchOutcome? {
         let live = liveEntry(entry.storageFolderName) ?? entry
         let state = state(for: live)
         let onDisk = await hashOriginal(catalog.storage.originalFile(for: live))
         // Hashing suspends: the scene may have left the foreground, or Stop Updating finished.
-        guard isStillEligible(live.storageFolderName, subscription: subscription, automatic: automatic) else {
+        guard isStillEligible(
+            live.storageFolderName, subscription: subscription, automatic: automatic, generation: generation
+        ) else {
             return nil
         }
         let validated = onDisk != nil && state.contentSHA256 == onDisk
@@ -35,7 +41,7 @@ extension SubscriptionRefresher {
             return .failed(SubscriptionError(fetchError: error))
         }
         guard case let .data(data) = response.body else {
-            return .unchanged(response, content: validated ? onDisk : nil, hints: nil)
+            return validated ? .unchanged(response, content: onDisk, hints: nil) : .failed(.http(304))
         }
         let verified = (onDisk ?? live.contentSHA256) == live.contentSHA256 ? live.contentSHA256 : nil
         // The stored server hints come from other content (a synced device that never fetched
