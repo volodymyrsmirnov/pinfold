@@ -2,41 +2,64 @@ import Foundation
 
 /// Style identity used to deduplicate synthesized styles (KML colours are `aabbggrr`).
 struct GeoJSONStyleKey: Hashable {
+    var iconHref: String?
     var iconColor: String?
+    var iconScale: Double?
     var lineColor: String?
     var lineWidth: Double?
     var polyColor: String?
 }
 
 /// Feature `properties` mapped to placemark fields: `name` (else `title`), `description`,
-/// simplestyle keys (-> style) and everything else as sorted extended data.
+/// `snippet`, `address`, `phoneNumber` (else `phone`), photo URLs, simplestyle keys and a
+/// remote `icon` URL (-> style), and everything else as sorted extended data.
 struct GeoJSONProperties {
+    /// Simplestyle keys always consumed by the style, even when their value is unusable.
+    /// `marker-symbol` (a Maki icon name) is not among them: no icon set ships with the app,
+    /// so it stays visible as data rather than vanishing.
     private static let styleKeys: Set<String> = [
-        "marker-color", "marker-size", "marker-symbol", "stroke", "stroke-width",
+        "marker-color", "marker-size", "stroke", "stroke-width",
         "stroke-opacity", "fill", "fill-opacity",
     ]
+    /// Keys whose value, when it is nothing but http(s) URLs, becomes photo links (the KML
+    /// `gx_media_links` convention plus common hand-written names). Read in sorted order.
+    private static let photoKeys = ["gx_media_links", "image", "images", "photo", "photos"]
 
     private(set) var name: String?
     private(set) var descriptionHTML: String?
+    private(set) var snippet: String?
+    private(set) var address: String?
+    private(set) var phoneNumber: String?
+    private(set) var photoLinks: [String] = []
     private(set) var data: [KMLDataItem] = []
     private(set) var style: GeoJSONStyleKey?
 
     init(_ properties: [String: Any]) {
         var consumed: Set = ["description"]
-        if let direct = Self.text(properties["name"]) {
-            name = direct
-            consumed.insert("name")
-        } else if let title = Self.text(properties["title"]) {
-            name = title
-            consumed.insert("title")
+        func take(_ key: String) -> String? {
+            guard let value = Self.text(properties[key]) else { return nil }
+            consumed.insert(key)
+            return value
         }
+        name = take("name") ?? take("title")
         descriptionHTML = Self.text(properties["description"]).map(Self.html)
+        snippet = take("snippet")
+        address = take("address")
+        phoneNumber = take("phoneNumber") ?? take("phone")
+        for key in Self.photoKeys {
+            guard let links = Self.remoteLinks(properties[key]) else { continue }
+            photoLinks += links
+            consumed.insert(key)
+        }
+        style = Self.style(properties)
+        if style?.iconHref != nil {
+            consumed.insert("icon")
+        }
         data = properties.keys.sorted().compactMap { key in
             guard !consumed.contains(key), !Self.styleKeys.contains(key),
                   let value = Self.text(properties[key]) else { return nil }
             return KMLDataItem(name: key, value: value)
         }
-        style = Self.style(properties)
     }
 
     static func nonEmpty(_ string: String) -> String? {
@@ -83,7 +106,7 @@ struct GeoJSONProperties {
     }
 
     /// Plain text is escaped so `&` and `<` show literally; text that already holds tags is kept.
-    private static func html(_ text: String) -> String {
+    static func html(_ text: String) -> String {
         let hasTag = text.range(of: "<[A-Za-z/!]", options: .regularExpression) != nil
         guard !hasTag else { return text }
         return text.replacingOccurrences(of: "&", with: "&amp;")
@@ -91,11 +114,38 @@ struct GeoJSONProperties {
             .replacingOccurrences(of: ">", with: "&gt;")
     }
 
+    /// A string of whitespace-separated URLs, or an array of such strings, as photo links;
+    /// nil unless every token is an http(s) URL (a lone file name cannot be resolved).
+    private static func remoteLinks(_ raw: Any?) -> [String]? {
+        let parts: [String]
+        switch raw {
+        case let string as String:
+            parts = [string]
+        case let list as [Any]:
+            parts = list.compactMap { $0 as? String }
+            guard parts.count == list.count else { return nil }
+        default:
+            return nil
+        }
+        let links = parts.flatMap { $0.split(whereSeparator: \.isWhitespace).map(String.init) }
+        guard !links.isEmpty, links.allSatisfy(isRemoteURL) else { return nil }
+        return links
+    }
+
+    private static func isRemoteURL(_ string: String) -> Bool {
+        guard let url = URL(string: string), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", let host = url.host, !host.isEmpty
+        else { return false }
+        return true
+    }
+
     // MARK: simplestyle
 
     private static func style(_ properties: [String: Any]) -> GeoJSONStyleKey? {
         var key = GeoJSONStyleKey()
+        key.iconHref = (properties["icon"] as? String).flatMap { isRemoteURL($0) ? $0 : nil }
         key.iconColor = color(properties["marker-color"], opacity: 1)
+        key.iconScale = scale(properties["marker-size"])
         key.lineColor = color(properties["stroke"], opacity: opacity(properties["stroke-opacity"], default: 1))
         let width = (properties["stroke-width"] as? NSNumber)?.doubleValue
         if key.lineColor != nil, let width, width.isFinite, width > 0 {
@@ -103,6 +153,15 @@ struct GeoJSONProperties {
         }
         key.polyColor = color(properties["fill"], opacity: opacity(properties["fill-opacity"], default: 0.6))
         return key == GeoJSONStyleKey() ? nil : key
+    }
+
+    /// simplestyle `marker-size`: `small` and `large` scale the icon; `medium` is the default.
+    private static func scale(_ raw: Any?) -> Double? {
+        switch (raw as? String)?.lowercased() {
+        case "small": 0.75
+        case "large": 1.5
+        default: nil
+        }
     }
 
     private static func opacity(_ raw: Any?, default fallback: Double) -> Double {

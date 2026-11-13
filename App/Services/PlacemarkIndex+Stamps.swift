@@ -27,8 +27,9 @@ extension PlacemarkIndex {
 
     /// Bump when the importer starts deriving something new from the original, so entries
     /// built by an older build are refreshed once. 2 = description `<img>` hrefs are gathered
-    /// (wave 3); an entry with no version file predates that.
-    static let currentDerivedDataVersion = 2
+    /// (wave 3); an entry with no version file predates that. 3 = GeoJSON photo URLs and `icon`
+    /// hrefs are mapped, so their remote resources are fetched.
+    static let currentDerivedDataVersion = 3
 
     /// `true` when `resourcesDir` was built by the current derived-data generation.
     static func derivedDataIsCurrent(in resourcesDir: URL) -> Bool {

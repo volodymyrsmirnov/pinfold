@@ -3,8 +3,9 @@ import Foundation
 /// Reads RFC 7946 GeoJSON into the same `KMLDocument` model the KML parser produces.
 ///
 /// A `FeatureCollection`, a single `Feature` or a bare geometry becomes one flat root container
-/// (`id` "root") holding one placemark per feature. Placemark ids are `p1`, `p2`, ... in file
-/// order, and synthesized style ids are `geojson-style-1`, ... in order of first use.
+/// (`id` "root") holding one placemark per feature; a collection's `name` and `description`
+/// become the document's. Placemark ids are `p1`, `p2`, ... in file order, and synthesized
+/// style ids are `geojson-style-1`, ... in order of first use.
 enum GeoJSONReader {
     /// Geometry nesting (`GeometryCollection` inside `GeometryCollection`) deeper than this is
     /// refused as `geoJSONTooComplex`.
@@ -28,9 +29,11 @@ enum GeoJSONReader {
         }
         var builder = GeoJSONBuilder(maxWork: maxWork)
         var name: String?
+        var description: String?
         switch type {
         case "FeatureCollection":
             name = (top["name"] as? String).flatMap(GeoJSONProperties.nonEmpty)
+            description = GeoJSONProperties.text(top["description"]).map(GeoJSONProperties.html)
             for case let feature as [String: Any] in top["features"] as? [Any] ?? [] {
                 try builder.addFeature(feature)
             }
@@ -41,7 +44,7 @@ enum GeoJSONReader {
         default:
             throw KMLReadError.unsupportedFormat
         }
-        return builder.makeDocument(name: name)
+        return builder.makeDocument(name: name, descriptionHTML: description)
     }
 
     private static func parseJSON(_ data: Data) throws -> Any {
@@ -85,13 +88,14 @@ struct GeoJSONBuilder {
         placemarks.append(KMLPlacemark(
             id: "p\(placemarks.count + 1)", name: fields.name, descriptionHTML: fields.descriptionHTML,
             styleUrl: styleUrl, coordinate: shape.coordinate, hasPoint: shape.hasPoint,
-            geometries: shape.geometries, extendedData: fields.data, photoLinks: [], sourceID: id
+            geometries: shape.geometries, extendedData: fields.data, photoLinks: fields.photoLinks,
+            sourceID: id, snippet: fields.snippet, address: fields.address, phoneNumber: fields.phoneNumber
         ))
     }
 
-    func makeDocument(name: String?) -> KMLDocument {
+    func makeDocument(name: String?, descriptionHTML: String? = nil) -> KMLDocument {
         let root = KMLContainer(id: "root", name: nil, children: [], placemarks: placemarks)
-        return KMLDocument(name: name, descriptionHTML: nil, root: root, styles: styles, styleMaps: [:])
+        return KMLDocument(name: name, descriptionHTML: descriptionHTML, root: root, styles: styles, styleMaps: [:])
     }
 
     private mutating func styleURL(for key: GeoJSONStyleKey) -> String {
@@ -100,7 +104,7 @@ struct GeoJSONBuilder {
         }
         let id = "geojson-style-\(styleIDs.count + 1)"
         styleIDs[key] = id
-        styles[id] = KMLStyle(id: id, iconHref: nil, iconColor: key.iconColor, iconScale: nil,
+        styles[id] = KMLStyle(id: id, iconHref: key.iconHref, iconColor: key.iconColor, iconScale: key.iconScale,
                               lineColor: key.lineColor, lineWidth: key.lineWidth,
                               polyColor: key.polyColor, polyFill: key.polyColor == nil ? nil : true)
         return "#\(id)"
