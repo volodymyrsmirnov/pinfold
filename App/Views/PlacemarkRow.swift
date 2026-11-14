@@ -93,6 +93,7 @@ struct PlacemarkRow: View {
                 // icon column, which left a wide gap between the small arrow and the distance.
                 HStack(spacing: 3) {
                     Image(systemName: "location")
+                        .accessibilityHidden(true)
                     Text(distance)
                 }
                 .font(.caption)

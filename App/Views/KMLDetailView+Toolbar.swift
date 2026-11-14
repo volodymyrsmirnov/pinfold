@@ -20,14 +20,12 @@ extension KMLDetailView {
     /// spinner and Refresh Now is disabled.
     private var moreMenu: some View {
         Menu {
-            if let url = existingOriginalURL {
-                Section {
-                    ShareLink(item: url, preview: SharePreview(liveEntry.displayName)) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
-                }
-            }
-            Section {
+            FileActions(
+                entry: liveEntry,
+                originalURL: catalog.map { FileShareLink.originalURL(for: liveEntry, in: $0.storage) } ?? nil,
+                isRefreshing: isRefreshing,
+                handlers: fileActionHandlers
+            ) {
                 sortPicker
                 if let info = documentInfo {
                     Button {
@@ -35,15 +33,6 @@ extension KMLDetailView {
                     } label: {
                         Label("File Description", systemImage: "info.circle")
                     }
-                }
-            }
-            onlineActions
-            if catalog != nil {
-                Section {
-                    Button(role: .destructive, action: trashAndClose) {
-                        Label("Trash", systemImage: "trash")
-                    }
-                    .disabled(liveEntry.isReadOnly)
                 }
             }
         } label: {
@@ -93,15 +82,6 @@ extension KMLDetailView {
         )
     }
 
-    /// The file's original on disk, for Share; `nil` while it isn't there (an iCloud
-    /// placeholder not yet downloaded), so Share never offers a dead URL.
-    private var existingOriginalURL: URL? {
-        guard let url = storage.originalFileURL(inFolderNamed: liveEntry.storageFolderName),
-              FileManager.default.fileExists(atPath: url.path)
-        else { return nil }
-        return url
-    }
-
     /// Moves the file to Trash and closes it, back to the file list. Closes first so the screen
     /// slides away rather than blanking when the catalogue reload drops the entry; if the move
     /// fails (a read-only sidecar), the catalogue reports it and the file stays in the list.
@@ -117,30 +97,18 @@ extension KMLDetailView {
         return refresher.phase(for: liveEntry) == .refreshing
     }
 
-    /// The online-list actions, in their own menu section; nothing for a normal list.
-    @ViewBuilder
-    private var onlineActions: some View {
-        if let refresher, let subscription = liveEntry.subscription {
-            let live = liveEntry
-            Section {
-                Button {
-                    Task { await showRefreshError(refresher.refreshNowMessage(live)) }
-                } label: {
-                    Label("Refresh Now", systemImage: "arrow.clockwise")
-                }
-                .disabled(live.isReadOnly || isRefreshing)
-                Button {
-                    UIPasteboard.general.url = subscription.url
-                } label: {
-                    Label("Copy URL", systemImage: "link")
-                }
-                Button {
-                    stopUpdatingTarget = live
-                } label: {
-                    Label("Stop Updating", systemImage: "xmark.circle")
-                }
-                .disabled(live.isReadOnly)
-            }
-        }
+    /// What the open file's actions do: this screen's refresh-error alert and Stop Updating
+    /// confirmation, and a Trash that closes the file first. Refresh and Trash need the shared
+    /// services, so they do nothing when those are missing (previews).
+    private var fileActionHandlers: FileActionHandlers {
+        let live = liveEntry
+        return FileActionHandlers(
+            refreshNow: {
+                guard let refresher else { return }
+                Task { await showRefreshError(refresher.refreshNowMessage(live)) }
+            },
+            stopUpdating: { stopUpdatingTarget = live },
+            trash: catalog == nil ? nil : { trashAndClose() }
+        )
     }
 }

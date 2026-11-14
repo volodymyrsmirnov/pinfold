@@ -74,14 +74,21 @@ extension HomeView {
     /// This window's menu-command actions, published as a focused-scene value (E7). Acts on the
     /// sidebar's selected file; the pure model decides what is enabled.
     var windowCommands: WindowCommands {
-        WindowCommands(
-            selectedEntry: selection.flatMap { id in active.first { $0.id == id } },
+        let selected = isSelecting ? nil : selection.flatMap { id in active.first { $0.id == id } }
+        return WindowCommands(
+            // In select mode the ticked rows, not the open file, are what the user has in hand,
+            // so the single-file commands stand down rather than act on a file that isn't ticked.
+            selectedEntry: selected,
             canImport: !importCoordinator.isImporting && importCoordinator.pendingDuplicate == nil
                 && !isSubscribing,
             importFiles: { isFileImporterPresented = true },
             subscribeToURL: { beginSubscribe() },
             focusSearch: { isSearchFocused = true },
-            trash: { entry in Task { await catalog.moveToTrash(entry) } }
+            trash: { trash($0) },
+            refreshNow: { runRefreshNow($0) },
+            copyURL: { entry in UIPasteboard.general.url = entry.subscription?.url },
+            stopUpdating: { stopUpdatingTarget = $0 },
+            isRefreshingSelection: selected.map { refresher.phase(for: $0) == .refreshing } ?? false
         )
     }
 }

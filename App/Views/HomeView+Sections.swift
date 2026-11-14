@@ -65,31 +65,23 @@ extension HomeView {
     /// The context menu for an active (non-trashed) file row, in separated groups: Share (the
     /// original file on disk); Refresh Now, Copy URL and Stop Updating for online lists; Trash.
     /// Trashed rows use their own menu (Restore / Delete) and never get this one.
-    @ViewBuilder
     func activeRowMenu(for entry: CatalogEntry) -> some View {
-        // Share the original back out. `ShareLink` with a file URL shares the file itself. Only
-        // offered while the original exists on disk: in iCloud mode an entry can be a
-        // not-yet-downloaded placeholder, and ShareLink would share a dead URL.
-        if let url = existingOriginalURL(for: entry) {
-            Section {
-                ShareLink(item: url, preview: SharePreview(entry.displayName)) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-        }
-        if let subscription = entry.subscription {
-            Section {
-                onlineRowMenu(for: entry, url: subscription.url)
-            }
-        }
-        Section {
-            Button(role: .destructive) {
-                Task { await catalog.moveToTrash(entry) }
-            } label: {
-                Label("Trash", systemImage: "trash")
-            }
-            .disabled(entry.isReadOnly)
-        }
+        FileActions(
+            entry: entry,
+            originalURL: FileShareLink.originalURL(for: entry, in: catalog.storage),
+            isRefreshing: refresher.phase(for: entry) == .refreshing,
+            handlers: fileActionHandlers(for: entry)
+        )
+    }
+
+    /// What the catalogue's file actions do: Home's refresh-error alert, its Stop Updating
+    /// confirmation, and a Trash that closes the file if it's the one open beside the list.
+    func fileActionHandlers(for entry: CatalogEntry) -> FileActionHandlers {
+        FileActionHandlers(
+            refreshNow: { runRefreshNow(entry) },
+            stopUpdating: { stopUpdatingTarget = entry },
+            trash: { trash(entry) }
+        )
     }
 
     /// An active file's row with all of its actions, the same wherever the file is listed (the
@@ -105,7 +97,7 @@ extension HomeView {
         .tag(entry.id)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
-                Task { await catalog.moveToTrash(entry) }
+                trash(entry)
             } label: {
                 Label("Trash", systemImage: "trash")
             }
@@ -118,63 +110,26 @@ extension HomeView {
         .stopUpdatingConfirmation(target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating)
     }
 
+    /// Moves `entry` to Trash from any of its actions (swipe, menu, menu bar). If it is the file
+    /// open beside the list, it is closed first, as the file's own Trash does, so the detail
+    /// doesn't blank in place and a later Restore doesn't silently reopen it.
+    func trash(_ entry: CatalogEntry) {
+        if selection == entry.id {
+            selection = nil
+        }
+        Task { await catalog.moveToTrash(entry) }
+    }
+
     /// The actions revealed by swiping a file row to the right, as place rows offer theirs:
     /// Share, Refresh (online lists only) and Trash. Share is left out while the original isn't
     /// on disk (an iCloud placeholder), as in the row menu.
-    @ViewBuilder
     func fileRowLeadingActions(for entry: CatalogEntry) -> some View {
-        if let url = existingOriginalURL(for: entry) {
-            ShareLink(item: url, preview: SharePreview(entry.displayName)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
-            .tint(.blue)
-        }
-        if entry.subscription != nil {
-            Button {
-                runRefreshNow(entry)
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .tint(.indigo)
-            .disabled(entry.isReadOnly || refresher.phase(for: entry) == .refreshing)
-        }
-        Button(role: .destructive) {
-            Task { await catalog.moveToTrash(entry) }
-        } label: {
-            Label("Trash", systemImage: "trash")
-        }
-        .disabled(entry.isReadOnly)
-    }
-
-    /// Refresh Now / Copy URL / Stop Updating, for online lists only.
-    @ViewBuilder
-    private func onlineRowMenu(for entry: CatalogEntry, url: URL) -> some View {
-        Button {
-            runRefreshNow(entry)
-        } label: {
-            Label("Refresh Now", systemImage: "arrow.clockwise")
-        }
-        .disabled(entry.isReadOnly || refresher.phase(for: entry) == .refreshing)
-        Button {
-            UIPasteboard.general.url = url
-        } label: {
-            Label("Copy URL", systemImage: "link")
-        }
-        Button {
-            stopUpdatingTarget = entry
-        } label: {
-            Label("Stop Updating", systemImage: "xmark.circle")
-        }
-        .disabled(entry.isReadOnly)
-    }
-
-    /// The entry's original KML/KMZ file URL, but only if it currently exists on disk (so the
-    /// Share action never offers a dead iCloud-placeholder URL). `nil` when absent.
-    private func existingOriginalURL(for entry: CatalogEntry) -> URL? {
-        guard let url = catalog.storage.originalFileURL(inFolderNamed: entry.storageFolderName),
-              FileManager.default.fileExists(atPath: url.path)
-        else { return nil }
-        return url
+        FileSwipeActions(
+            entry: entry,
+            originalURL: FileShareLink.originalURL(for: entry, in: catalog.storage),
+            isRefreshing: refresher.phase(for: entry) == .refreshing,
+            handlers: fileActionHandlers(for: entry)
+        )
     }
 }
 
@@ -223,12 +178,7 @@ extension HomeView {
                 ForEach(grouped, id: \.entry.id) { group in
                     Section(group.entry.displayName) {
                         ForEach(group.hits) { hit in
-                            Button {
-                                openPlaceHit(hit)
-                            } label: {
-                                placeHitRow(hit)
-                            }
-                            .buttonStyle(.plain)
+                            placeHitButton(hit)
                         }
                     }
                 }
@@ -237,15 +187,59 @@ extension HomeView {
         }
     }
 
-    /// One "Places" hit row: the placemark name (or a coordinate-only placeholder), plus an
-    /// excerpt line when the match was in the description, data or a note rather than the name.
-    private func placeHitRow(_ hit: PlacemarkIndex.Hit) -> some View {
-        HStack(spacing: 8) {
+    /// A "Places" hit with the same actions as the place inside its file (see "UI action
+    /// consistency" in CLAUDE.md): tap opens it, swipe right for Share / Favorite / Mark Seen, and
+    /// the long-press menu is the place's own (`PlacemarkActions`).
+    private func placeHitButton(_ hit: PlacemarkIndex.Hit) -> some View {
+        let place = PlaceRef(hit)
+        let annotations = hitAnnotations[hit.folderName]
+        return Button {
+            openPlaceHit(hit)
+        } label: {
+            placeHitRow(hit, annotations: annotations)
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            PlacemarkSwipeActions(place: place, annotations: annotations)
+        }
+        .contextMenu {
+            PlacemarkActions(place: place, annotations: annotations)
+        }
+    }
+
+    /// Favourites / Seen for each file the hits come from, read from its sidecar.
+    func annotationsForHits(_ hits: [PlacemarkIndex.Hit]) -> [String: PlacemarkAnnotations] {
+        var result: [String: PlacemarkAnnotations] = [:]
+        for folder in Set(hits.map(\.folderName)) {
+            guard let entry = active.first(where: { $0.storageFolderName == folder }) else { continue }
+            result[folder] = PlacemarkAnnotations(entry: entry, storage: catalog.storage)
+        }
+        return result
+    }
+
+    /// One "Places" hit row: the placemark name (or a coordinate-only placeholder) with its
+    /// favourite star and Seen strikethrough as in the file's own rows, plus an excerpt line when
+    /// the match was in the description, data or a note rather than the name.
+    private func placeHitRow(_ hit: PlacemarkIndex.Hit, annotations: PlacemarkAnnotations?) -> some View {
+        let isFavorite = annotations?.isFavorite(key: hit.key) ?? false
+        let isVisited = annotations?.isVisited(key: hit.key) ?? false
+        return HStack(spacing: 8) {
             Image(systemName: hit.matchedField == .note ? "note.text" : "mappin.circle")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(hit.name.isEmpty ? "Unnamed place" : hit.name)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.yellow)
+                            .accessibilityLabel("Favorite")
+                    }
+                    Text(hit.name.isEmpty ? "Unnamed place" : hit.name)
+                        .strikethrough(isVisited)
+                        .foregroundStyle(isVisited ? .secondary : .primary)
+                        .lineLimit(1)
+                        .accessibilityValue(isVisited ? Text("Seen") : Text(""))
+                }
                 if let snippet = hit.snippet {
                     Text(snippet)
                         .font(.caption)

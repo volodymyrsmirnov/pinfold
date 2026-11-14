@@ -74,6 +74,10 @@ struct HomeView: View {
     /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
     /// Not `private`: `groupedPlaceHits` lives in the `HomeView+Sections` extension (a separate file).
     @State var placeHits: [PlacemarkIndex.Hit] = []
+    /// Favourites / Seen for the files the "Places" hits come from, by folder name, so a hit
+    /// offers the same actions as the place inside its file. Rebuilt with each search (which
+    /// re-runs when any sidecar changes, via `searchDataRevision`).
+    @State var hitAnnotations: [String: PlacemarkAnnotations] = [:]
 
     /// Debounce before reading every entry's index off disk, matching `KMLDetailView`'s
     /// in-file search debounce so rapid typing doesn't fan out a read storm.
@@ -114,6 +118,14 @@ struct HomeView: View {
         segment == .files && !trimmedQuery.isEmpty
     }
 
+    /// Trash, narrowed to the names matching the search query (Trash is searched by name; it
+    /// has no place results). The whole Trash when the query is empty.
+    var visibleTrashed: [CatalogEntry] {
+        let query = trimmedQuery
+        guard !query.isEmpty else { return trashed }
+        return trashed.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -124,13 +136,12 @@ struct HomeView: View {
             fileList
         }
         .navigationTitle("Pinfold")
-        // Catalogue-wide search lives only on the Files segment (active entries); Trash is not
-        // searched. `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F
+        // Files searches file names and every file's places; Trash filters its rows by name. `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F
         // command move keyboard focus here.
         .searchable(
             text: $searchQuery,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: Text("Search files and places")
+            prompt: segment == .files ? Text("Search files and places") : Text("Search Trash")
         )
         .searchFocused($isSearchFocused)
         // Debounced, off-main search over each active entry's local placemark index. Re-keys on
@@ -141,6 +152,7 @@ struct HomeView: View {
             let query = trimmedQuery
             guard segment == .files, !query.isEmpty else {
                 placeHits = []
+                hitAnnotations = [:]
                 return
             }
             try? await Task.sleep(for: Self.searchDebounce)
@@ -163,6 +175,7 @@ struct HomeView: View {
                 return
             }
             placeHits = hits
+            hitAnnotations = annotationsForHits(hits)
         }
         // Menu commands act on THIS window only: published as a focused-scene value.
         .focusedSceneValue(\.windowCommands, windowCommands)
@@ -193,7 +206,7 @@ struct HomeView: View {
             NavigationStack {
                 SettingsView()
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button(role: .close) { isSettingsPresented = false }
                         }
                     }

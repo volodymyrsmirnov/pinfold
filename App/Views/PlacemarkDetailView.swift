@@ -35,8 +35,6 @@ struct PlacemarkDetailView: View {
 
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
-    /// Whether to force-show the picker (long-press on Open in Maps).
-    @State private var forcePicker = false
     /// Fallbacks for macOS "Designed for iPad" navigation/sheet hosts that can drop typed
     /// environment values from pushed destinations. Normal app flows still use the injected
     /// environment instances.
@@ -100,12 +98,22 @@ struct PlacemarkDetailView: View {
         }
     }
 
-    /// The menu-bar actions for this place (⌘D, ⇧⌘O); each is `nil` (menu item disabled) when
-    /// it cannot apply.
+    /// The menu-bar actions for this place, mirroring its "⋯" menu; each is `nil` (menu item
+    /// disabled) when it cannot apply.
     private var placeCommands: PlaceCommands {
-        PlaceCommands(
-            toggleFavorite: annotations.map { store in { store.toggleFavorite(placemark) } },
-            openInMaps: hasCoordinate ? { openInMaps() } : nil
+        let place = PlaceRef(placemark)
+        let editable = annotations.flatMap { $0.canEdit ? $0 : nil }
+        return PlaceCommands(
+            toggleFavorite: editable.map { store in { store.toggleFavorite(placemark) } },
+            isFavorite: annotations?.isFavorite(placemark) ?? false,
+            toggleVisited: editable.map { store in { store.toggleVisited(placemark) } },
+            isVisited: annotations?.isVisited(placemark) ?? false,
+            openInMaps: hasCoordinate ? { openInMaps() } : nil,
+            showOnMap: hasCoordinate ? { activeRouter?.path.append(.map(focusKey: placemark.stableKey)) } : nil,
+            copyCoordinates: place.coordinate.map { coordinate in
+                { UIPasteboard.general.string = CoordinateFormatter.string(for: coordinate) }
+            },
+            copyName: place.name.flatMap { name in name.isEmpty ? nil : { UIPasteboard.general.string = name } }
         )
     }
 
@@ -232,12 +240,12 @@ struct PlacemarkDetailView: View {
     /// makes the whole chip a link (tinted, with an arrow), so it can be tapped to open.
     @ViewBuilder
     private func extendedDataChip(_ item: KMLDataItem) -> some View {
-        if let url = webURL(item.value) {
+        if let url = WebLink.url(from: item.value) {
             Link(destination: url) {
                 chipContent(item, isLink: true)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens in Safari")
+            .accessibilityHint("Opens the link")
         } else {
             chipContent(item, isLink: false)
                 .textSelection(.enabled)
@@ -273,18 +281,6 @@ struct PlacemarkDetailView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// The value as a URL when it is a single http(s) address.
-    private func webURL(_ value: String) -> URL? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.contains(where: \.isWhitespace),
-              let url = URL(string: trimmed),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              url.host() != nil
-        else { return nil }
-        return url
-    }
-
     // MARK: - Open in Maps button
 
     private var openInMapsButton: some View {
@@ -312,7 +308,7 @@ struct PlacemarkDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                PlacemarkActions(placemark: placemark, annotations: annotations) {
+                PlacemarkActions(place: PlaceRef(placemark), annotations: annotations) {
                     if hasCoordinate {
                         Button {
                             activeRouter?.path.append(.map(focusKey: placemark.stableKey))

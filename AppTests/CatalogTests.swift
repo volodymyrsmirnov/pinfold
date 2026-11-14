@@ -90,6 +90,45 @@ import Testing
         ))
     }
 
+    @Test func deleteForever_skipsAnEntryRestoredOnDiskSinceItWasListed() async throws {
+        // The list still shows the entry in Trash, but its sidecar was restored meanwhile
+        // (another device, or a restore that finished during the index read): keep the file.
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "back", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let stale = try #require(catalog.trashed.first)
+        try storage.updateMetadata(forFolderNamed: "back") { $0.trashedAt = nil }
+
+        await catalog.deleteForever(stale)
+
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("back").path))
+        #expect(catalog.active.map(\.storageFolderName) == ["back"])
+    }
+
+    @Test func deleteForever_twiceIsQuietNoOp() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let entry = try #require(catalog.trashed.first)
+
+        await catalog.deleteForever(entry)
+        await catalog.deleteForever(entry)
+
+        #expect(catalog.actionError == nil)
+        #expect(catalog.entries.isEmpty)
+    }
+
+    @Test func deleteForever_neverDeletesAnActiveEntry() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.deleteForever(entry)
+
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
+    }
+
     @Test func entryWithSHA256_findsByContentHash() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "f", sha: "needle")
@@ -230,9 +269,9 @@ import Testing
 
     @Test func deleteForeverFailure_setsActionError() async throws {
         let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "stuck")
+        try seedFolder(storage, folder: "stuck", trashedAt: Date(timeIntervalSince1970: 3))
         await catalog.reload()
-        let entry = try #require(catalog.active.first)
+        let entry = try #require(catalog.trashed.first)
         // A read-only root: the folder itself cannot be unlinked.
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: storage.root.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: storage.root.path) }

@@ -66,6 +66,10 @@ struct PlacemarkMapView: View {
                 PlacemarkPreviewCard(placemark: placemark, document: document, entry: entry) {
                     activeRouter?.path.append(.placemark(stableKey: placemark.stableKey))
                 }
+                // The place's own long-press menu, as on its row (tapping opens the place).
+                .contextMenu {
+                    PlacemarkActions(place: PlaceRef(placemark), annotations: annotations)
+                }
                 .padding()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }

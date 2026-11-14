@@ -11,8 +11,9 @@ import SwiftUI
 ///
 /// Search is the system search bar, exactly as on the catalogue: activating it slides the title
 /// and toolbar away and shows a close button. Typing filters the hierarchy in place — folders
-/// that contain matches stay, the rest are pruned — so results remain grouped by category, and
-/// the map (once search is closed with the query kept) plots the filtered set.
+/// that contain matches stay, the rest are pruned — so results remain grouped by category. While
+/// searching, a "Show N Results on Map" row opens the map of just the matches; closing search
+/// clears the query.
 struct KMLDetailView: View {
     // MARK: - Properties
 

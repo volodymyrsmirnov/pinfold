@@ -153,20 +153,9 @@ import Observation
         return true
     }
 
-    /// Permanently removes an entry's folder (and its resource cache), then reloads.
+    /// Permanently removes one trashed entry; see `deleteForever(_:)` for the safety checks.
     func deleteForever(_ entry: CatalogEntry) async {
-        // Read the index BEFORE removing the folder so the placemark item ids can be
-        // reconstructed; otherwise the cache is gone and only the entry item would be removable.
-        // The read is `await`ed (now off-main) and completes fully before `removeFolder`, so the
-        // ordering is preserved.
-        let toRemove = await indexEntries(for: entry)
-        do {
-            try storage.removeFolder(named: entry.storageFolderName)
-            SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
-        } catch {
-            actionError = .deleteFailed(entryName: entry.displayName, error: error)
-        }
-        await reload()
+        await deleteForever([entry])
     }
 
     /// The first entry with the given content hash, for import-time duplicate detection.

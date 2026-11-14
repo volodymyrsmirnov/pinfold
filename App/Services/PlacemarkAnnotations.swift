@@ -29,8 +29,9 @@ import PinfoldCore
     @ObservationIgnored private var canPersist = true
 
     /// `false` when this entry cannot be written (read-only, not downloaded, unreadable
-    /// sidecar); the note editor is disabled rather than accepting text it would drop.
-    var canEditNotes: Bool {
+    /// sidecar). Favorite, Seen and the note editor are then disabled everywhere they're offered,
+    /// rather than showing a change that would be dropped.
+    var canEdit: Bool {
         canPersist
     }
 
@@ -77,13 +78,35 @@ import PinfoldCore
     }
 
     func toggleFavorite(_ placemark: KMLPlacemark) {
-        let added = toggle(&favoriteKeys, key: placemark.stableKey)
-        persist(favorite: (placemark.stableKey, added))
+        toggleFavorite(key: placemark.stableKey)
     }
 
     func toggleVisited(_ placemark: KMLPlacemark) {
-        let added = toggle(&visitedKeys, key: placemark.stableKey)
-        persist(visited: (placemark.stableKey, added))
+        toggleVisited(key: placemark.stableKey)
+    }
+
+    // MARK: By stable key (search hits carry the key, not a parsed placemark)
+
+    func isFavorite(key: String) -> Bool {
+        favoriteKeys.contains(key)
+    }
+
+    func isVisited(key: String) -> Bool {
+        visitedKeys.contains(key)
+    }
+
+    /// No-op when the entry can't be written, so the UI never shows a change that won't stick.
+    func toggleFavorite(key: String) {
+        guard canPersist else { return }
+        let added = toggle(&favoriteKeys, key: key)
+        persist(favorite: (key, added))
+    }
+
+    /// No-op when the entry can't be written, so the UI never shows a change that won't stick.
+    func toggleVisited(key: String) {
+        guard canPersist else { return }
+        let added = toggle(&visitedKeys, key: key)
+        persist(visited: (key, added))
     }
 
     /// The live (non-tombstone) note for a placemark, if any.

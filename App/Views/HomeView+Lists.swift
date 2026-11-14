@@ -34,10 +34,12 @@ extension HomeView {
                 } description: {
                     Text("Files you trash will appear here.")
                 }
+            } else if visibleTrashed.isEmpty {
+                ContentUnavailableView.search(text: trimmedQuery)
             } else if isSelecting {
                 selectionList
             } else {
-                TrashList(trashed: trashed)
+                TrashList(trashed: visibleTrashed)
             }
         }
     }

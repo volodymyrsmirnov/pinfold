@@ -187,7 +187,7 @@ import Testing
     @Test func setNote_reportsSuccess() throws {
         let (entry, storage) = try makeEntryAndStorage()
         let store = PlacemarkAnnotations(entry: entry, storage: storage)
-        #expect(store.canEditNotes)
+        #expect(store.canEdit)
         #expect(store.setNote("ok", for: point("s")))
     }
 
@@ -196,7 +196,7 @@ import Testing
         var readOnly = entry
         readOnly.sidecarState = .notDownloaded
         let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
-        #expect(!store.canEditNotes)
+        #expect(!store.canEdit)
         #expect(!store.setNote("lost", for: point("ro")))
         #expect(store.note(for: point("ro")) == nil)
     }

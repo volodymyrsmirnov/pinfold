@@ -6,13 +6,13 @@ extension HomeView {
     /// The rows select mode works on: the Files list (newest first) or the Trash list, in the
     /// order each one shows them.
     var selectableEntries: [CatalogEntry] {
-        segment == .files ? sortedActive : trashed
+        segment == .files ? sortedActive : visibleTrashed
     }
 
     /// Whether select mode makes sense right now: a plain list (not search results) with at
     /// least one file, on either segment.
     var canSelect: Bool {
-        !isSearching && !selectableEntries.isEmpty
+        trimmedQuery.isEmpty && !selectableEntries.isEmpty
     }
 
     /// The entries ticked in select mode, in list order.
@@ -53,6 +53,10 @@ extension HomeView {
     /// Trashes every ticked entry (one reload) and leaves select mode.
     func trashBulkSelection() {
         let entries = bulkEntries
+        // The open file is closed if it's among them, as when trashing it on its own.
+        if let selection, bulkSelection.contains(selection) {
+            self.selection = nil
+        }
         Task {
             await catalog.moveToTrash(entries)
             endSelecting()
@@ -115,7 +119,10 @@ extension HomeView {
                     Button("Trash", systemImage: "trash", role: .destructive) { trashBulkSelection() }
                         .disabled(bulkEntries.isEmpty)
                 } else {
-                    Button("Delete", systemImage: "trash", role: .destructive) { deleteBulkSelection() }
+                    // Deleting for good wears the same filled red glyph as a Trash row's Delete,
+                    // so it can't be mistaken for the recoverable Trash button in Files.
+                    Button("Delete", systemImage: "trash.fill", role: .destructive) { deleteBulkSelection() }
+                        .tint(.red)
                         .disabled(bulkEntries.isEmpty)
                 }
             }

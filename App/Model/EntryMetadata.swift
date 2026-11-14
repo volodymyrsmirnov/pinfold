@@ -93,8 +93,8 @@ struct EntryMetadata: Codable, Equatable {
         // array order is otherwise nondeterministic, causing spurious sync churn).
         try c.encode(favoriteKeys.sorted(), forKey: .favoriteKeys)
         try c.encode(visitedKeys.sorted(), forKey: .visitedKeys)
-        // Tags are already kept sorted by `Catalog.setTags`, but sort again here so a
-        // hand-built/legacy-merged value still serializes diff-stably.
+        // Legacy tags (written by versions that had tagging) are round-tripped untouched;
+        // sorted so a merged value still serializes diff-stably.
         try c.encode(tags.sorted(), forKey: .tags)
         if !notes.isEmpty {
             try c.encode(notes, forKey: .notes)
