@@ -89,11 +89,16 @@ struct PlacemarkRow: View {
                     .lineLimit(1)
             }
             if let distance {
-                Label(distance, systemImage: "location")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
+                // An HStack rather than a Label: inside a List a Label reserves a fixed-width
+                // icon column, which left a wide gap between the small arrow and the distance.
+                HStack(spacing: 3) {
+                    Image(systemName: "location")
+                    Text(distance)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .accessibilityElement(children: .combine)
             }
         }
     }
