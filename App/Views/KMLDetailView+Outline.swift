@@ -65,6 +65,7 @@ extension KMLDetailView {
             return
         }
         outline = built
+        outlineQuery = query.trimmingCharacters(in: .whitespaces)
         outlineGeneration += 1
     }
 }

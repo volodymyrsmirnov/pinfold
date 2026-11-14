@@ -31,6 +31,10 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("f", modifiers: .command)
             .disabled(window == nil && fileSearch == nil)
+            // Mail's ⌥⌘F: the catalogue-wide search, even while a file is open beside it.
+            Button("Search All Files") { window?.search() }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(window == nil)
         }
         CommandMenu("File Actions") {
             fileButtons

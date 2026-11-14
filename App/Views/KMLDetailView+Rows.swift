@@ -22,7 +22,9 @@ extension KMLDetailView {
                 }
                 remoteImagesSection
                 if let outline {
-                    if !query.isEmpty, !outline.mappablePlacemarks.isEmpty {
+                    // Only once the outline is built for this query: until then it still holds
+                    // the previous (often unfiltered) set, and the row would map the wrong places.
+                    if !query.isEmpty, outlineQuery == query, !outline.mappablePlacemarks.isEmpty {
                         searchResultsMapSection(count: outline.mappablePlacemarks.count)
                     }
                     if outline.rows.isEmpty, !query.isEmpty {

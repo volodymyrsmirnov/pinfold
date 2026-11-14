@@ -76,6 +76,9 @@ struct KMLDetailView: View {
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State var outline: PlacemarkOutline?
+    /// The trimmed query `outline` was built for. The outline lags typing by the debounce plus
+    /// the build, so anything that presents it as "the results" (the map row) checks this first.
+    @State var outlineQuery = ""
     /// Monotonic count of completed outline rebuilds. The scroll-restore task keys on THIS
     /// (not `outline?.rows.count`): a rebuild can reorder rows without changing their count
     /// — e.g. the nearest-first re-sort arriving on a flat, folderless file — and a
