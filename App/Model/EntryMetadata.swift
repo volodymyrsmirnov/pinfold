@@ -25,7 +25,7 @@ struct EntryMetadata: Codable, Equatable {
     var favoriteKeys: Set<String> = []
     /// Stable keys of placemarks marked visited/seen.
     var visitedKeys: Set<String> = []
-    /// Labels written by Pinfold versions that had tagging (removed in 2.2). Nothing reads or
+    /// Labels written by Pinfold versions that had tagging (removed in 2.1). Nothing reads or
     /// edits them any more, but they are decoded, merged and re-encoded unchanged so a device
     /// still on an older version doesn't lose them when iCloud syncs this sidecar.
     var tags: [String] = []
