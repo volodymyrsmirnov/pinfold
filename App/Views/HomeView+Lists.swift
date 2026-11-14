@@ -32,6 +32,9 @@ extension HomeView {
                                 }
                                 .disabled(entry.isReadOnly)
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                fileRowLeadingActions(for: entry)
+                            }
                             .contextMenu { activeRowMenu(for: entry) }
                             .stopUpdatingConfirmation(
                                 target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating

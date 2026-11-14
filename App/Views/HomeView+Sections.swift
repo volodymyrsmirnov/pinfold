@@ -94,6 +94,34 @@ extension HomeView {
         .disabled(entry.isReadOnly)
     }
 
+    /// The actions revealed by swiping a file row to the right, as place rows offer theirs:
+    /// Share, Refresh (online lists only) and Trash. Share is left out while the original isn't
+    /// on disk (an iCloud placeholder), as in the row menu.
+    @ViewBuilder
+    func fileRowLeadingActions(for entry: CatalogEntry) -> some View {
+        if let url = existingOriginalURL(for: entry) {
+            ShareLink(item: url, preview: SharePreview(entry.displayName)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            .tint(.blue)
+        }
+        if entry.subscription != nil {
+            Button {
+                runRefreshNow(entry)
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .tint(.indigo)
+            .disabled(entry.isReadOnly || refresher.phase(for: entry) == .refreshing)
+        }
+        Button(role: .destructive) {
+            Task { await catalog.moveToTrash(entry) }
+        } label: {
+            Label("Trash", systemImage: "trash")
+        }
+        .disabled(entry.isReadOnly)
+    }
+
     /// Refresh Now / Copy URL / Stop Updating, for online lists only.
     @ViewBuilder
     private func onlineRowMenu(for entry: CatalogEntry, url: URL) -> some View {
