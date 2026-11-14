@@ -9,6 +9,7 @@ import SwiftUI
 struct AppCommands: Commands {
     @FocusedValue(\.windowCommands) private var window
     @FocusedValue(\.placeCommands) private var place
+    @FocusedValue(\.fileSearch) private var fileSearch
 
     var body: some Commands {
         // Placed after the standard "New" group so Import sits with file-creation commands.
@@ -20,9 +21,16 @@ struct AppCommands: Commands {
                 .disabled(!(window?.canImport ?? false))
         }
         CommandGroup(after: .textEditing) {
-            Button("Search") { window?.search() }
-                .keyboardShortcut("f", modifiers: .command)
-                .disabled(window == nil)
+            // The open file's search when a file is on screen, else the catalogue's.
+            Button("Search") {
+                if let fileSearch {
+                    fileSearch.focus()
+                } else {
+                    window?.search()
+                }
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(window == nil && fileSearch == nil)
         }
         CommandMenu("File Actions") {
             fileButtons

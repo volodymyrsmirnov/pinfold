@@ -94,17 +94,20 @@ extension HomeView {
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
                 Button("Trash", systemImage: "trash", role: .destructive) { trashBulkSelection() }
-                    .disabled(bulkSelection.isEmpty)
+                    .disabled(bulkEntries.isEmpty)
             }
         }
     }
 
     /// "Select Files" before anything is ticked, then "1 File Selected" / "N Files Selected".
+    /// Counts the ticked files still in the list, so a file removed meanwhile (iCloud, another
+    /// window) drops out of the count.
     private var selectionCountText: String {
-        switch bulkSelection.count {
+        let count = bulkEntries.count
+        return switch count {
         case 0: String(localized: "Select Files")
         case 1: String(localized: "1 File Selected")
-        default: String(localized: "\(bulkSelection.count) Files Selected")
+        default: String(localized: "\(count) Files Selected")
         }
     }
 }

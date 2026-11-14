@@ -13,7 +13,7 @@ struct WindowCommands {
     /// Whether importing is allowed right now (not while an import stalls on a prompt).
     var canImport: Bool
     let importFiles: () -> Void
-    /// Opens the "Subscribe to URL" alert; gated by `canImport` like importing.
+    /// Opens the "Remote URL" alert; gated by `canImport` like importing.
     let subscribeToURL: () -> Void
     let focusSearch: () -> Void
     let rename: (CatalogEntry) -> Void
@@ -87,7 +87,14 @@ struct PlaceCommands {
     }
 }
 
+/// ⌘F for the file open on top of a window's detail column, published by `KMLDetailView` while
+/// it is on screen: focuses that file's search bar instead of the catalogue's.
+struct FileSearchCommand {
+    let focus: () -> Void
+}
+
 extension FocusedValues {
     @Entry var windowCommands: WindowCommands?
     @Entry var placeCommands: PlaceCommands?
+    @Entry var fileSearch: FileSearchCommand?
 }

@@ -1,3 +1,4 @@
+import ImageIO
 import PinfoldCore
 import SwiftUI
 import UIKit
@@ -59,10 +60,13 @@ struct PhotoGalleryView: View {
     }
 
     /// Opens the viewer on the tapped photo, paging through only the photos that are on disk.
+    /// The start page is counted from the tapped position (not looked up by URL), so a link
+    /// that repeats opens on the copy that was tapped.
     private func open(at index: Int, in urls: [URL?]) {
-        guard let tapped = urls[index] else { return }
+        guard urls[index] != nil else { return }
         let available = urls.compactMap(\.self)
-        viewer = PhotoViewer.Item(urls: available, startIndex: available.firstIndex(of: tapped) ?? 0)
+        let startIndex = urls[..<index].count { $0 != nil }
+        viewer = PhotoViewer.Item(urls: available, startIndex: startIndex)
     }
 
     // MARK: - Thumbnail tile
@@ -136,6 +140,7 @@ struct PhotoViewer: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: item.urls.count > 1 ? .always : .never))
+            .background { pagingShortcuts }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -150,6 +155,28 @@ struct PhotoViewer: View {
         .presentationSizing(.page)
     }
 
+    /// Left and right arrows page on a hardware keyboard (iPad, Mac), where swiping is awkward.
+    /// Invisible buttons, so the shortcuts work without adding visible controls.
+    @ViewBuilder
+    private var pagingShortcuts: some View {
+        if item.urls.count > 1 {
+            Group {
+                Button("Previous Photo") { step(-1) }
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                Button("Next Photo") { step(1) }
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+            }
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private func step(_ delta: Int) {
+        let target = selection + delta
+        guard item.urls.indices.contains(target) else { return }
+        withAnimation { selection = target }
+    }
+
     /// "2 of 5" when there is more than one photo; nothing otherwise.
     private var title: String {
         item.urls.count > 1 ? String(localized: "\(selection + 1) of \(item.urls.count)") : ""
@@ -159,7 +186,9 @@ struct PhotoViewer: View {
 // MARK: - ZoomablePhoto
 
 /// One page of the viewer: loads the cached file off the main thread, then shows it in a
-/// zooming scroll view. Zoom resets when the page is swiped away (`isCurrent` turns false).
+/// zooming scroll view. Zoom resets when the page is swiped away (`isCurrent` turns false), and
+/// the decoded bitmap is dropped when the page leaves the screen (`.task` reloads it on return),
+/// so paging through many photos doesn't keep every one in memory.
 private struct ZoomablePhoto: View {
     let url: URL
     let isCurrent: Bool
@@ -183,18 +212,40 @@ private struct ZoomablePhoto: View {
             }
         }
         .task(id: url) {
+            guard image == nil else { return }
             let loaded = await loadDisplayImage(url)
+            if Task.isCancelled {
+                return
+            }
             image = loaded
             failed = loaded == nil
+        }
+        .onDisappear {
+            image = nil
         }
     }
 }
 
-/// Decodes `url` for display off the main actor. A `nonisolated` free function so the detached
-/// closure is compiled outside any view (see the note at the top of `DocumentLoad.swift`).
+/// The longest side, in pixels, a photo is decoded at: sharp at full zoom on the largest
+/// screens, without holding a full-size bitmap (a 48 MP photo would be ~190 MB).
+private let maxDisplayPixelSize = 3072
+
+/// Decodes `url` for display off the main actor, downsampled to `maxDisplayPixelSize` with
+/// ImageIO (which never decodes the full-size image) and with its orientation applied. A
+/// `nonisolated` free function so the detached closure is compiled outside any view (see the note
+/// at the top of `DocumentLoad.swift`).
 private func loadDisplayImage(_ url: URL) async -> UIImage? {
     await Task.detached(priority: .userInitiated) {
-        UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else { return nil }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDisplayPixelSize,
+        ] as CFDictionary
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
+        return UIImage(cgImage: image)
     }.value
 }
 

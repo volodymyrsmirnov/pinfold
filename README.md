@@ -54,13 +54,13 @@ It's a faithful viewer and launcher: it reads your files exactly as they were au
 - **Browse your places** — navigate the original folder hierarchy from the file, tap any placemark for its full details (description with formatting, lists, tables and images, photos, address, phone, extended-data fields), with custom icons and colors from the file's styles preserved.
 - **See it on the map** — view all of a file's pins together on an embedded map; nearby pins group into numbered clusters when you zoom out so dense files stay readable. Tap a route or an area to select it, too.
 - **Search that finds more** — search across every file at once, matching names, descriptions, extended-data details and your own notes. Accents, case and character width don't matter: "Reykjavik" finds "Reykjavík".
-- **Notes and favourites** — add a personal note to any place, star your favourites, and see every favourite from every file together on one map, or in a list sorted nearest-first.
+- **Notes and favourites** — add a personal note to any place, star your favourites and mark places you've seen. Each file keeps its own.
 - **Navigate with the app you already use** — open any place in Apple Maps, Google Maps, Waze, Organic Maps, CoMaps, Maps.me, OsmAnd, Magic Earth, Citymapper, Guru Maps, Sygic, Yandex Maps, 2GIS, or Google Maps on the web. Set a default for one-tap navigation, or pick each time. Apps you don't have installed are hidden automatically.
 - **Import from anywhere** — share a file from any app, open one directly from Files or an attachment, or import several at once. Imports show their progress, can be cancelled, and explain what went wrong when a file can't be read.
-- **Built for iPad and Mac too** — drag files onto the window to import them, and use the menu bar commands (import, search, rename, edit tags, move to trash, toggle favourite, open in maps) with their keyboard shortcuts, each acting on its own window. On every device, select several files to tag or trash them together.
+- **Built for iPad and Mac too** — drag files onto the window to import them, and use the menu bar commands (import, search, rename, move to trash, toggle favourite, open in maps) with their keyboard shortcuts, each acting on its own window. On every device, select several files to trash them together.
 - **Your call on image downloads** — choose whether Pinfold downloads the icons and photos a file links to: always, after asking for each file, or never. Images packaged inside a KMZ always show.
 - **Storage and cache controls** — Settings shows how much space your files, downloaded images and extracted data use, and clears downloaded images in one tap.
-- **Optional iCloud sync** — turn on iCloud to keep your imported files, favourites, tags and notes on every device signed in to the same account. Files stay in your private iCloud; Pinfold has no account and no servers. If iCloud is unavailable, Pinfold says so and keeps working with the files on the device.
+- **Optional iCloud sync** — turn on iCloud to keep your imported files, favourites and notes on every device signed in to the same account. Files stay in your private iCloud; Pinfold has no account and no servers. If iCloud is unavailable, Pinfold says so and keeps working with the files on the device.
 - **Private by design** — no account, no sign-up, no ads, no tracking. Your location is shown only on your device and never leaves it.
 
 ## Requirements
@@ -105,7 +105,7 @@ Pinfold is split into two parts:
 - **`PinfoldCore/`** — a standalone Swift Package with no UIKit/SwiftUI/SwiftData dependency: the KML/KMZ parser plus GPX and GeoJSON readers, dispatched by file content. Entry points are `KMLReader.read(data:) -> ParsedKML` and `KMLReader.readDocument(data:)`. Depends only on [ZIPFoundation](https://github.com/weichsel/ZIPFoundation) (for KMZ archives).
 - **`App/` + `ShareExtension/`** — the SwiftUI app (Liquid Glass UI), using **MV + `@Observable`** (no view-model layer).
 
-The catalogue is **folder-as-source-of-truth**: each imported file lives in its own folder (under Application Support, or in iCloud Drive when sync is on) alongside a small metadata sidecar that also carries favourites, tags and notes. The parsed tree is never persisted — it's **re-parsed from disk on open**. Derivable per-device resources (extracted KMZ media, downloaded remote icons/photos, the search index) are cached locally and rebuilt on each device from the synced original.
+The catalogue is **folder-as-source-of-truth**: each imported file lives in its own folder (under Application Support, or in iCloud Drive when sync is on) alongside a small metadata sidecar that also carries favourites and notes. The parsed tree is never persisted — it's **re-parsed from disk on open**. Derivable per-device resources (extracted KMZ media, downloaded remote icons/photos, the search index) are cached locally and rebuilt on each device from the synced original.
 
 ## Project structure
 

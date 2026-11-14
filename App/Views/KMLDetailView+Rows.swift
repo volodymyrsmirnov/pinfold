@@ -22,6 +22,9 @@ extension KMLDetailView {
                 }
                 remoteImagesSection
                 if let outline {
+                    if !query.isEmpty, !outline.mappablePlacemarks.isEmpty {
+                        searchResultsMapSection(count: outline.mappablePlacemarks.count)
+                    }
                     if outline.rows.isEmpty, !query.isEmpty {
                         Section {
                             Text("No placemarks match \u{201C}\(query)\u{201D}.")
@@ -52,6 +55,28 @@ extension KMLDetailView {
             // arrives on a folderless file).
             .task(id: outlineGeneration) {
                 await applyPendingScroll(using: proxy)
+            }
+        }
+    }
+
+    // MARK: - Search results on the map
+
+    /// While searching, a row that opens the map of just the matches. The system search bar
+    /// hides the toolbar's Map button on iPhone, and closing search clears the query, so this
+    /// is the way to map the results (the `.map(focusKey: nil)` route plots the live, filtered
+    /// outline).
+    func searchResultsMapSection(count: Int) -> some View {
+        Section {
+            NavigationLink(value: EntryRoute.map(focusKey: nil)) {
+                Label {
+                    if count == 1 {
+                        Text("Show 1 Result on Map")
+                    } else {
+                        Text("Show \(count) Results on Map")
+                    }
+                } icon: {
+                    Image(systemName: "map")
+                }
             }
         }
     }

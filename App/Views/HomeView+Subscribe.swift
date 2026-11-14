@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The "Subscribe to URL" alert's state. What the person typed survives an error: an address
+/// The "Remote URL" alert's state. What the person typed survives an error: an address
 /// that isn't valid reopens the alert with it once the error is dismissed, and after a failed
 /// subscribe the next alert starts with it. Only a subscribe that went through clears it.
 struct SubscribePrompt: Equatable {
@@ -46,7 +46,7 @@ struct SubscribePrompt: Equatable {
 }
 
 extension HomeView {
-    /// Opens the "Subscribe to URL" alert.
+    /// Opens the "Remote URL" alert.
     func beginSubscribe() {
         guard !isSubscribing else { return }
         subscribePrompt.begin()
@@ -78,7 +78,7 @@ extension HomeView {
     }
 }
 
-/// The "Subscribe to URL" alert and its error alert. A `ViewModifier` so `HomeView.body` stays
+/// The "Remote URL" alert and its error alert. A `ViewModifier` so `HomeView.body` stays
 /// small for the type-checker.
 struct SubscribeAlertsModifier: ViewModifier {
     @Binding var prompt: SubscribePrompt
@@ -87,7 +87,7 @@ struct SubscribeAlertsModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("Subscribe to URL", isPresented: $prompt.isPresented) {
+            .alert("Remote URL", isPresented: $prompt.isPresented) {
                 // A `String` title, not a `LocalizedStringKey`: a key is parsed as Markdown,
                 // which turns the example URL into a link drawn in the tint colour, so the
                 // placeholder looked like a pre-filled value.

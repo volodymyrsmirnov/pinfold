@@ -33,10 +33,8 @@ struct HomeView: View {
 
     // MARK: - Environment
 
-    // Not `private`: read from the `HomeViewRows` extension (a separate file) for the
-    // active-row context menu (Share/Trash).
+    // Not `private`: the extensions in other files (rows, banner, toolbar) read these.
     @Environment(Catalog.self) var catalog
-    // Not `private`: read from the `HomeViewBanner` extension (a separate file).
     @Environment(ImportFailureLog.self) var importFailureLog
     @Environment(\.resourceCache) var resourceCache
     /// The shared import queue, owned by `RootView`.
@@ -50,7 +48,7 @@ struct HomeView: View {
     /// Presents the `fileImporter` picker sheet. Distinct from
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
     @State var isFileImporterPresented = false
-    /// Subscribe to URL: the alert, its text, a download in flight, and the error to show.
+    /// Remote URL: the alert, its text, a download in flight, and the error to show.
     @State var subscribePrompt = SubscribePrompt()
     @State var isSubscribing = false
     @Environment(SubscriptionRefresher.self) var refresher

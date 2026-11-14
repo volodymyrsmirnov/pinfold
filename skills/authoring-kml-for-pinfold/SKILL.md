@@ -20,7 +20,7 @@ file that "validates" but renders wrong.
 ## The golden rules (read these first)
 
 1. **Use `<Point>` placemarks for anything that is a place.** Only point placemarks get a
-   regular map pin, appear on the Favorites map, and can be sorted nearest-first. Search is
+   regular map pin and can be sorted nearest-first. Search is
    broader: it matches the placemark's name, its description text, ExtendedData values,
    `<Snippet>` and `<address>` (plus the user's own notes) — but the name is what lists show,
    so make it specific.
@@ -39,7 +39,7 @@ file that "validates" but renders wrong.
    (`<!DOCTYPE kml>`) is tolerated and never fetched, but any DOCTYPE with a `[` internal
    subset (entity, element or attribute declarations) **rejects the entire file**. There is
    no reason to emit one, so don't.
-7. **Tags, favorites, "visited" and notes are set by the user inside the app — not in the
+7. **Favorites, "visited" and notes are set by the user inside the app — not in the
    KML.** Don't try to encode them. (You *can* influence organization via `<Folder>`
    structure.)
 8. **Write UTF-8.** UTF-16/UTF-32 (with or without a BOM), ASCII, Latin-1, ISO-8859-x and
@@ -121,7 +121,7 @@ Coordinate whitespace is tolerant: `-9.13, 38.71, 0` (spaces after commas) parse
 
 A placemark **without a `<Point>`** (only a line/polygon) still appears in the list and is
 searchable; on the map its line or area is the tappable target and there is no pin. It is
-located by its first vertex but is not shown on the Favorites map or sorted by distance. If
+located by its first vertex but is not sorted by distance. If
 it represents a place, also include a `<Point>`.
 
 ### Styling
@@ -325,7 +325,7 @@ If you host a file that Pinfold subscribes to:
 | Relying on `<NetworkLink>` tricks / overlays / 3D | A network link only works as a whole-file subscription (see "Online lists"); overlays and 3D are not rendered. Use Point/Line/Polygon geometry. |
 | Changing placemark `id`s between server updates | Keep them stable, or the user's notes and favourites on that placemark are orphaned. |
 | Nameless placemarks | Every placemark needs a clear `<name>`. |
-| Places drawn only as a line or polygon | Add a `<Point>` so the place gets a pin and appears on the Favorites map. |
+| Places drawn only as a line or polygon | Add a `<Point>` so the place gets a pin and can be sorted by distance. |
 
 ## Pre-flight checklist
 

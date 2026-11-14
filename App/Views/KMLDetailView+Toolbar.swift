@@ -46,18 +46,33 @@ extension KMLDetailView {
         }
     }
 
-    /// Document order vs. nearest first, as a "Sort By" submenu showing the current choice.
-    /// Disabled until a location fix is known, so the person isn't offered a sort that can't be
-    /// applied (without a fix the outline is in document order regardless).
+    /// Document order vs. nearest first, as a "Sort By" submenu with a checkmark on the current
+    /// choice. Only "Nearest First" waits for a location fix (it can't be applied without one);
+    /// "Document Order" stays available, so a restored nearest-first list can always go back.
     private var sortPicker: some View {
-        Picker(selection: $nearestFirst) {
-            Label("Document Order", systemImage: "list.bullet").tag(false)
-            Label("Nearest First", systemImage: "location").tag(true)
+        Menu {
+            Toggle(isOn: sortBinding(nearest: false)) {
+                Label("Document Order", systemImage: "list.bullet")
+            }
+            Toggle(isOn: sortBinding(nearest: true)) {
+                Label("Nearest First", systemImage: "location")
+            }
+            .disabled(locationAuth.lastLocation == nil && !nearestFirst)
         } label: {
-            Label("Sort By", systemImage: "arrow.up.arrow.down")
+            Label("Sort By", systemImage: nearestFirst ? "location" : "arrow.up.arrow.down")
         }
-        .pickerStyle(.menu)
-        .disabled(locationAuth.lastLocation == nil)
+    }
+
+    /// On when the sort is `nearest`; turning it on selects that sort.
+    private func sortBinding(nearest: Bool) -> Binding<Bool> {
+        Binding(
+            get: { nearestFirst == nearest },
+            set: { isOn in
+                if isOn {
+                    nearestFirst = nearest
+                }
+            }
+        )
     }
 
     private var isRefreshing: Bool {

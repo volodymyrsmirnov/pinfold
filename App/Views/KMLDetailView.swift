@@ -60,6 +60,8 @@ struct KMLDetailView: View {
     @State var isOnScreen = false
     @State var loadError: Error?
     @State var searchText = ""
+    /// Keyboard focus for the search bar, driven by ⌘F (see `FileSearchCommand`).
+    @FocusState var isSearchFocused: Bool
     @State var annotations: PlacemarkAnnotations?
     /// The description/detail search index for the loaded document, built off-main after the
     /// document arrives (`buildSearchCorpus`). `nil` until ready: searches are name-only (plus
@@ -137,8 +139,11 @@ struct KMLDetailView: View {
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: Text("Search places, descriptions and notes")
         )
+        .searchFocused($isSearchFocused)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
+        // ⌘F searches this file while it is the screen on top (not under a pushed place or map).
+        .focusedSceneValue(\.fileSearch, isOnScreen ? FileSearchCommand { isSearchFocused = true } : nil)
         .toolbar { toolbarContent }
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
