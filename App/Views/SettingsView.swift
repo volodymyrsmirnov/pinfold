@@ -118,7 +118,11 @@ struct SettingsView: View {
         } header: {
             Text("Map Apps")
         } footer: {
-            Text("Apps you don't have installed are hidden automatically.")
+            if installed.contains(where: { isOnlyEnabledApp($0, among: installed) }) {
+                Text("Apps you don't have installed are hidden automatically. At least one app stays on.")
+            } else {
+                Text("Apps you don't have installed are hidden automatically.")
+            }
         }
     }
 

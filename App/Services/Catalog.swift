@@ -18,6 +18,9 @@ import Observation
 
     /// The active storage root. Changes (live) when the iCloud sync toggle flips.
     private(set) var storage: StorageLocations
+    /// Shared annotation stores by root + folder name (see `annotations(for:)`).
+    @ObservationIgnored private var annotationStores:
+        [String: (store: PlacemarkAnnotations, revision: Int, readOnly: Bool)] = [:]
 
     /// The last user-initiated mutation that could not be carried out (a read-only entry, a
     /// failed write or delete). Observable; shown by `CatalogErrorAlert`, which clears it.
@@ -161,6 +164,29 @@ import Observation
     /// The first entry with the given content hash, for import-time duplicate detection.
     func entry(withSHA256 sha256: String) -> CatalogEntry? {
         entries.first { $0.contentSHA256 == sha256 }
+    }
+
+    /// The one favourites / Seen / notes store for `entry`, shared by every view showing that
+    /// file — the open file (its rows, place screen, map) and the catalogue's search results —
+    /// so a toggle in one is seen at once by the others (two separate stores would each keep a
+    /// stale copy and the next toggle on the stale side would undo instead of redo).
+    ///
+    /// Re-read from disk when the catalogue has rescanned since it was last handed out (a
+    /// sidecar that synced in from another device bumps `searchDataRevision`) or when the
+    /// entry's read-only state changed; otherwise returned as is, so repeated searches don't
+    /// re-read every sidecar.
+    func annotations(for entry: CatalogEntry) -> PlacemarkAnnotations {
+        let key = "\(storage.root.path)\n\(entry.storageFolderName)"
+        if let cached = annotationStores[key] {
+            if cached.revision != searchDataRevision || cached.readOnly != entry.isReadOnly {
+                cached.store.reload(entry: entry)
+                annotationStores[key] = (cached.store, searchDataRevision, entry.isReadOnly)
+            }
+            return cached.store
+        }
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        annotationStores[key] = (store, searchDataRevision, entry.isReadOnly)
+        return store
     }
 
     /// Repoints the catalogue at a new root and reloads. Any file migration between roots

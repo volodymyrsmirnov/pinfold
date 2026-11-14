@@ -81,6 +81,12 @@ struct PlacemarkMapView: View {
                     .transition(.opacity)
             }
         }
+        // The place selected on the map gets the place menu-bar commands, as its card gets the
+        // place's long-press menu (Open in Maps and Show on Map belong to the place screen).
+        .focusedSceneValue(
+            \.placeCommands,
+            selectedPlacemark.map { PlaceCommands(place: PlaceRef($0), annotations: annotations) }
+        )
         .animation(.snappy, value: selectedPlacemarkKey)
         .animation(.default, value: network.isOnline)
         // Let the map show through the navigation bar; the glass back button floats over

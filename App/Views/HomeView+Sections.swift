@@ -207,12 +207,13 @@ extension HomeView {
         }
     }
 
-    /// Favourites / Seen for each file the hits come from, read from its sidecar.
+    /// Favourites / Seen for each file the hits come from: the catalogue's shared store per
+    /// file, the same instance an open file uses, so both always agree.
     func annotationsForHits(_ hits: [PlacemarkIndex.Hit]) -> [String: PlacemarkAnnotations] {
         var result: [String: PlacemarkAnnotations] = [:]
         for folder in Set(hits.map(\.folderName)) {
             guard let entry = active.first(where: { $0.storageFolderName == folder }) else { continue }
-            result[folder] = PlacemarkAnnotations(entry: entry, storage: catalog.storage)
+            result[folder] = catalog.annotations(for: entry)
         }
         return result
     }

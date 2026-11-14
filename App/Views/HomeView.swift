@@ -54,6 +54,10 @@ struct HomeView: View {
     @Environment(SubscriptionRefresher.self) var refresher
     /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
     @State var stopUpdatingTarget: CatalogEntry?
+    /// Stop Updating asked for from the menu bar. It has its own screen-level confirmation, as
+    /// the open file's row (which hosts the row-originated one) may not be on screen: Trash
+    /// shown, filtered out by a search, or scrolled away.
+    @State var menuStopUpdatingTarget: CatalogEntry?
     @State var refreshError: String?
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
@@ -66,7 +70,8 @@ struct HomeView: View {
     /// The ids ticked in select mode.
     @State var bulkSelection: Set<CatalogEntry.ID> = []
 
-    /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
+    /// The search query, bound to the `.searchable` field: on Files it searches file names and
+    /// every file's places; on Trash it filters the rows by name.
     @State var searchQuery = ""
     /// Keyboard focus for the search field, driven by the ⌘F command (see `WindowCommands`).
     @FocusState var isSearchFocused: Bool
@@ -108,8 +113,8 @@ struct HomeView: View {
         catalog.trashed
     }
 
-    /// Trimmed query; non-empty means the Files segment shows search results instead of the
-    /// plain entry list. Trash is never searched (active entries only).
+    /// Trimmed query; non-empty means Files shows search results instead of the plain list and
+    /// Trash shows only the matching rows.
     var trimmedQuery: String {
         searchQuery.trimmingCharacters(in: .whitespaces)
     }
@@ -123,7 +128,8 @@ struct HomeView: View {
     var visibleTrashed: [CatalogEntry] {
         let query = trimmedQuery
         guard !query.isEmpty else { return trashed }
-        return trashed.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+        // The same matching as Files search (ignores case, accents and width).
+        return trashed.filter { SearchText.contains($0.displayName, query: query) }
     }
 
     // MARK: - Body
@@ -136,8 +142,9 @@ struct HomeView: View {
             fileList
         }
         .navigationTitle("Pinfold")
-        // Files searches file names and every file's places; Trash filters its rows by name. `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F
-        // command move keyboard focus here.
+        // Files searches file names and every file's places; Trash filters its rows by name.
+        // `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F command
+        // move keyboard focus here.
         .searchable(
             text: $searchQuery,
             placement: .navigationBarDrawer(displayMode: .always),
@@ -146,7 +153,7 @@ struct HomeView: View {
         .searchFocused($isSearchFocused)
         // Debounced, off-main search over each active entry's local placemark index. Re-keys on
         // the query AND the segment so returning to Files with a live query recomputes the hits
-        // (Trash isn't searched). Single trigger — simpler than KMLDetailView's two-trigger
+        // (Trash filters by name only, without this task). Single trigger — simpler than KMLDetailView's two-trigger
         // split, which existed only to handle un-debounced collapse toggles.
         .task(id: SearchTrigger(query: searchQuery, segment: segment, dataRevision: catalog.searchDataRevision)) {
             let query = trimmedQuery
@@ -179,6 +186,7 @@ struct HomeView: View {
         }
         // Menu commands act on THIS window only: published as a focused-scene value.
         .focusedSceneValue(\.windowCommands, windowCommands)
+        .stopUpdatingConfirmation(target: $menuStopUpdatingTarget, stop: runStopUpdating)
         .toolbar { toolbarContent }
         .fileImporter(
             isPresented: $isFileImporterPresented,

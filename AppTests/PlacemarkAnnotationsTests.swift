@@ -110,8 +110,13 @@ import Testing
         readOnly.sidecarState = .notDownloaded
         let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
         store.toggleFavorite(point("x"))
+        store.toggleVisited(point("x"))
         let reloaded = try #require(try storage.readMetadata(forFolderNamed: entry.storageFolderName))
         #expect(reloaded.favoriteKeys.isEmpty)
+        // Nor does the UI show a change that won't stick.
+        #expect(!store.canEdit)
+        #expect(!store.isFavorite(point("x")))
+        #expect(!store.isVisited(point("x")))
     }
 
     // MARK: - Notes

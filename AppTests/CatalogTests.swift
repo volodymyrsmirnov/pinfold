@@ -105,6 +105,55 @@ import Testing
         #expect(catalog.active.map(\.storageFolderName) == ["back"])
     }
 
+    @Test func removeFolderIfTrashed_checksTheSidecarUnderTheLock() throws {
+        let (_, storage) = makeCatalog()
+        try seedFolder(storage, folder: "trashed", trashedAt: Date(timeIntervalSince1970: 9))
+        try seedFolder(storage, folder: "restored")
+        _ = try seedUnreadable(storage, folder: "garbled")
+
+        #expect(try storage.removeFolderIfTrashed(named: "trashed") == .removed)
+        #expect(try storage.removeFolderIfTrashed(named: "restored") == .notTrashed)
+        #expect(try storage.removeFolderIfTrashed(named: "garbled") == .unreadable)
+        #expect(try storage.removeFolderIfTrashed(named: "missing") == .notTrashed)
+
+        let exists = { (name: String) in
+            FileManager.default.fileExists(atPath: storage.root.appendingPathComponent(name).path)
+        }
+        #expect(!exists("trashed"))
+        #expect(exists("restored"))
+        #expect(exists("garbled"))
+    }
+
+    @Test func annotations_areOneSharedStorePerFile() async throws {
+        // The open file and the catalogue's search results must share one store, or a toggle
+        // in one leaves the other stale (and its next toggle undoes instead of redoes).
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        let fromFile = catalog.annotations(for: entry)
+        let fromSearch = catalog.annotations(for: entry)
+        #expect(fromFile === fromSearch)
+
+        fromSearch.toggleFavorite(key: "k")
+        #expect(fromFile.isFavorite(key: "k"))
+    }
+
+    @Test func annotations_rereadTheSidecarAfterARescan() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let store = try catalog.annotations(for: #require(catalog.active.first))
+        // Another device favourites a place; the sidecar syncs in and the catalogue rescans.
+        try storage.updateMetadata(forFolderNamed: "f") { $0.favoriteKeys.insert("remote") }
+        await catalog.reload()
+
+        let again = try catalog.annotations(for: #require(catalog.active.first))
+        #expect(again === store)
+        #expect(store.isFavorite(key: "remote"))
+    }
+
     @Test func deleteForever_twiceIsQuietNoOp() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
@@ -114,7 +163,7 @@ import Testing
         await catalog.deleteForever(entry)
         await catalog.deleteForever(entry)
 
-        #expect(catalog.actionError == nil)
+        #expect(catalog.actionError == nil, "\(catalog.actionError?.message ?? "")")
         #expect(catalog.entries.isEmpty)
     }
 

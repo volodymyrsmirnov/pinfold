@@ -87,7 +87,7 @@ extension HomeView {
             trash: { trash($0) },
             refreshNow: { runRefreshNow($0) },
             copyURL: { entry in UIPasteboard.general.url = entry.subscription?.url },
-            stopUpdating: { stopUpdatingTarget = $0 },
+            stopUpdating: { menuStopUpdatingTarget = $0 },
             isRefreshingSelection: selected.map { refresher.phase(for: $0) == .refreshing } ?? false
         )
     }

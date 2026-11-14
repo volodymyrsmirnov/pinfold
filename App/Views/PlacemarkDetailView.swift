@@ -101,19 +101,11 @@ struct PlacemarkDetailView: View {
     /// The menu-bar actions for this place, mirroring its "⋯" menu; each is `nil` (menu item
     /// disabled) when it cannot apply.
     private var placeCommands: PlaceCommands {
-        let place = PlaceRef(placemark)
-        let editable = annotations.flatMap { $0.canEdit ? $0 : nil }
-        return PlaceCommands(
-            toggleFavorite: editable.map { store in { store.toggleFavorite(placemark) } },
-            isFavorite: annotations?.isFavorite(placemark) ?? false,
-            toggleVisited: editable.map { store in { store.toggleVisited(placemark) } },
-            isVisited: annotations?.isVisited(placemark) ?? false,
+        PlaceCommands(
+            place: PlaceRef(placemark),
+            annotations: annotations,
             openInMaps: hasCoordinate ? { openInMaps() } : nil,
-            showOnMap: hasCoordinate ? { activeRouter?.path.append(.map(focusKey: placemark.stableKey)) } : nil,
-            copyCoordinates: place.coordinate.map { coordinate in
-                { UIPasteboard.general.string = CoordinateFormatter.string(for: coordinate) }
-            },
-            copyName: place.name.flatMap { name in name.isEmpty ? nil : { UIPasteboard.general.string = name } }
+            showOnMap: hasCoordinate ? { activeRouter?.path.append(.map(focusKey: placemark.stableKey)) } : nil
         )
     }
 

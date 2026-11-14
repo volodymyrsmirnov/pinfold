@@ -5,36 +5,54 @@ extension Catalog {
     /// its Spotlight items, and reloads once. With nothing to delete it is a no-op (no reload).
     ///
     /// The single path for every permanent delete (a Trash row, select-mode Delete), and it can
-    /// never remove a file that isn't in Trash. Each entry's sidecar on disk is checked right
-    /// before its folder is removed, with no suspension in between: an entry restored (on this
-    /// device or another) while an earlier index read was awaited is skipped, as is one already
-    /// deleted by a repeated tap. Deletion also stops if the storage root changed meanwhile (the
-    /// iCloud sync toggle), so it never acts on a root the selection didn't come from.
+    /// never remove a file that isn't in Trash: the check that the sidecar still says "trashed"
+    /// and the removal happen inside one coordinated file lock (`removeFolderIfTrashed`), so a
+    /// restore from this or another device can't slip in between. An entry restored meanwhile,
+    /// or already deleted by a repeated tap, is skipped quietly; one whose sidecar can't be read
+    /// is kept and reported. Deletion also stops if the storage root changed during an index
+    /// read (the iCloud sync toggle), so it never acts on a root the selection didn't come from.
     func deleteForever(_ selection: [CatalogEntry]) async {
         let trashedFolders = Set(trashed.map(\.storageFolderName))
         let doomed = selection.filter { trashedFolders.contains($0.storageFolderName) }
         guard !doomed.isEmpty else { return }
         let root = storage.root
+        var unreadable: [CatalogEntry] = []
         for entry in doomed {
             // Read the index BEFORE removing the folder so placemark Spotlight ids can be rebuilt.
             let indexEntries = await trashIndexEntries(from: storage.resourcesDirectory(for: entry))
             guard storage.root == root else { break }
-            guard isStillTrashedOnDisk(entry) else { continue }
             do {
-                try storage.removeFolder(named: entry.storageFolderName)
-                SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries)
+                switch try storage.removeFolderIfTrashed(named: entry.storageFolderName) {
+                case .removed:
+                    SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: indexEntries)
+                case .notTrashed:
+                    break
+                case .unreadable:
+                    unreadable.append(entry)
+                }
             } catch {
                 actionError = .deleteFailed(entryName: entry.displayName, error: error)
             }
         }
+        if !unreadable.isEmpty, actionError == nil {
+            actionError = Self.keptInTrashError(unreadable)
+        }
         await reload()
     }
 
-    /// Whether `entry`'s sidecar on disk still marks it as trashed. A sidecar that can't be read
-    /// counts as "not trashed": when in doubt, keep the file.
-    private func isStillTrashedOnDisk(_ entry: CatalogEntry) -> Bool {
-        let meta = try? storage.readMetadata(forFolderNamed: entry.storageFolderName)
-        return meta?.trashedAt != nil
+    /// Why some files stayed in Trash: their saved data can't be read, so it can't be confirmed
+    /// they are still trashed (they may be mid-download or restored on another device).
+    private static func keptInTrashError(_ kept: [CatalogEntry]) -> CatalogActionError {
+        if kept.count == 1, let only = kept.first {
+            return CatalogActionError(
+                message: "\u{201C}\(only.displayName)\u{201D} was kept: its saved data can't be read yet "
+                    + "(it may still be downloading from iCloud). Try again in a moment."
+            )
+        }
+        return CatalogActionError(
+            message: "\(kept.count) files were kept: their saved data can't be read yet "
+                + "(they may still be downloading from iCloud). Try again in a moment."
+        )
     }
 }
 

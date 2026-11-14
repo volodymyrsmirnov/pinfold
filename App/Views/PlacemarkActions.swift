@@ -122,8 +122,10 @@ struct PlacemarkSwipeActions: View {
                 .tint(.blue)
         }
         if let annotations {
+            // Orange rather than yellow: the white label and glyph on yellow were nearly
+            // unreadable (≈1.4:1). Mail's Flag swipe uses the same treatment.
             PlacemarkFavoriteButton(place: place, annotations: annotations, style: .swipe)
-                .tint(.yellow)
+                .tint(.orange)
             PlacemarkSeenButton(place: place, annotations: annotations, style: .swipe)
                 .tint(.indigo)
         }
@@ -187,5 +189,33 @@ struct PlacemarkShareLink: View {
         ShareLink(item: url, subject: Text(place.name ?? "Placemark")) {
             Label("Share", systemImage: "square.and.arrow.up")
         }
+    }
+}
+
+extension PlaceCommands {
+    /// The menu-bar commands for a place, from the same rules as `PlacemarkActions`: Favorite and
+    /// Seen only when the file can be written, Copy Coordinates only with a coordinate, Copy
+    /// Name only with a name. The caller adds what only its screen can do (`openInMaps`,
+    /// `showOnMap`).
+    @MainActor
+    init(
+        place: PlaceRef,
+        annotations: PlacemarkAnnotations?,
+        openInMaps: (() -> Void)? = nil,
+        showOnMap: (() -> Void)? = nil
+    ) {
+        let editable = annotations.flatMap { $0.canEdit ? $0 : nil }
+        self.init(
+            toggleFavorite: editable.map { store in { store.toggleFavorite(key: place.key) } },
+            isFavorite: annotations?.isFavorite(key: place.key) ?? false,
+            toggleVisited: editable.map { store in { store.toggleVisited(key: place.key) } },
+            isVisited: annotations?.isVisited(key: place.key) ?? false,
+            openInMaps: openInMaps,
+            showOnMap: showOnMap,
+            copyCoordinates: place.coordinate.map { coordinate in
+                { UIPasteboard.general.string = CoordinateFormatter.string(for: coordinate) }
+            },
+            copyName: place.name.flatMap { name in name.isEmpty ? nil : { UIPasteboard.general.string = name } }
+        )
     }
 }

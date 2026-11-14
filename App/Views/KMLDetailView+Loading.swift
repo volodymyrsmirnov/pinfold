@@ -26,7 +26,8 @@ extension KMLDetailView {
     func loadDocument(for target: CatalogEntry? = nil) async {
         let target = target ?? liveEntry
         let ticket = loadTickets.issue()
-        annotations = PlacemarkAnnotations(entry: target, storage: storage)
+        // The catalogue's shared store, so the sidebar's search results see the same state.
+        annotations = catalog?.annotations(for: target) ?? PlacemarkAnnotations(entry: target, storage: storage)
         let fileURL = storage.originalFile(for: target)
         do {
             // Materializes an iCloud placeholder first (no-op for local files), then parses the

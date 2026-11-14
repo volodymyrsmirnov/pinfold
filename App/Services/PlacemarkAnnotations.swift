@@ -14,10 +14,10 @@ import PinfoldCore
 /// toggles and writes are serialized; the sidecar is sub-KB JSON, making the synchronous
 /// write-through negligible in wall-clock time.
 @MainActor @Observable final class PlacemarkAnnotations {
-    private(set) var favoriteKeys: Set<String>
-    private(set) var visitedKeys: Set<String>
+    private(set) var favoriteKeys: Set<String> = []
+    private(set) var visitedKeys: Set<String> = []
     /// All notes for this entry keyed by stable key, including tombstones (empty text).
-    private(set) var notes: [String: PlacemarkNote] {
+    private(set) var notes: [String: PlacemarkNote] = [:] {
         didSet { notesRevision &+= 1 }
     }
 
@@ -38,6 +38,13 @@ import PinfoldCore
     init(entry: CatalogEntry, storage: StorageLocations) {
         self.storage = storage
         folderName = entry.storageFolderName
+        reload(entry: entry)
+    }
+
+    /// Re-reads favourites, Seen and notes from the sidecar on disk, keeping this instance (and
+    /// so every view observing it) — used when the catalogue hands out its shared store for a
+    /// file after a rescan (`Catalog.annotations(for:)`).
+    func reload(entry: CatalogEntry) {
         // A read-only entry (sidecar unreadable / still downloading) must never be written:
         // the in-memory sets would be empty and a later write would destroy synced data.
         canPersist = !entry.isReadOnly
@@ -65,14 +72,14 @@ import PinfoldCore
     }
 
     /// A VoiceOver-friendly description combining the placemark name with its
-    /// favorite/visited state, e.g. "Mount Everest, Favorite, Visited".
+    /// favorite/Seen state, e.g. "Mount Everest, Favorite, Seen" (the wording every action uses).
     func accessibilityDescription(for placemark: KMLPlacemark) -> String {
         var parts = [placemark.name ?? "Untitled"]
         if isFavorite(placemark) {
             parts.append("Favorite")
         }
         if isVisited(placemark) {
-            parts.append("Visited")
+            parts.append("Seen")
         }
         return parts.joined(separator: ", ")
     }
