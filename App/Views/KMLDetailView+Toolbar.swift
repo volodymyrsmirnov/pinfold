@@ -15,19 +15,37 @@ extension KMLDetailView {
         }
     }
 
-    /// Sort order, the file's description, and — for an online list — Refresh Now, Copy URL and
-    /// Stop Updating. While a refresh runs the label is a spinner and Refresh Now is disabled.
+    /// In separated groups: Share; sort order and the file's description; for an online list
+    /// Refresh Now, Copy URL and Stop Updating; and Trash. While a refresh runs the label is a
+    /// spinner and Refresh Now is disabled.
     private var moreMenu: some View {
         Menu {
-            sortPicker
-            if let info = documentInfo {
-                Button {
-                    infoSheet = info
-                } label: {
-                    Label("File Description", systemImage: "info.circle")
+            if let url = existingOriginalURL {
+                Section {
+                    ShareLink(item: url, preview: SharePreview(liveEntry.displayName)) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            Section {
+                sortPicker
+                if let info = documentInfo {
+                    Button {
+                        infoSheet = info
+                    } label: {
+                        Label("File Description", systemImage: "info.circle")
+                    }
                 }
             }
             onlineActions
+            if catalog != nil {
+                Section {
+                    Button(role: .destructive, action: trashAndClose) {
+                        Label("Trash", systemImage: "trash")
+                    }
+                    .disabled(liveEntry.isReadOnly)
+                }
+            }
         } label: {
             // Fixed frame so the toolbar pill keeps its size when the glyph becomes a spinner.
             Group {
@@ -73,6 +91,25 @@ extension KMLDetailView {
                 }
             }
         )
+    }
+
+    /// The file's original on disk, for Share; `nil` while it isn't there (an iCloud
+    /// placeholder not yet downloaded), so Share never offers a dead URL.
+    private var existingOriginalURL: URL? {
+        guard let url = storage.originalFileURL(inFolderNamed: liveEntry.storageFolderName),
+              FileManager.default.fileExists(atPath: url.path)
+        else { return nil }
+        return url
+    }
+
+    /// Moves the file to Trash and closes it, back to the file list. Closes first so the screen
+    /// slides away rather than blanking when the catalogue reload drops the entry; if the move
+    /// fails (a read-only sidecar), the catalogue reports it and the file stays in the list.
+    private func trashAndClose() {
+        guard let catalog else { return }
+        let target = liveEntry
+        router?.closeEntry()
+        Task { await catalog.moveToTrash(target) }
     }
 
     private var isRefreshing: Bool {

@@ -269,6 +269,10 @@ struct RootView: View {
                 settings.resumeEntryFolderName = selectedEntry?.storageFolderName
             }
         }
+        // The open file asked to be closed (it was moved to Trash from its own menu).
+        .onChange(of: router.closeEntryRequests) { _, _ in
+            selectedEntryID = nil
+        }
         // App Intents ("Open <file> in Pinfold") route here: the out-of-tree intent sets a
         // pending folder name on the shared router; resolve it to an active entry and select it.
         // Consume-once — clear the router so the same folder set twice still re-fires.
