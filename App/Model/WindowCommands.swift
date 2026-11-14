@@ -16,17 +16,12 @@ struct WindowCommands {
     /// Opens the "Remote URL" alert; gated by `canImport` like importing.
     let subscribeToURL: () -> Void
     let focusSearch: () -> Void
-    let rename: (CatalogEntry) -> Void
     let trash: (CatalogEntry) -> Void
 
     /// The selection when it may be changed; read-only entries (B12) are excluded.
     private var editableSelection: CatalogEntry? {
         guard let selectedEntry, !selectedEntry.isReadOnly else { return nil }
         return selectedEntry
-    }
-
-    var canRename: Bool {
-        editableSelection != nil
     }
 
     var canTrash: Bool {
@@ -47,12 +42,6 @@ struct WindowCommands {
 
     func search() {
         focusSearch()
-    }
-
-    func renameSelected() {
-        if let entry = editableSelection {
-            rename(entry)
-        }
     }
 
     func trashSelected() {

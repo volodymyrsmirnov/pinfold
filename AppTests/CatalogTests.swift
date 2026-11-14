@@ -124,35 +124,7 @@ import Testing
         #expect(catalog.entries.count == 5)
     }
 
-    @Test func rename_updatesSidecarAndList() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "f")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-
-        await catalog.rename(entry, to: "  Renamed Trip  ")
-
-        // The renamed entry appears with the trimmed new name after the reload.
-        #expect(catalog.active.first?.displayName == "Renamed Trip")
-        // The sidecar on disk carries the new name (persisted, survives a fresh scan).
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == "Renamed Trip")
-    }
-
-    @Test func rename_rejectsEmptyOrWhitespace() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "f")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-        let original = entry.displayName
-
-        await catalog.rename(entry, to: "   ")
-
-        // No-op: the name is unchanged both in memory and on disk.
-        #expect(catalog.active.first?.displayName == original)
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
-    }
-
-    @Test func legacyTags_surviveRenameAndTrash() async throws {
+    @Test func legacyTags_surviveTrashAndRestore() async throws {
         // Tagging is gone from the UI, but tags written by older versions must stay in the
         // sidecar untouched so a device still on that version doesn't lose them on sync.
         let (catalog, storage) = makeCatalog()
@@ -161,13 +133,15 @@ import Testing
         await catalog.reload()
         let entry = try #require(catalog.active.first)
 
-        await catalog.rename(entry, to: "Renamed")
-        let renamed = try #require(catalog.active.first)
-        await catalog.moveToTrash(renamed)
+        await catalog.moveToTrash(entry)
+        let trashedMeta = try #require(try storage.readMetadata(forFolderNamed: "f"))
+        #expect(trashedMeta.trashedAt != nil)
+        #expect(trashedMeta.tags == ["art", "food"])
 
+        let trashed = try #require(catalog.trashed.first)
+        _ = await catalog.restore(trashed)
         let meta = try #require(try storage.readMetadata(forFolderNamed: "f"))
-        #expect(meta.displayName == "Renamed")
-        #expect(meta.trashedAt != nil)
+        #expect(meta.trashedAt == nil)
         #expect(meta.tags == ["art", "food"])
     }
 
@@ -190,7 +164,7 @@ import Testing
         #expect(catalog.storage.root == newRoot)
     }
 
-    @Test func emptyTrash_removesAllTrashedAndKeepsActive() async throws {
+    @Test func deleteForeverSelection_removesTrashedAndKeepsActive() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "keep")
         try seedFolder(storage, folder: "t1", sha: "a", trashedAt: Date(timeIntervalSince1970: 5))
@@ -198,7 +172,8 @@ import Testing
         await catalog.reload()
         #expect(catalog.trashed.count == 2)
 
-        await catalog.emptyTrash()
+        // The active entry rides along in the selection but must never be deleted.
+        await catalog.deleteForever(catalog.entries)
 
         #expect(catalog.trashed.isEmpty)
         #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
@@ -208,12 +183,12 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
     }
 
-    @Test func emptyTrash_withNoTrashIsANoOp() async throws {
+    @Test func deleteForeverSelection_withNothingTrashedIsANoOp() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "keep")
         await catalog.reload()
 
-        await catalog.emptyTrash()
+        await catalog.deleteForever(catalog.active)
 
         #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
     }
@@ -227,20 +202,6 @@ import Testing
         let garbage = Data("not json".utf8)
         try garbage.write(to: dir.appendingPathComponent("metadata.json"))
         return garbage
-    }
-
-    @Test func renameOnReadOnlyEntry_setsActionErrorAndWritesNothing() async throws {
-        let (catalog, storage) = makeCatalog()
-        let garbage = try seedUnreadable(storage, folder: "bad")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-        #expect(entry.isReadOnly)
-
-        await catalog.rename(entry, to: "New Name")
-
-        #expect(catalog.actionError != nil)
-        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
-        #expect(catalog.active.first?.displayName == "Rome")
     }
 
     @Test func moveToTrashOnReadOnlyEntry_setsActionError() async throws {
@@ -261,10 +222,10 @@ import Testing
         await catalog.reload()
         let entry = try #require(catalog.active.first)
 
-        await catalog.rename(entry, to: "Renamed")
+        await catalog.moveToTrash(entry)
 
         #expect(catalog.actionError == nil)
-        #expect(catalog.active.first?.displayName == "Renamed")
+        #expect(catalog.trashed.map(\.storageFolderName) == ["ok"])
     }
 
     @Test func deleteForeverFailure_setsActionError() async throws {

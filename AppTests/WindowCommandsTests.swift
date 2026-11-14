@@ -14,7 +14,6 @@ import Testing
 
     private final class Recorder {
         var trashed: [String] = []
-        var renamed: [String] = []
         var imports = 0
         var subscribes = 0
         var searches = 0
@@ -27,7 +26,6 @@ import Testing
             importFiles: { rec.imports += 1 },
             subscribeToURL: { rec.subscribes += 1 },
             focusSearch: { rec.searches += 1 },
-            rename: { rec.renamed.append($0.displayName) },
             trash: { rec.trashed.append($0.displayName) }
         )
     }
@@ -36,11 +34,9 @@ import Testing
         let rec = Recorder()
         let cmds = commands(selected: nil, rec)
 
-        #expect(!cmds.canRename)
         #expect(!cmds.canTrash)
-        cmds.renameSelected()
         cmds.trashSelected()
-        #expect(rec.renamed.isEmpty && rec.trashed.isEmpty)
+        #expect(rec.trashed.isEmpty)
         // Import and Search do not depend on a selection.
         #expect(cmds.canImport)
         cmds.search()
@@ -63,10 +59,9 @@ import Testing
         let rec = Recorder()
         let cmds = commands(selected: entry(name: "bad", state: .unreadable), rec)
 
-        #expect(!cmds.canRename && !cmds.canTrash)
+        #expect(!cmds.canTrash)
         cmds.trashSelected()
-        cmds.renameSelected()
-        #expect(rec.trashed.isEmpty && rec.renamed.isEmpty)
+        #expect(rec.trashed.isEmpty)
     }
 
     @Test func importIsDisabledWhenNotAllowed() {

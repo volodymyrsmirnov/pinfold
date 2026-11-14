@@ -13,7 +13,7 @@ enum Segment: Hashable {
 /// The root screen of Pinfold.
 ///
 /// Shows a segmented Files / Trash list. The "+" toolbar menu imports a local file or follows a
-/// remote URL; Select (Files) or Empty (Trash) sits in its own pill before the Settings gear.
+/// remote URL; Select sits in its own pill before the Settings gear on both segments.
 ///
 /// Layout: the `NavigationTitle` "Pinfold" stays in the nav bar; the segmented Picker
 /// lives in a `safeAreaInset` bar above the List so it never replaces the title; empty
@@ -58,18 +58,10 @@ struct HomeView: View {
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State var isSettingsPresented = false
-    /// Presents the Empty Trash confirmation, anchored to the toolbar's Empty button.
-    @State var isConfirmingEmptyTrash = false
 
-    /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
-    /// in progress. Set from the active-row context menu's "Rename" action (in HomeViewRows).
-    @State var renameTarget: CatalogEntry?
-    /// The editable text bound to the rename alert's `TextField`, prefilled with the entry's
-    /// current name when the alert opens.
-    @State var renameText = ""
-
-    /// Whether the Files list is in explicit multi-select mode (C8). The list then binds
-    /// `bulkSelection` instead of `selection`, so picking rows never drives the detail column.
+    /// Whether the Files or Trash list is in explicit multi-select mode (C8). The Files list
+    /// then binds `bulkSelection` instead of `selection`, so picking rows never drives the
+    /// detail column.
     @State var isSelecting = false
     /// The ids ticked in select mode.
     @State var bulkSelection: Set<CatalogEntry.ID> = []
@@ -187,34 +179,13 @@ struct HomeView: View {
             prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
         ))
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
-        // Rename alert — a single TextField prefilled with the current name. `presenting` keys
-        // the alert to the entry being renamed; Save commits the trimmed name via
-        // `catalog.rename` (which rejects an empty/whitespace name as a no-op).
-        .alert(
-            "Rename File",
-            isPresented: Binding(
-                get: { renameTarget != nil },
-                set: {
-                    if !$0 {
-                        renameTarget = nil
-                    }
-                }
-            ),
-            presenting: renameTarget
-        ) { entry in
-            TextField("Name", text: $renameText)
-            Button("Save") {
-                let newName = renameText
-                Task { await catalog.rename(entry, to: newName) }
-                renameTarget = nil
-            }
-            Button("Cancel", role: .cancel) { renameTarget = nil }
-        }
         .onChange(of: canSelect) { _, allowed in
             if !allowed {
                 endSelecting()
             }
         }
+        // A selection belongs to one segment's list; switching segments leaves select mode.
+        .onChange(of: segment) { endSelecting() }
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.

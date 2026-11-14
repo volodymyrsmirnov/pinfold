@@ -60,7 +60,7 @@ struct RootView: View {
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
-    /// stale (and break `List` selection equality) after any reload, trash, or rename. Storing
+    /// stale (and break `List` selection equality) after any reload or trash. Storing
     /// the stable `UUID` and resolving it against `catalog.entries` keeps the selection alive
     /// across reloads, and naturally clears it when the entry disappears (deleted) or is
     /// trashed (the sidebar only exposes active entries for selection).

@@ -153,28 +153,6 @@ import Observation
         return true
     }
 
-    /// Renames an entry by writing a new `displayName` into its sidecar, then reloading.
-    ///
-    /// Trims surrounding whitespace; a name that is empty after trimming is rejected as a
-    /// no-op (nothing is written, no reload). Writes through `updateMetadata`, which preserves
-    /// every other sidecar field (favorites/visited/trash), unlike reconstructing the metadata
-    /// from the in-memory `CatalogEntry`.
-    func rename(_ entry: CatalogEntry, to newName: String) async {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard updateSidecar(of: entry, { $0.displayName = trimmed }) else { return }
-        // Re-index the whole entry so Spotlight reflects the new name everywhere: the entry
-        // item's title AND every placemark item's contentDescription embed the display name, so
-        // a name-only reindex would leave stale "<old name>" subtitles on the placemark hits.
-        // The index file is one cheap read and we're already reloading from disk — correctness
-        // over the marginal cost of re-pushing the items.
-        var renamed = entry
-        renamed.displayName = trimmed
-        let toIndex = await indexEntries(for: entry)
-        SpotlightIndexer.index(entry: renamed, indexEntries: toIndex)
-        await reload()
-    }
-
     /// Permanently removes an entry's folder (and its resource cache), then reloads.
     func deleteForever(_ entry: CatalogEntry) async {
         // Read the index BEFORE removing the folder so the placemark item ids can be

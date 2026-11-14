@@ -50,6 +50,8 @@ extension HomeView {
                 } description: {
                     Text("Files you trash will appear here.")
                 }
+            } else if isSelecting {
+                selectionList
             } else {
                 TrashList(trashed: trashed)
             }

@@ -10,7 +10,7 @@ import SwiftUI
 //
 // Note on access control: `private` is file-scoped, so anything `HomeView.body` (in
 // `HomeView.swift`) calls — `importFailureBanner`, `activeRowMenu`, `searchResults` — and any
-// stored `@State` the extensions read (`placeHits`, `renameText`, …) stays `internal`. Members
+// stored `@State` the extensions read (`placeHits`, `bulkSelection`, …) stays `internal`. Members
 // both defined and used only within this file (e.g. `matchingFiles`, `groupedPlaceHits`, the
 // row/hit helpers) are `private`.
 
@@ -59,39 +59,37 @@ extension HomeView {
     }
 }
 
-// MARK: - Active-row actions (context menu + rename plumbing)
+// MARK: - Active-row actions (context menu and swipe actions)
 
 extension HomeView {
-    /// The context menu for an active (non-trashed) file row. Offers Rename, Share (the
-    /// original file on disk), and Trash. Trashed rows use a different menu (restore/delete)
-    /// and never get this one.
+    /// The context menu for an active (non-trashed) file row, in separated groups: Share (the
+    /// original file on disk); Refresh Now, Copy URL and Stop Updating for online lists; Trash.
+    /// Trashed rows use their own menu (Restore / Delete) and never get this one.
     @ViewBuilder
     func activeRowMenu(for entry: CatalogEntry) -> some View {
-        Button {
-            beginRename(entry)
-        } label: {
-            Label("Rename", systemImage: "pencil")
-        }
-        .disabled(entry.isReadOnly)
-        // Share the original .kml/.kmz back out. `ShareLink` with a file URL shares the file
-        // itself. Shown only when the original actually exists on disk: in iCloud mode an entry
-        // can be a not-yet-downloaded placeholder, and ShareLink would otherwise render a
-        // tappable item that shares a dead URL. `existingOriginalURL` does a cheap `fileExists`
-        // stat — fine to evaluate while building the (lazily-built) menu.
+        // Share the original back out. `ShareLink` with a file URL shares the file itself. Only
+        // offered while the original exists on disk: in iCloud mode an entry can be a
+        // not-yet-downloaded placeholder, and ShareLink would share a dead URL.
         if let url = existingOriginalURL(for: entry) {
-            ShareLink(item: url, preview: SharePreview(entry.displayName)) {
-                Label("Share", systemImage: "square.and.arrow.up")
+            Section {
+                ShareLink(item: url, preview: SharePreview(entry.displayName)) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
             }
         }
         if let subscription = entry.subscription {
-            onlineRowMenu(for: entry, url: subscription.url)
+            Section {
+                onlineRowMenu(for: entry, url: subscription.url)
+            }
         }
-        Button(role: .destructive) {
-            Task { await catalog.moveToTrash(entry) }
-        } label: {
-            Label("Trash", systemImage: "trash")
+        Section {
+            Button(role: .destructive) {
+                Task { await catalog.moveToTrash(entry) }
+            } label: {
+                Label("Trash", systemImage: "trash")
+            }
+            .disabled(entry.isReadOnly)
         }
-        .disabled(entry.isReadOnly)
     }
 
     /// The actions revealed by swiping a file row to the right, as place rows offer theirs:
@@ -151,12 +149,6 @@ extension HomeView {
               FileManager.default.fileExists(atPath: url.path)
         else { return nil }
         return url
-    }
-
-    /// Opens the rename alert for `entry`, prefilling the field with its current name.
-    func beginRename(_ entry: CatalogEntry) {
-        renameText = entry.displayName
-        renameTarget = entry
     }
 }
 

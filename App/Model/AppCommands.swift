@@ -44,11 +44,7 @@ struct AppCommands: Commands {
         }
     }
 
-    @ViewBuilder
     private var fileButtons: some View {
-        Button("Rename\u{2026}") { window?.renameSelected() }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!(window?.canRename ?? false))
         Button("Move to Trash") { window?.trashSelected() }
             .keyboardShortcut(.delete, modifiers: .command)
             .disabled(!(window?.canTrash ?? false))

@@ -1,11 +1,12 @@
 import Foundation
 
 extension Catalog {
-    /// Permanently removes every trashed entry (folder + resource cache), removes their
-    /// Spotlight items, and reloads once. Active entries are untouched; with nothing in Trash
-    /// this is a no-op (no reload).
-    func emptyTrash() async {
-        let doomed = trashed
+    /// Permanently removes each given entry that is in Trash (folder + resource cache), removes
+    /// its Spotlight items, and reloads once. Entries not in Trash are skipped, so this can never
+    /// delete an active file; with nothing to delete it is a no-op (no reload).
+    func deleteForever(_ selection: [CatalogEntry]) async {
+        let trashedFolders = Set(trashed.map(\.storageFolderName))
+        let doomed = selection.filter { trashedFolders.contains($0.storageFolderName) }
         guard !doomed.isEmpty else { return }
         for entry in doomed {
             // Read the index BEFORE removing the folder so placemark Spotlight ids can be rebuilt.

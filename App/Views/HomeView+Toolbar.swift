@@ -3,7 +3,7 @@ import SwiftUI
 extension HomeView {
     /// The catalogue toolbar, laid out like Mail's mailbox list:
     /// - leading: the "+" import menu (Select All / Deselect All while selecting);
-    /// - trailing: Select (Files) or Empty (Trash) as a text button in its own pill, then the
+    /// - trailing: Select as a text button in its own pill (Files and Trash alike), then the
     ///   Settings gear in another;
     /// - bottom bar: the import progress status, or the select-mode actions.
     ///
@@ -18,9 +18,8 @@ extension HomeView {
             }
         }
         selectToolbarItem
-        emptyTrashToolbarItem
         if !isSelecting {
-            // Keeps the text button (Select / Empty) in a pill of its own, apart from the gear.
+            // Keeps the Select text button in a pill of its own, apart from the gear.
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -72,30 +71,6 @@ extension HomeView {
         .disabled(importCoordinator.isImporting || importCoordinator.pendingDuplicate != nil || isSubscribing)
     }
 
-    /// Trash's Empty button: red text in its own pill, where Select sits on the Files segment.
-    /// The confirmation is attached to the button so it anchors there on iPad and Mac.
-    @ToolbarContentBuilder
-    private var emptyTrashToolbarItem: some ToolbarContent {
-        if segment == .trash, !trashed.isEmpty {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Empty", role: .destructive) { isConfirmingEmptyTrash = true }
-                    .tint(.red)
-                    .accessibilityLabel("Empty Trash")
-                    .confirmationDialog(
-                        "Empty Trash?",
-                        isPresented: $isConfirmingEmptyTrash,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Delete \(trashed.count) Permanently", role: .destructive) {
-                            Task { await catalog.emptyTrash() }
-                        }
-                    } message: {
-                        Text("Everything in Trash will be deleted and can't be recovered.")
-                    }
-            }
-        }
-    }
-
     /// This window's menu-command actions, published as a focused-scene value (E7). Acts on the
     /// sidebar's selected file; the pure model decides what is enabled.
     var windowCommands: WindowCommands {
@@ -106,7 +81,6 @@ extension HomeView {
             importFiles: { isFileImporterPresented = true },
             subscribeToURL: { beginSubscribe() },
             focusSearch: { isSearchFocused = true },
-            rename: { beginRename($0) },
             trash: { entry in Task { await catalog.moveToTrash(entry) } }
         )
     }
