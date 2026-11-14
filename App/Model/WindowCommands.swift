@@ -13,11 +13,10 @@ struct WindowCommands {
     /// Whether importing is allowed right now (not while an import stalls on a prompt).
     var canImport: Bool
     let importFiles: () -> Void
-    /// Opens the "Subscribe to URL" alert; gated by `canImport` like importing.
+    /// Opens the "Remote URL" alert; gated by `canImport` like importing.
     let subscribeToURL: () -> Void
     let focusSearch: () -> Void
     let rename: (CatalogEntry) -> Void
-    let editTags: (CatalogEntry) -> Void
     let trash: (CatalogEntry) -> Void
 
     /// The selection when it may be changed; read-only entries (B12) are excluded.
@@ -27,10 +26,6 @@ struct WindowCommands {
     }
 
     var canRename: Bool {
-        editableSelection != nil
-    }
-
-    var canEditTags: Bool {
         editableSelection != nil
     }
 
@@ -57,12 +52,6 @@ struct WindowCommands {
     func renameSelected() {
         if let entry = editableSelection {
             rename(entry)
-        }
-    }
-
-    func editTagsOfSelected() {
-        if let entry = editableSelection {
-            editTags(entry)
         }
     }
 
@@ -98,7 +87,14 @@ struct PlaceCommands {
     }
 }
 
+/// ⌘F for the file open on top of a window's detail column, published by `KMLDetailView` while
+/// it is on screen: focuses that file's search bar instead of the catalogue's.
+struct FileSearchCommand {
+    let focus: () -> Void
+}
+
 extension FocusedValues {
     @Entry var windowCommands: WindowCommands?
     @Entry var placeCommands: PlaceCommands?
+    @Entry var fileSearch: FileSearchCommand?
 }

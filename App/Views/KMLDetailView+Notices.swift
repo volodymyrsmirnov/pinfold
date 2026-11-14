@@ -43,7 +43,7 @@ extension KMLDetailView {
 }
 
 /// Every placemark's stable key, hashed off the main actor. A `nonisolated` free function so
-/// the detached closure is compiled outside the view (see FavoritesView.swift).
+/// the detached closure is compiled outside the view (see DocumentLoad.swift).
 private nonisolated func placemarkKeys(of root: KMLContainer) async -> Set<String> {
     await Task.detached(priority: .utility) {
         Set(root.allPlacemarks.map(\.stableKey))

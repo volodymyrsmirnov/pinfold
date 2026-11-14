@@ -253,7 +253,7 @@ enum SubscriptionURL {
 // MARK: - Off-main work
 
 /// Validates fetched bytes off the main actor. A `nonisolated` free function so the detached
-/// closure is compiled outside any actor-isolated caller (see FavoritesView.swift).
+/// closure is compiled outside any actor-isolated caller (see DocumentLoad.swift).
 private nonisolated func prepareSubscribedOffMain(
     _ data: Data, filename: String
 ) async -> Result<ImportResult, SubscriptionError> {

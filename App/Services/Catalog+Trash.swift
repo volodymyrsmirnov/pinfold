@@ -22,7 +22,7 @@ extension Catalog {
 }
 
 /// Reads a placemark index off the main actor. `nonisolated` free function so the detached
-/// closure is not compiled inside a `@MainActor` context (see `FavoritesView.swift`).
+/// closure is not compiled inside a `@MainActor` context (see `DocumentLoad.swift`).
 private func trashIndexEntries(from resourcesDir: URL) async -> [PlacemarkIndex.Entry] {
     await Task.detached(priority: .userInitiated) {
         PlacemarkIndex.read(from: resourcesDir) ?? []

@@ -19,19 +19,6 @@ extension Catalog {
         }
     }
 
-    /// Adds `tags` to every given entry, merged with the tags it already has (normalized the
-    /// same way as `setTags`), then reloads once.
-    func addTags(_ tags: [String], to selection: [CatalogEntry]) async {
-        let additions = Self.normalizeTags(tags)
-        guard !additions.isEmpty else { return }
-        let changed = applyBulk(to: selection) {
-            $0.tags = Self.normalizeTags($0.tags + additions)
-        }
-        if !changed.isEmpty {
-            await reload()
-        }
-    }
-
     /// Applies `mutate` to each eligible entry's sidecar and returns the entries written.
     /// Skipped read-only entries and failed writes are summarised in a single `actionError`.
     private func applyBulk(

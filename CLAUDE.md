@@ -56,4 +56,4 @@ MV + `@Observable` (no view-model layer); see **Persistence & storage** for the 
 - Git: branch for non-trivial work and merge to `main` with `--no-ff`; **commit only when explicitly asked**.
 - The App Group / share-extension handoff only works on a **signed** build — it's inactive on the unsigned simulator builds (the app guards on `AppGroup.inboxURL != nil`).
 - SwiftFormat's `redundantSendable` rule strips explicit `Sendable` from internal all-value-type structs; the conformance is then implicit and compiler-enforced, so don't re-add it to fight the formatter.
-- Keep `Task.detached` closures inside nonisolated free functions and keep view `body`s small — large closures captured in big view bodies hit a Swift SIL `ClosureLifetimeFixup` pathology (see the comments in `FavoritesView.swift`).
+- Keep `Task.detached` closures inside nonisolated free functions and keep view `body`s small — large closures captured in big view bodies hit a Swift SIL `ClosureLifetimeFixup` pathology (see the note at the top of `DocumentLoad.swift`).

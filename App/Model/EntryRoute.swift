@@ -69,7 +69,7 @@ extension EntryRoute {
 // MARK: - RestoreBundle
 
 /// A one-shot navigation payload handed to `KMLDetailView` when a selection is driven
-/// programmatically — by a deep link (Spotlight, App Intent, a "Places"/favorites hit) or
+/// programmatically — by a deep link (Spotlight, App Intent, a "Places" search hit) or
 /// by session restore. Consumed once via `onConsumeRestore`, like the `initialPlacemarkKey`
 /// mechanism it replaces.
 ///

@@ -175,34 +175,6 @@ import Observation
         await reload()
     }
 
-    /// Sets an entry's tags by writing a normalized list into its sidecar, then reloading.
-    ///
-    /// Normalization (so the on-disk JSON is stable and the UI is clean): each tag is trimmed
-    /// of surrounding whitespace, empties are dropped, duplicates are removed
-    /// case-INSENSITIVELY but the first-seen casing is **preserved**, and the result is sorted
-    /// case-insensitively. Writes through `updateMetadata`, preserving every other sidecar
-    /// field (favorites/visited/trash/name) — mirrors `rename`.
-    func setTags(_ tags: [String], for entry: CatalogEntry) async {
-        let normalized = Self.normalizeTags(tags)
-        guard updateSidecar(of: entry, { $0.tags = normalized }) else { return }
-        await reload()
-    }
-
-    /// Trims, drops empties, de-duplicates case-insensitively (keeping the first casing seen),
-    /// and sorts case-insensitively. Pure and `static` so it is testable in isolation.
-    static func normalizeTags(_ tags: [String]) -> [String] {
-        var seen: Set<String> = []
-        var result: [String] = []
-        for raw in tags {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            let lowered = trimmed.lowercased()
-            guard seen.insert(lowered).inserted else { continue }
-            result.append(trimmed)
-        }
-        return result.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
     /// Permanently removes an entry's folder (and its resource cache), then reloads.
     func deleteForever(_ entry: CatalogEntry) async {
         // Read the index BEFORE removing the folder so the placemark item ids can be
@@ -279,7 +251,7 @@ private nonisolated func runMaterialization(storage: StorageLocations, cache: Re
 /// Reads an entry's placemark index off the main actor (the synchronous `PlacemarkIndex.read`
 /// does a `Data(contentsOf:)` + JSON decode that can be costly for large indexes). A
 /// `nonisolated` free function so the `Task.detached` closure is compiled here, not inside the
-/// `@MainActor` `Catalog` — see the `ClosureLifetimeFixup` note in FavoritesView.swift.
+/// `@MainActor` `Catalog` — see the `ClosureLifetimeFixup` note in DocumentLoad.swift.
 private func readIndexEntries(from resourcesDir: URL) async -> [PlacemarkIndex.Entry] {
     await Task.detached(priority: .userInitiated) {
         PlacemarkIndex.read(from: resourcesDir) ?? []

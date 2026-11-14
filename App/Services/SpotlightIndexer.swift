@@ -191,7 +191,7 @@ enum SpotlightIndexer {
 /// Builds the items for `entry` and submits them to the default Core Spotlight index, all off
 /// the caller's thread, logging any failure. A `nonisolated` free function so the
 /// `Task.detached` closure is compiled here rather than inside a `@MainActor` caller's SIL
-/// (mirrors `FavoritesView`'s pattern). `CSSearchableItem` isn't `Sendable`, so the items are
+/// (the pattern described in `DocumentLoad.swift`). `CSSearchableItem` isn't `Sendable`, so the items are
 /// created and consumed entirely inside the task; only value-type inputs cross the boundary.
 private func spotlightIndex(entry: CatalogEntry, indexEntries: [PlacemarkIndex.Entry]) {
     Task.detached(priority: .utility) {

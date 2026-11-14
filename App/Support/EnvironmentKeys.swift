@@ -53,3 +53,13 @@ extension View {
         environment(\.storageLocations, storage)
     }
 }
+
+// MARK: - Row disclosure
+
+extension EnvironmentValues {
+    /// Whether catalogue rows show a trailing chevron because tapping one pushes a new screen.
+    /// `RootView` sets it from the window's horizontal size class: compact (iPhone, narrow iPad
+    /// windows) collapses the split view into one stack, so a row navigates and gets the
+    /// chevron; regular (iPad, Mac) shows the file beside the list, so rows just highlight.
+    @Entry var showsRowDisclosure = true
+}

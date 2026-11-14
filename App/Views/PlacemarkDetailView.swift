@@ -324,7 +324,7 @@ struct PlacemarkDetailView: View {
                     Label("Copy Name", systemImage: "character.cursor.ibeam")
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Label("More", systemImage: "ellipsis")
             }
         }
     }

@@ -53,7 +53,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
         static let clusterMapPins = "settings.clusterMapPins"
         static let syncEnabled = "settings.syncEnabled"
         static let remoteImagePolicy = RemoteImagePolicy.defaultsKey
-        static let entrySort = "settings.entrySort"
         static let restoreSessionEnabled = "settings.restoreSessionEnabled"
         static let resumeEntryFolderName = "settings.resumeEntryFolderName"
         static let resumeRoutes = "settings.resumeRoutes"
@@ -87,12 +86,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
     /// Whether remote icons and photos are downloaded on import. Defaults to `.always`.
     var remoteImagePolicy: RemoteImagePolicy {
         didSet { defaults.set(remoteImagePolicy.rawValue, forKey: Key.remoteImagePolicy) }
-    }
-
-    /// How the catalogue's active list is ordered (presentation-level; see `EntrySort`).
-    /// Stored as the case's raw-value string; defaults to `.dateDesc` (newest first).
-    var entrySort: EntrySort {
-        didSet { defaults.set(entrySort.rawValue, forKey: Key.entrySort) }
     }
 
     // MARK: - Session restoration
@@ -168,8 +161,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
         clusterMapPins = defaults.bool(forKey: Key.clusterMapPins)
         syncEnabled = defaults.bool(forKey: Key.syncEnabled)
         remoteImagePolicy = RemoteImagePolicy.stored(in: defaults)
-        entrySort = defaults.string(forKey: Key.entrySort)
-            .flatMap(EntrySort.init(rawValue:)) ?? .dateDesc
         restoreSessionEnabled = defaults.object(forKey: Key.restoreSessionEnabled) as? Bool ?? true
         resumeEntryFolderName = defaults.string(forKey: Key.resumeEntryFolderName)
         resumeRoutes = defaults.data(forKey: Key.resumeRoutes)

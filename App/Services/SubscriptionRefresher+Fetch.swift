@@ -84,7 +84,7 @@ private enum Classified: Sendable {
 /// Hashes and validates fetched bytes off the main actor. Bytes equal to `currentSHA` are
 /// `.same` and never fully prepared (with `readHints`, only parsed for their server hints).
 /// A `nonisolated` free function so the detached closure is compiled outside any
-/// actor-isolated caller (see FavoritesView.swift).
+/// actor-isolated caller (see DocumentLoad.swift).
 private nonisolated func classifyOffMain(
     _ data: Data, filename: String, currentSHA: String?, readHints: Bool
 ) async -> Classified {

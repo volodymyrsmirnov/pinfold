@@ -11,7 +11,12 @@ extension HomeView {
 
     /// The entries ticked in select mode, in list order.
     var bulkEntries: [CatalogEntry] {
-        displayedActive.filter { bulkSelection.contains($0.id) }
+        sortedActive.filter { bulkSelection.contains($0.id) }
+    }
+
+    /// Whether every file in the list is ticked (Select All then reads Deselect All).
+    var isEverythingSelected: Bool {
+        !active.isEmpty && active.allSatisfy { bulkSelection.contains($0.id) }
     }
 
     /// The Files list in select mode. An explicit mode on every platform (the single-selection
@@ -19,7 +24,7 @@ extension HomeView {
     /// on so the selection checkmarks render on iPhone, iPad and Mac alike.
     var selectionList: some View {
         List(selection: $bulkSelection) {
-            ForEach(displayedActive) { entry in
+            ForEach(sortedActive) { entry in
                 FileRow(entry: entry, online: onlineStatus(for: entry))
                     .tag(entry.id)
             }
@@ -47,25 +52,22 @@ extension HomeView {
         }
     }
 
-    /// Opens the shared tags alert for the ticked entries.
-    func beginBulkTagging() {
-        bulkTagsText = ""
-        bulkTagTargets = bulkEntries
-    }
-
-    /// Commits the bulk tags alert: the parts are added to each entry's existing tags.
-    func saveBulkTags(_ entries: [CatalogEntry], _ parts: [String]) {
-        Task {
-            await catalog.addTags(parts, to: entries)
-            endSelecting()
+    /// Select All / Deselect All, in place of the "+" menu while selecting (as in Mail).
+    var selectAllButton: some View {
+        Button(isEverythingSelected ? "Deselect All" : "Select All") {
+            if isEverythingSelected {
+                bulkSelection = []
+            } else {
+                bulkSelection = Set(active.map(\.id))
+            }
         }
     }
 
-    /// The Select / Done toolbar button (Files segment only).
+    /// The Select / Done text button (Files segment only), in its own pill before the gear.
     @ToolbarContentBuilder
     var selectToolbarItem: some ToolbarContent {
         if canSelect || isSelecting {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button(isSelecting ? "Done" : "Select") {
                     if isSelecting {
                         endSelecting()
@@ -77,17 +79,35 @@ extension HomeView {
         }
     }
 
-    /// The bottom bar shown in select mode: Tag and Trash act on the ticked entries.
+    /// The bottom bar shown in select mode: how many files are ticked, and Trash for them.
     @ToolbarContentBuilder
     var selectBottomBar: some ToolbarContent {
         if isSelecting {
-            ToolbarItemGroup(placement: .bottomBar) {
-                Button("Tag", systemImage: "tag") { beginBulkTagging() }
-                    .disabled(bulkSelection.isEmpty)
-                Spacer()
-                Button("Trash", systemImage: "trash", role: .destructive) { trashBulkSelection() }
-                    .disabled(bulkSelection.isEmpty)
+            // Plain text like Mail's "N Selected", not a glass button.
+            ToolbarItem(placement: .status) {
+                Text(selectionCountText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
             }
+            .sharedBackgroundVisibility(.hidden)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+                Button("Trash", systemImage: "trash", role: .destructive) { trashBulkSelection() }
+                    .disabled(bulkEntries.isEmpty)
+            }
+        }
+    }
+
+    /// "Select Files" before anything is ticked, then "1 File Selected" / "N Files Selected".
+    /// Counts the ticked files still in the list, so a file removed meanwhile (iCloud, another
+    /// window) drops out of the count.
+    private var selectionCountText: String {
+        let count = bulkEntries.count
+        return switch count {
+        case 0: String(localized: "Select Files")
+        case 1: String(localized: "1 File Selected")
+        default: String(localized: "\(count) Files Selected")
         }
     }
 }

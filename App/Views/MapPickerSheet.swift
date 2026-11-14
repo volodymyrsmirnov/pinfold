@@ -51,7 +51,7 @@ struct MapPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cancel") {
+                    Button(role: .close) {
                         dismiss()
                     }
                 }

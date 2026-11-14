@@ -9,11 +9,10 @@ import SwiftUI
 /// On appearance the original file is loaded and parsed off the main actor. While
 /// loading a `ProgressView` is shown; on error a `ContentUnavailableView` is shown.
 ///
-/// A search field is rendered as the first (non-sticky) row of the list, styled like
-/// the other groups. Typing in it filters the hierarchy in place — folders that contain
-/// matches stay, the rest are pruned — so results remain grouped by category. Because the
-/// search field lives in the list (not the navigation bar's search mode), the back and
-/// map toolbar buttons stay visible while searching, and the map plots the filtered set.
+/// Search is the system search bar, exactly as on the catalogue: activating it slides the title
+/// and toolbar away and shows a close button. Typing filters the hierarchy in place — folders
+/// that contain matches stay, the rest are pruned — so results remain grouped by category, and
+/// the map (once search is closed with the query kept) plots the filtered set.
 struct KMLDetailView: View {
     // MARK: - Properties
 
@@ -61,6 +60,8 @@ struct KMLDetailView: View {
     @State var isOnScreen = false
     @State var loadError: Error?
     @State var searchText = ""
+    /// Keyboard focus for the search bar, driven by ⌘F (see `FileSearchCommand`).
+    @FocusState var isSearchFocused: Bool
     @State var annotations: PlacemarkAnnotations?
     /// The description/detail search index for the loaded document, built off-main after the
     /// document arrives (`buildSearchCorpus`). `nil` until ready: searches are name-only (plus
@@ -75,6 +76,9 @@ struct KMLDetailView: View {
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State var outline: PlacemarkOutline?
+    /// The trimmed query `outline` was built for. The outline lags typing by the debounce plus
+    /// the build, so anything that presents it as "the results" (the map row) checks this first.
+    @State var outlineQuery = ""
     /// Monotonic count of completed outline rebuilds. The scroll-restore task keys on THIS
     /// (not `outline?.rows.count`): a rebuild can reorder rows without changing their count
     /// — e.g. the nearest-first re-sort arriving on a flat, folderless file — and a
@@ -132,42 +136,18 @@ struct KMLDetailView: View {
         }
         .navigationTitle(entry.displayName)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            if refresher != nil, liveEntry.isOnline {
-                ToolbarItem(placement: .topBarTrailing) { onlineMenu }
-            }
-            // Sort menu: Document order vs. Nearest first. "Nearest" is disabled until a
-            // location fix is known (so the user isn't offered a sort that can't be applied).
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("Sort", selection: $nearestFirst) {
-                        Label("Document Order", systemImage: "list.bullet").tag(false)
-                        Label("Nearest First", systemImage: "location").tag(true)
-                    }
-                    .disabled(locationAuth.lastLocation == nil)
-                } label: {
-                    Image(systemName: nearestFirst ? "location.fill" : "arrow.up.arrow.down")
-                }
-                .accessibilityLabel("Sort")
-            }
-            if let info = documentInfo {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        infoSheet = info
-                    } label: {
-                        Image(systemName: "info.circle")
-                    }
-                    .accessibilityLabel("File description")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: EntryRoute.map(focusKey: nil)) {
-                    Image(systemName: "map")
-                }
-                .accessibilityLabel("Map")
-                .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
-            }
-        }
+        // Names, descriptions, details and notes are all searched (C3, D8).
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text("Search places, descriptions and notes")
+        )
+        .searchFocused($isSearchFocused)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        // ⌘F searches this file while it is the screen on top (not under a pushed place or map).
+        .focusedSceneValue(\.fileSearch, isOnScreen ? FileSearchCommand { isSearchFocused = true } : nil)
+        .toolbar { toolbarContent }
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
         .onAppear { isOnScreen = true }

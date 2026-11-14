@@ -31,10 +31,11 @@ struct NoteEditorSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
+                        Button(role: .cancel) { dismiss() }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save", action: save)
+                        Button(role: .confirm, action: save)
+                            .accessibilityLabel("Save")
                     }
                 }
                 .onAppear { focused = true }

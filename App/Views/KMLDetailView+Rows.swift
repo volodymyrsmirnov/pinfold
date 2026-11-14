@@ -5,8 +5,8 @@ import SwiftUI
 extension KMLDetailView {
     // MARK: - Content list
 
-    /// A single inset-grouped list: the search field row, then the flattened placemark
-    /// outline. Rendering a flat `[PlacemarkOutline.Row]` (instead of nested `Section`/
+    /// A single inset-grouped list: the notices, then the flattened placemark outline.
+    /// Rendering a flat `[PlacemarkOutline.Row]` (instead of nested `Section`/
     /// `DisclosureGroup` trees built via `AnyView`) lets `List` lazily realize and diff
     /// rows, and confines per-keystroke work to one memoized, debounced tree walk.
     @ViewBuilder
@@ -17,12 +17,16 @@ extension KMLDetailView {
         let location = locationAuth.lastLocation
         ScrollViewReader { proxy in
             List {
-                searchSection
                 if let offer = networkLinkOffer {
                     networkLinkSection(offer)
                 }
                 remoteImagesSection
                 if let outline {
+                    // Only once the outline is built for this query: until then it still holds
+                    // the previous (often unfiltered) set, and the row would map the wrong places.
+                    if !query.isEmpty, outlineQuery == query, !outline.mappablePlacemarks.isEmpty {
+                        searchResultsMapSection(count: outline.mappablePlacemarks.count)
+                    }
                     if outline.rows.isEmpty, !query.isEmpty {
                         Section {
                             Text("No placemarks match \u{201C}\(query)\u{201D}.")
@@ -53,6 +57,28 @@ extension KMLDetailView {
             // arrives on a folderless file).
             .task(id: outlineGeneration) {
                 await applyPendingScroll(using: proxy)
+            }
+        }
+    }
+
+    // MARK: - Search results on the map
+
+    /// While searching, a row that opens the map of just the matches. The system search bar
+    /// hides the toolbar's Map button on iPhone, and closing search clears the query, so this
+    /// is the way to map the results (the `.map(focusKey: nil)` route plots the live, filtered
+    /// outline).
+    func searchResultsMapSection(count: Int) -> some View {
+        Section {
+            NavigationLink(value: EntryRoute.map(focusKey: nil)) {
+                Label {
+                    if count == 1 {
+                        Text("Show 1 Result on Map")
+                    } else {
+                        Text("Show \(count) Results on Map")
+                    }
+                } icon: {
+                    Image(systemName: "map")
+                }
             }
         }
     }
@@ -172,35 +198,6 @@ extension KMLDetailView {
 
     /// Folder-description heads mapped to their plain-text preview (empty string = none).
     private static let folderPreviewCache = NSCache<NSString, NSString>()
-
-    // MARK: - Search field row
-
-    /// The search field, rendered as the first list group with the same card styling as
-    /// the others. It scrolls with the content (non-sticky) and never enters the navigation
-    /// bar's search mode, so the back and map buttons stay visible while searching.
-    var searchSection: some View {
-        Section {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                // Names, descriptions, details and notes are all searched (C3, D8).
-                TextField("Search places, descriptions and notes", text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
-                }
-            }
-        }
-    }
 
     // MARK: - Placemark navigation link
 
