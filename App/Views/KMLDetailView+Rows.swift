@@ -133,9 +133,11 @@ extension KMLDetailView {
                 } label: {
                     Image(systemName: "info.circle")
                         .foregroundStyle(.secondary)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Folder description")
+                .accessibilityLabel("Description of \(name)")
             }
         }
     }
@@ -215,41 +217,13 @@ extension KMLDetailView {
                 distance: PlacemarkDistance.format(from: location, to: placemark.coordinate)
             )
         }
+        // Swipe right: Share, Favorite, Mark Seen — the same set search results offer.
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            if let annotations {
-                Button {
-                    annotations.toggleFavorite(placemark)
-                } label: {
-                    let on = annotations.isFavorite(placemark)
-                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
-                }
-                .tint(.yellow)
-
-                Button {
-                    annotations.toggleVisited(placemark)
-                } label: {
-                    let on = annotations.isVisited(placemark)
-                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
-                }
-                .tint(.blue)
-            }
+            PlacemarkSwipeActions(place: PlaceRef(placemark), annotations: annotations)
         }
+        // Long press: the same actions as the place screen's "⋯" menu, from the same view.
         .contextMenu {
-            if let annotations {
-                Button {
-                    annotations.toggleFavorite(placemark)
-                } label: {
-                    let on = annotations.isFavorite(placemark)
-                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
-                }
-
-                Button {
-                    annotations.toggleVisited(placemark)
-                } label: {
-                    let on = annotations.isVisited(placemark)
-                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
-                }
-            }
+            PlacemarkActions(place: PlaceRef(placemark), annotations: annotations)
         }
     }
 }

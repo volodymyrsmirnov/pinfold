@@ -111,15 +111,29 @@ struct SettingsView: View {
         Section {
             ForEach(installed) { app in
                 Toggle(app.displayName, isOn: enabledBinding(for: app))
+                    // At least one app must stay on: an empty list means "all apps" to
+                    // `MapAppService`, so switching off the last one would re-enable them all.
+                    .disabled(isOnlyEnabledApp(app, among: installed))
             }
         } header: {
             Text("Map Apps")
         } footer: {
-            Text("Apps you don't have installed are hidden automatically.")
+            if installed.contains(where: { isOnlyEnabledApp($0, among: installed) }) {
+                Text("Apps you don't have installed are hidden automatically. At least one app stays on.")
+            } else {
+                Text("Apps you don't have installed are hidden automatically.")
+            }
         }
     }
 
     // MARK: - Helpers
+
+    /// Whether `app` is the only installed app still switched on.
+    private func isOnlyEnabledApp(_ app: MapApp, among installed: [MapApp]) -> Bool {
+        let ids = settings.enabledMapAppIDs
+        let enabled = ids.isEmpty ? installed : installed.filter { ids.contains($0.id) }
+        return enabled.count == 1 && enabled.first?.id == app.id
+    }
 
     /// Returns a `Binding<Bool>` for the given app's membership in `enabledMapAppIDs`.
     private func enabledBinding(for app: MapApp) -> Binding<Bool> {
@@ -142,6 +156,8 @@ struct SettingsView: View {
                         ids.append(app.id)
                     }
                 } else {
+                    // Never store an empty list: it would read back as "every app enabled".
+                    guard ids.contains(where: { $0 != app.id }) else { return }
                     ids.removeAll { $0 == app.id }
                     // If the user disabled the default app, clear the default.
                     if settings.defaultMapAppID == app.id {

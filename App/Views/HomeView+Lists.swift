@@ -22,33 +22,24 @@ extension HomeView {
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
                     ForEach(sortedActive) { entry in
-                        FileRow(entry: entry, online: onlineStatus(for: entry), showsDisclosure: showsRowDisclosure)
-                            .tag(entry.id)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    Task { await catalog.moveToTrash(entry) }
-                                } label: {
-                                    Label("Trash", systemImage: "trash")
-                                }
-                                .disabled(entry.isReadOnly)
-                            }
-                            .contextMenu { activeRowMenu(for: entry) }
-                            .stopUpdatingConfirmation(
-                                target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
-                            )
+                        activeFileRow(entry)
                     }
                 }
-                .listStyle(.insetGrouped)
+                .catalogueListStyle()
             }
         } else {
             if trashed.isEmpty {
                 ContentUnavailableView {
-                    Label("Trash is Empty", systemImage: "trash")
+                    Label("Archive is Empty", systemImage: "archivebox")
                 } description: {
-                    Text("Files you trash will appear here.")
+                    Text("Files you archive will appear here.")
                 }
+            } else if visibleTrashed.isEmpty {
+                ContentUnavailableView.search(text: trimmedQuery)
+            } else if isSelecting {
+                selectionList
             } else {
-                TrashList(trashed: trashed)
+                TrashList(trashed: visibleTrashed)
             }
         }
     }
@@ -60,9 +51,9 @@ extension HomeView {
         Picker("View", selection: $segment) {
             Text("Files").tag(Segment.files)
             if trashed.isEmpty {
-                Text("Trash").tag(Segment.trash)
+                Text("Archive").tag(Segment.trash)
             } else {
-                Text("Trash (\(trashed.count))").tag(Segment.trash)
+                Text("Archive (\(trashed.count))").tag(Segment.trash)
             }
         }
         .pickerStyle(.segmented)

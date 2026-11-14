@@ -13,7 +13,8 @@ import SwiftUI
 /// 5. "My Notes" block.
 /// 6. "Open in Maps" primary action button.
 ///
-/// Toolbar menu provides secondary actions: Copy Coordinates, Share, Copy Name.
+/// Toolbar menu: the shared `PlacemarkActions` (share, favourite, seen, copy coordinates, copy
+/// name) — the same set the place's row offers on a long press — with Show on Map after Share.
 struct PlacemarkDetailView: View {
     // MARK: - Properties
 
@@ -34,8 +35,10 @@ struct PlacemarkDetailView: View {
 
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
-    /// Whether to force-show the picker (long-press on Open in Maps).
-    @State private var forcePicker = false
+    /// Whether this screen is the top of its stack. A screen covered by a pushed map (or a
+    /// place opened from that map) keeps existing, so it stops publishing its menu-bar
+    /// commands, as `KMLDetailView` does, or the scene would hold two for one key.
+    @State private var isOnScreen = false
     /// Fallbacks for macOS "Designed for iPad" navigation/sheet hosts that can drop typed
     /// environment values from pushed destinations. Normal app flows still use the injected
     /// environment instances.
@@ -86,7 +89,9 @@ struct PlacemarkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
         // Favourite / Open in Maps menu commands act on the place open in THIS window.
-        .focusedSceneValue(\.placeCommands, placeCommands)
+        .focusedSceneValue(\.placeCommands, isOnScreen ? placeCommands : nil)
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(
@@ -99,12 +104,14 @@ struct PlacemarkDetailView: View {
         }
     }
 
-    /// The menu-bar actions for this place (⌘D, ⇧⌘O); each is `nil` (menu item disabled) when
-    /// it cannot apply.
+    /// The menu-bar actions for this place, mirroring its "⋯" menu; each is `nil` (menu item
+    /// disabled) when it cannot apply.
     private var placeCommands: PlaceCommands {
         PlaceCommands(
-            toggleFavorite: annotations.map { store in { store.toggleFavorite(placemark) } },
-            openInMaps: hasCoordinate ? { openInMaps() } : nil
+            place: PlaceRef(placemark),
+            annotations: annotations,
+            openInMaps: hasCoordinate ? { openInMaps() } : nil,
+            showOnMap: hasCoordinate ? { activeRouter?.path.append(.map(focusKey: placemark.stableKey)) } : nil
         )
     }
 
@@ -227,20 +234,49 @@ struct PlacemarkDetailView: View {
         }
     }
 
+    /// One field as a chip: its name above its value. A value that is a single web address
+    /// makes the whole chip a link (tinted, with an arrow), so it can be tapped to open.
+    @ViewBuilder
     private func extendedDataChip(_ item: KMLDataItem) -> some View {
+        if let url = WebLink.url(from: item.value) {
+            Link(destination: url) {
+                chipContent(item, isLink: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the link")
+        } else {
+            chipContent(item, isLink: false)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func chipContent(_ item: KMLDataItem, isLink: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(item.displayName ?? item.name)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(item.value)
-                .font(.caption.bold())
+            HStack(spacing: 4) {
+                Text(item.value)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if isLink {
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(isLink ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(maxWidth: 280, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.secondary.opacity(0.12))
         )
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Open in Maps button
@@ -270,58 +306,14 @@ struct PlacemarkDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                if hasCoordinate {
-                    Button {
-                        activeRouter?.path.append(.map(focusKey: placemark.stableKey))
-                    } label: {
-                        Label("Show on Map", systemImage: "map")
-                    }
-                    Divider()
-                }
-                if let annotations {
-                    Button {
-                        annotations.toggleFavorite(placemark)
-                    } label: {
-                        let on = annotations.isFavorite(placemark)
-                        Label(on ? "Remove from Favorites" : "Add to Favorites",
-                              systemImage: on ? "star.slash" : "star")
-                    }
-                    Button {
-                        annotations.toggleVisited(placemark)
-                    } label: {
-                        let on = annotations.isVisited(placemark)
-                        Label(on ? "Mark as Unseen" : "Mark as Seen",
-                              systemImage: on ? "eye.slash" : "eye")
-                    }
-                    Divider()
-                }
-                if let coordStr = coordinateString {
-                    Button {
-                        UIPasteboard.general.string = coordStr
-                    } label: {
-                        Label("Copy Coordinates", systemImage: "doc.on.doc")
-                    }
-
-                    if let coord = placemark.coordinate {
-                        let q = (placemark.name ?? "")
-                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        // Apple Maps' `ll` wants `lat,lon` with a `.` decimal separator; pin the
-                        // locale so a comma-decimal region doesn't corrupt the URL.
-                        let ll = String(format: "%f,%f", locale: Locale(identifier: "en_US_POSIX"),
-                                        coord.latitude, coord.longitude)
-                        let mapsURL = "https://maps.apple.com/?ll=\(ll)&q=\(q)"
-                        if let url = URL(string: mapsURL) {
-                            ShareLink(item: url, subject: Text(placemark.name ?? "Placemark")) {
-                                Label("Share", systemImage: "square.and.arrow.up")
-                            }
+                PlacemarkActions(place: PlaceRef(placemark), annotations: annotations) {
+                    if hasCoordinate {
+                        Button {
+                            activeRouter?.path.append(.map(focusKey: placemark.stableKey))
+                        } label: {
+                            Label("Show on Map", systemImage: "map")
                         }
                     }
-                }
-
-                Button {
-                    UIPasteboard.general.string = placemark.name ?? ""
-                } label: {
-                    Label("Copy Name", systemImage: "character.cursor.ibeam")
                 }
             } label: {
                 Label("More", systemImage: "ellipsis")

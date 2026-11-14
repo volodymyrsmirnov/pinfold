@@ -90,6 +90,110 @@ import Testing
         ))
     }
 
+    @Test func deleteForever_skipsAnEntryRestoredOnDiskSinceItWasListed() async throws {
+        // The list still shows the entry in Trash, but its sidecar was restored meanwhile
+        // (another device, or a restore that finished during the index read): keep the file.
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "back", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let stale = try #require(catalog.trashed.first)
+        try storage.updateMetadata(forFolderNamed: "back") { $0.trashedAt = nil }
+
+        await catalog.deleteForever(stale)
+
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("back").path))
+        #expect(catalog.active.map(\.storageFolderName) == ["back"])
+    }
+
+    @Test func removeFolderIfTrashed_checksTheSidecarUnderTheLock() throws {
+        let (_, storage) = makeCatalog()
+        try seedFolder(storage, folder: "trashed", trashedAt: Date(timeIntervalSince1970: 9))
+        try seedFolder(storage, folder: "restored")
+        _ = try seedUnreadable(storage, folder: "garbled")
+
+        #expect(try storage.removeFolderIfTrashed(named: "trashed") == .removed)
+        #expect(try storage.removeFolderIfTrashed(named: "restored") == .notTrashed)
+        #expect(try storage.removeFolderIfTrashed(named: "garbled") == .unreadable)
+        #expect(try storage.removeFolderIfTrashed(named: "missing") == .notTrashed)
+
+        let exists = { (name: String) in
+            FileManager.default.fileExists(atPath: storage.root.appendingPathComponent(name).path)
+        }
+        #expect(!exists("trashed"))
+        #expect(exists("restored"))
+        #expect(exists("garbled"))
+    }
+
+    @Test func annotations_areOneSharedStorePerFile() async throws {
+        // The open file and the catalogue's search results must share one store, or a toggle
+        // in one leaves the other stale (and its next toggle undoes instead of redoes).
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        let fromFile = catalog.annotations(for: entry)
+        let fromSearch = catalog.annotations(for: entry)
+        #expect(fromFile === fromSearch)
+
+        fromSearch.toggleFavorite(key: "k")
+        #expect(fromFile.isFavorite(key: "k"))
+    }
+
+    @Test func annotations_rereadTheSidecarAfterARescan() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "f")
+        await catalog.reload()
+        let store = try catalog.annotations(for: #require(catalog.active.first))
+        // Another device favourites a place; the sidecar syncs in and the catalogue rescans.
+        try storage.updateMetadata(forFolderNamed: "f") { $0.favoriteKeys.insert("remote") }
+        await catalog.reload()
+
+        // The store already held (an open file) is refreshed by the rescan itself.
+        #expect(store.isFavorite(key: "remote"))
+        let again = try catalog.annotations(for: #require(catalog.active.first))
+        #expect(again === store)
+    }
+
+    @Test func annotations_storesOfDeletedFilesAreDropped() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let entry = try #require(catalog.trashed.first)
+        let before = catalog.annotations(for: entry)
+
+        await catalog.deleteForever(entry)
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+
+        // A new file in the same folder gets a fresh store, not the deleted file's.
+        #expect(try catalog.annotations(for: #require(catalog.trashed.first)) !== before)
+    }
+
+    @Test func deleteForever_twiceIsQuietNoOp() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let entry = try #require(catalog.trashed.first)
+
+        await catalog.deleteForever(entry)
+        await catalog.deleteForever(entry)
+
+        #expect(catalog.actionError == nil, "\(catalog.actionError?.message ?? "")")
+        #expect(catalog.entries.isEmpty)
+    }
+
+    @Test func deleteForever_neverDeletesAnActiveEntry() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "keep")
+        await catalog.reload()
+        let entry = try #require(catalog.active.first)
+
+        await catalog.deleteForever(entry)
+
+        #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
+    }
+
     @Test func entryWithSHA256_findsByContentHash() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "f", sha: "needle")
@@ -124,35 +228,7 @@ import Testing
         #expect(catalog.entries.count == 5)
     }
 
-    @Test func rename_updatesSidecarAndList() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "f")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-
-        await catalog.rename(entry, to: "  Renamed Trip  ")
-
-        // The renamed entry appears with the trimmed new name after the reload.
-        #expect(catalog.active.first?.displayName == "Renamed Trip")
-        // The sidecar on disk carries the new name (persisted, survives a fresh scan).
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == "Renamed Trip")
-    }
-
-    @Test func rename_rejectsEmptyOrWhitespace() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "f")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-        let original = entry.displayName
-
-        await catalog.rename(entry, to: "   ")
-
-        // No-op: the name is unchanged both in memory and on disk.
-        #expect(catalog.active.first?.displayName == original)
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
-    }
-
-    @Test func legacyTags_surviveRenameAndTrash() async throws {
+    @Test func legacyTags_surviveTrashAndRestore() async throws {
         // Tagging is gone from the UI, but tags written by older versions must stay in the
         // sidecar untouched so a device still on that version doesn't lose them on sync.
         let (catalog, storage) = makeCatalog()
@@ -161,13 +237,15 @@ import Testing
         await catalog.reload()
         let entry = try #require(catalog.active.first)
 
-        await catalog.rename(entry, to: "Renamed")
-        let renamed = try #require(catalog.active.first)
-        await catalog.moveToTrash(renamed)
+        await catalog.moveToTrash(entry)
+        let trashedMeta = try #require(try storage.readMetadata(forFolderNamed: "f"))
+        #expect(trashedMeta.trashedAt != nil)
+        #expect(trashedMeta.tags == ["art", "food"])
 
+        let trashed = try #require(catalog.trashed.first)
+        _ = await catalog.restore(trashed)
         let meta = try #require(try storage.readMetadata(forFolderNamed: "f"))
-        #expect(meta.displayName == "Renamed")
-        #expect(meta.trashedAt != nil)
+        #expect(meta.trashedAt == nil)
         #expect(meta.tags == ["art", "food"])
     }
 
@@ -190,7 +268,7 @@ import Testing
         #expect(catalog.storage.root == newRoot)
     }
 
-    @Test func emptyTrash_removesAllTrashedAndKeepsActive() async throws {
+    @Test func deleteForeverSelection_removesTrashedAndKeepsActive() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "keep")
         try seedFolder(storage, folder: "t1", sha: "a", trashedAt: Date(timeIntervalSince1970: 5))
@@ -198,7 +276,8 @@ import Testing
         await catalog.reload()
         #expect(catalog.trashed.count == 2)
 
-        await catalog.emptyTrash()
+        // The active entry rides along in the selection but must never be deleted.
+        await catalog.deleteForever(catalog.entries)
 
         #expect(catalog.trashed.isEmpty)
         #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
@@ -208,12 +287,12 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: storage.root.appendingPathComponent("keep").path))
     }
 
-    @Test func emptyTrash_withNoTrashIsANoOp() async throws {
+    @Test func deleteForeverSelection_withNothingTrashedIsANoOp() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "keep")
         await catalog.reload()
 
-        await catalog.emptyTrash()
+        await catalog.deleteForever(catalog.active)
 
         #expect(catalog.entries.map(\.storageFolderName) == ["keep"])
     }
@@ -227,20 +306,6 @@ import Testing
         let garbage = Data("not json".utf8)
         try garbage.write(to: dir.appendingPathComponent("metadata.json"))
         return garbage
-    }
-
-    @Test func renameOnReadOnlyEntry_setsActionErrorAndWritesNothing() async throws {
-        let (catalog, storage) = makeCatalog()
-        let garbage = try seedUnreadable(storage, folder: "bad")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-        #expect(entry.isReadOnly)
-
-        await catalog.rename(entry, to: "New Name")
-
-        #expect(catalog.actionError != nil)
-        #expect(try Data(contentsOf: storage.metadataFile(forFolderNamed: "bad")) == garbage)
-        #expect(catalog.active.first?.displayName == "Rome")
     }
 
     @Test func moveToTrashOnReadOnlyEntry_setsActionError() async throws {
@@ -261,17 +326,17 @@ import Testing
         await catalog.reload()
         let entry = try #require(catalog.active.first)
 
-        await catalog.rename(entry, to: "Renamed")
+        await catalog.moveToTrash(entry)
 
         #expect(catalog.actionError == nil)
-        #expect(catalog.active.first?.displayName == "Renamed")
+        #expect(catalog.trashed.map(\.storageFolderName) == ["ok"])
     }
 
     @Test func deleteForeverFailure_setsActionError() async throws {
         let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "stuck")
+        try seedFolder(storage, folder: "stuck", trashedAt: Date(timeIntervalSince1970: 3))
         await catalog.reload()
-        let entry = try #require(catalog.active.first)
+        let entry = try #require(catalog.trashed.first)
         // A read-only root: the folder itself cannot be unlinked.
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: storage.root.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: storage.root.path) }

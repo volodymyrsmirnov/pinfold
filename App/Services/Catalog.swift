@@ -18,6 +18,9 @@ import Observation
 
     /// The active storage root. Changes (live) when the iCloud sync toggle flips.
     private(set) var storage: StorageLocations
+    /// Shared annotation stores by root + folder name (see `annotations(for:)`).
+    @ObservationIgnored private var annotationStores:
+        [String: (store: PlacemarkAnnotations, revision: Int, readOnly: Bool)] = [:]
 
     /// The last user-initiated mutation that could not be carried out (a read-only entry, a
     /// failed write or delete). Observable; shown by `CatalogErrorAlert`, which clears it.
@@ -79,6 +82,16 @@ import Observation
         let resourceDirs = Set(entries.map { storage.resourcesDirectory(for: $0) })
         let sidecars = Set(entries.map { storage.metadataFile(for: $0) })
         PlacemarkIndexStore.shared.prune(keeping: resourceDirs, sidecars: sidecars)
+        // Shared annotation stores: drop those of files that are gone and of a previous root,
+        // and re-read the rest now, so a file already open sees favourites / Seen / notes that
+        // synced in, or a read-only change, without asking for its store again.
+        let liveEntries = Dictionary(entries.map { (annotationStoreKey(for: $0), $0) }, uniquingKeysWith: { first, _ in first })
+        annotationStores = annotationStores.filter { liveEntries[$0.key] != nil }
+        for (key, cached) in annotationStores {
+            guard let entry = liveEntries[key] else { continue }
+            cached.store.reload(entry: entry)
+            annotationStores[key] = (cached.store, searchDataRevision, entry.isReadOnly)
+        }
     }
 
     /// Starts a single background materialization pass. If one is already running, marks the
@@ -153,47 +166,41 @@ import Observation
         return true
     }
 
-    /// Renames an entry by writing a new `displayName` into its sidecar, then reloading.
-    ///
-    /// Trims surrounding whitespace; a name that is empty after trimming is rejected as a
-    /// no-op (nothing is written, no reload). Writes through `updateMetadata`, which preserves
-    /// every other sidecar field (favorites/visited/trash), unlike reconstructing the metadata
-    /// from the in-memory `CatalogEntry`.
-    func rename(_ entry: CatalogEntry, to newName: String) async {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard updateSidecar(of: entry, { $0.displayName = trimmed }) else { return }
-        // Re-index the whole entry so Spotlight reflects the new name everywhere: the entry
-        // item's title AND every placemark item's contentDescription embed the display name, so
-        // a name-only reindex would leave stale "<old name>" subtitles on the placemark hits.
-        // The index file is one cheap read and we're already reloading from disk — correctness
-        // over the marginal cost of re-pushing the items.
-        var renamed = entry
-        renamed.displayName = trimmed
-        let toIndex = await indexEntries(for: entry)
-        SpotlightIndexer.index(entry: renamed, indexEntries: toIndex)
-        await reload()
-    }
-
-    /// Permanently removes an entry's folder (and its resource cache), then reloads.
+    /// Permanently removes one trashed entry; see `deleteForever(_:)` for the safety checks.
     func deleteForever(_ entry: CatalogEntry) async {
-        // Read the index BEFORE removing the folder so the placemark item ids can be
-        // reconstructed; otherwise the cache is gone and only the entry item would be removable.
-        // The read is `await`ed (now off-main) and completes fully before `removeFolder`, so the
-        // ordering is preserved.
-        let toRemove = await indexEntries(for: entry)
-        do {
-            try storage.removeFolder(named: entry.storageFolderName)
-            SpotlightIndexer.deindex(folderName: entry.storageFolderName, indexEntries: toRemove)
-        } catch {
-            actionError = .deleteFailed(entryName: entry.displayName, error: error)
-        }
-        await reload()
+        await deleteForever([entry])
     }
 
     /// The first entry with the given content hash, for import-time duplicate detection.
     func entry(withSHA256 sha256: String) -> CatalogEntry? {
         entries.first { $0.contentSHA256 == sha256 }
+    }
+
+    /// The one favourites / Seen / notes store for `entry`, shared by every view showing that
+    /// file — the open file (its rows, place screen, map) and the catalogue's search results —
+    /// so a toggle in one is seen at once by the others (two separate stores would each keep a
+    /// stale copy and the next toggle on the stale side would undo instead of redo).
+    ///
+    /// Re-read from disk when the catalogue has rescanned since it was last handed out (a
+    /// sidecar that synced in from another device bumps `searchDataRevision`) or when the
+    /// entry's read-only state changed; otherwise returned as is, so repeated searches don't
+    /// re-read every sidecar.
+    func annotations(for entry: CatalogEntry) -> PlacemarkAnnotations {
+        let key = annotationStoreKey(for: entry)
+        if let cached = annotationStores[key] {
+            if cached.revision != searchDataRevision || cached.readOnly != entry.isReadOnly {
+                cached.store.reload(entry: entry)
+                annotationStores[key] = (cached.store, searchDataRevision, entry.isReadOnly)
+            }
+            return cached.store
+        }
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        annotationStores[key] = (store, searchDataRevision, entry.isReadOnly)
+        return store
+    }
+
+    private func annotationStoreKey(for entry: CatalogEntry) -> String {
+        "\(storage.root.path)\n\(entry.storageFolderName)"
     }
 
     /// Repoints the catalogue at a new root and reloads. Any file migration between roots

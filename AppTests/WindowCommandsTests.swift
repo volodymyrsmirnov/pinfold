@@ -14,7 +14,6 @@ import Testing
 
     private final class Recorder {
         var trashed: [String] = []
-        var renamed: [String] = []
         var imports = 0
         var subscribes = 0
         var searches = 0
@@ -27,7 +26,6 @@ import Testing
             importFiles: { rec.imports += 1 },
             subscribeToURL: { rec.subscribes += 1 },
             focusSearch: { rec.searches += 1 },
-            rename: { rec.renamed.append($0.displayName) },
             trash: { rec.trashed.append($0.displayName) }
         )
     }
@@ -36,11 +34,9 @@ import Testing
         let rec = Recorder()
         let cmds = commands(selected: nil, rec)
 
-        #expect(!cmds.canRename)
         #expect(!cmds.canTrash)
-        cmds.renameSelected()
         cmds.trashSelected()
-        #expect(rec.renamed.isEmpty && rec.trashed.isEmpty)
+        #expect(rec.trashed.isEmpty)
         // Import and Search do not depend on a selection.
         #expect(cmds.canImport)
         cmds.search()
@@ -63,10 +59,9 @@ import Testing
         let rec = Recorder()
         let cmds = commands(selected: entry(name: "bad", state: .unreadable), rec)
 
-        #expect(!cmds.canRename && !cmds.canTrash)
+        #expect(!cmds.canTrash)
         cmds.trashSelected()
-        cmds.renameSelected()
-        #expect(rec.trashed.isEmpty && rec.renamed.isEmpty)
+        #expect(rec.trashed.isEmpty)
     }
 
     @Test func importIsDisabledWhenNotAllowed() {
@@ -95,5 +90,57 @@ import Testing
         cmds.canImport = false
         cmds.subscribeIfAllowed()
         #expect(rec.subscribes == 1)
+    }
+
+    // MARK: - Online-list and place commands (2.1)
+
+    private func online(_ name: String, state: CatalogEntry.SidecarState = .ok) throws -> CatalogEntry {
+        var entry = entry(name: name, state: state)
+        entry.subscription = try Subscription(
+            url: #require(URL(string: "https://example.com/\(name).kml")), origin: .url,
+            subscribedAt: Date(timeIntervalSince1970: 1)
+        )
+        return entry
+    }
+
+    private func onlineCommands(selected: CatalogEntry?, refreshing: Bool = false) -> WindowCommands {
+        var cmds = commands(selected: selected, Recorder())
+        cmds.refreshNow = { _ in }
+        cmds.copyURL = { _ in }
+        cmds.stopUpdating = { _ in }
+        cmds.isRefreshingSelection = refreshing
+        return cmds
+    }
+
+    @Test func onlineSelectionEnablesItsActions() throws {
+        let cmds = try onlineCommands(selected: online("list"))
+        #expect(cmds.canRefreshNow && cmds.canCopyURL && cmds.canStopUpdating)
+    }
+
+    @Test func refreshingDisablesRefreshNowOnly() throws {
+        let cmds = try onlineCommands(selected: online("list"), refreshing: true)
+        #expect(!cmds.canRefreshNow)
+        #expect(cmds.canCopyURL && cmds.canStopUpdating)
+    }
+
+    @Test func readOnlyOnlineSelectionOnlyCopiesItsURL() throws {
+        let cmds = try onlineCommands(selected: online("list", state: .unreadable))
+        #expect(!cmds.canRefreshNow && !cmds.canStopUpdating)
+        #expect(cmds.canCopyURL)
+    }
+
+    @Test func localFileHasNoOnlineActions() {
+        let cmds = onlineCommands(selected: entry(name: "local"))
+        #expect(!cmds.canRefreshNow && !cmds.canCopyURL && !cmds.canStopUpdating)
+    }
+
+    @Test func placeCommandTitlesFollowState() {
+        var place = PlaceCommands()
+        #expect(place.favoriteTitle == "Add to Favorites")
+        #expect(place.visitedTitle == "Mark as Seen")
+        place.isFavorite = true
+        place.isVisited = true
+        #expect(place.favoriteTitle == "Remove from Favorites")
+        #expect(place.visitedTitle == "Mark as Unseen")
     }
 }

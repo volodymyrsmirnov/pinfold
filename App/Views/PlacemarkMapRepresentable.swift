@@ -31,6 +31,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     /// pin selected (its preview card shown) instead of fitting all pins — the "Show on
     /// Embedded Map" deep link from the POI page. `nil` → fit all pins (the default).
     var initialFocusKey: String?
+    /// Fit `placemarks` on first layout even when this file has a remembered camera.
+    var ignoresSavedCamera = false
     @Binding var selectedKey: String?
 
     /// UserDefaults key for the persisted basemap style. The style control and its
@@ -96,7 +98,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
         let coordinates = Self.fitCoordinates(for: placemarks)
         let focusKey = initialFocusKey
-        let savedCamera = cameraStore.camera(forFolderName: entry.storageFolderName)
+        let savedCamera = ignoresSavedCamera ? nil : cameraStore.camera(forFolderName: entry.storageFolderName)
         let userLocationVisible = showsUserLocation
         mapView.onFirstLayout = { [weak mapView, weak coordinator = context.coordinator] in
             guard let mapView, let coordinator else { return }

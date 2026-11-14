@@ -14,6 +14,10 @@ struct FileRow: View {
     /// Whether to draw the trailing chevron: on when the row navigates to a new screen
     /// (a collapsed split view), off in select mode, in Trash, and beside an open detail column.
     var showsDisclosure = false
+    /// Whether the row is the selected one beside an open file (iPad, Mac). Its tile then turns
+    /// solid accent with a white glyph, which reads on both selection highlights: the accent one
+    /// (list focused), where the tinted tile's blue glyph would vanish, and the grey one.
+    var isHighlighted = false
 
     /// What an online list's row shows: its glyph and the second line's tail.
     enum OnlineStatus: Equatable {
@@ -58,11 +62,11 @@ struct FileRow: View {
     private var sourceTile: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.accentColor.opacity(0.15))
+                .fill(isHighlighted ? Color.accentColor : Color.accentColor.opacity(0.15))
                 .frame(width: 44, height: 44)
             Image(systemName: entry.isOnline ? "globe" : "doc")
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(isHighlighted ? Color.white : Color.accentColor)
         }
         .accessibilityElement()
         .accessibilityLabel(entry.isOnline ? "Online list" : "File")
@@ -143,5 +147,29 @@ struct RowDisclosureIndicator: View {
             .font(.footnote.weight(.semibold))
             .foregroundStyle(.tertiary)
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Catalogue list style
+
+extension View {
+    /// The style of the catalogue's lists (Files, Trash, select mode, search results): inset
+    /// cards when rows push a new screen (iPhone, narrow windows), and a plain list beside an
+    /// open file (iPad, Mac), where the selected row is a full-width highlight as in Mail's
+    /// message list rather than a card whose first row picks up the card's rounded corners.
+    func catalogueListStyle() -> some View {
+        modifier(CatalogueListStyle())
+    }
+}
+
+private struct CatalogueListStyle: ViewModifier {
+    @Environment(\.showsRowDisclosure) private var showsRowDisclosure
+
+    func body(content: Content) -> some View {
+        if showsRowDisclosure {
+            content.listStyle(.insetGrouped)
+        } else {
+            content.listStyle(.plain)
+        }
     }
 }

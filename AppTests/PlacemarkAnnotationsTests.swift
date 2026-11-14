@@ -110,8 +110,13 @@ import Testing
         readOnly.sidecarState = .notDownloaded
         let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
         store.toggleFavorite(point("x"))
+        store.toggleVisited(point("x"))
         let reloaded = try #require(try storage.readMetadata(forFolderNamed: entry.storageFolderName))
         #expect(reloaded.favoriteKeys.isEmpty)
+        // Nor does the UI show a change that won't stick.
+        #expect(!store.canEdit)
+        #expect(!store.isFavorite(point("x")))
+        #expect(!store.isVisited(point("x")))
     }
 
     // MARK: - Notes
@@ -187,7 +192,7 @@ import Testing
     @Test func setNote_reportsSuccess() throws {
         let (entry, storage) = try makeEntryAndStorage()
         let store = PlacemarkAnnotations(entry: entry, storage: storage)
-        #expect(store.canEditNotes)
+        #expect(store.canEdit)
         #expect(store.setNote("ok", for: point("s")))
     }
 
@@ -196,7 +201,7 @@ import Testing
         var readOnly = entry
         readOnly.sidecarState = .notDownloaded
         let store = PlacemarkAnnotations(entry: readOnly, storage: storage)
-        #expect(!store.canEditNotes)
+        #expect(!store.canEdit)
         #expect(!store.setNote("lost", for: point("ro")))
         #expect(store.note(for: point("ro")) == nil)
     }

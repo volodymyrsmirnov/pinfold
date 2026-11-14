@@ -352,6 +352,53 @@ struct StorageLocations {
         try removeFolder(named: entry.storageFolderName)
     }
 
+    /// What `removeFolderIfTrashed` did.
+    enum TrashedRemoval: Equatable {
+        /// The folder (and its local cache) was removed.
+        case removed
+        /// Kept: the folder is gone already, or its sidecar no longer marks it trashed
+        /// (restored on this or another device).
+        case notTrashed
+        /// Kept: the sidecar can't be read (still downloading, corrupt), so whether it is
+        /// trashed can't be confirmed.
+        case unreadable
+    }
+
+    /// Removes the folder only if its sidecar still marks it as trashed, checking and removing
+    /// inside ONE coordinated `.forDeleting` lock on the folder, so a restore arriving from
+    /// another device or process (the iCloud daemon writes the sidecar under coordination)
+    /// can't land between the check and the removal. The local resources folder goes too, but
+    /// only when the synced folder was removed. When in doubt, the file is kept.
+    func removeFolderIfTrashed(named name: String) throws -> TrashedRemoval {
+        let fm = FileManager.default
+        let synced = root.appendingPathComponent(name, isDirectory: true)
+        guard fm.fileExists(atPath: synced.path) else { return .notTrashed }
+        var outcome = TrashedRemoval.notTrashed
+        try Self.coordinate(writingAt: synced, options: .forDeleting) { target in
+            // Plain read: the coordinated write on the folder already excludes other writers.
+            let sidecar = target.appendingPathComponent("metadata.json")
+            guard let data = try? Data(contentsOf: sidecar),
+                  let meta = try? EntryMetadata.decoded(from: data)
+            else {
+                outcome = .unreadable
+                return
+            }
+            guard meta.trashedAt != nil else { return }
+            try fm.removeItem(at: target)
+            outcome = .removed
+        }
+        if outcome == .removed {
+            // Best effort: the file is already deleted. This is derived per-device data, and a
+            // background cache build may be writing into it at this moment; anything left over
+            // is an orphan nothing reads.
+            let cache = cacheRoot.appendingPathComponent(name, isDirectory: true)
+            if fm.fileExists(atPath: cache.path) {
+                try? fm.removeItem(at: cache)
+            }
+        }
+        return outcome
+    }
+
     /// Removes the synced folder (coordinated, `.forDeleting`) and the local resources folder
     /// (plain: it never syncs) for a raw folder name.
     func removeFolder(named name: String) throws {

@@ -19,7 +19,7 @@ struct PlacemarkNoteBlock: View {
                     .font(.body)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if annotations.canEditNotes {
+            if annotations.canEdit {
                 Button(hasNote ? "Edit Note" : "Add Note", systemImage: "square.and.pencil") {
                     editing = true
                 }

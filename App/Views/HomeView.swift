@@ -13,7 +13,7 @@ enum Segment: Hashable {
 /// The root screen of Pinfold.
 ///
 /// Shows a segmented Files / Trash list. The "+" toolbar menu imports a local file or follows a
-/// remote URL; Select (Files) or Empty (Trash) sits in its own pill before the Settings gear.
+/// remote URL; Select sits in its own pill before the Settings gear on both segments.
 ///
 /// Layout: the `NavigationTitle` "Pinfold" stays in the nav bar; the segmented Picker
 /// lives in a `safeAreaInset` bar above the List so it never replaces the title; empty
@@ -54,27 +54,24 @@ struct HomeView: View {
     @Environment(SubscriptionRefresher.self) var refresher
     /// The online list awaiting a Stop Updating confirmation, and a failed Refresh Now's error.
     @State var stopUpdatingTarget: CatalogEntry?
+    /// Stop Updating asked for from the menu bar. It has its own screen-level confirmation, as
+    /// the open file's row (which hosts the row-originated one) may not be on screen: Trash
+    /// shown, filtered out by a search, or scrolled away.
+    @State var menuStopUpdatingTarget: CatalogEntry?
     @State var refreshError: String?
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State var isSettingsPresented = false
-    /// Presents the Empty Trash confirmation, anchored to the toolbar's Empty button.
-    @State var isConfirmingEmptyTrash = false
 
-    /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
-    /// in progress. Set from the active-row context menu's "Rename" action (in HomeViewRows).
-    @State var renameTarget: CatalogEntry?
-    /// The editable text bound to the rename alert's `TextField`, prefilled with the entry's
-    /// current name when the alert opens.
-    @State var renameText = ""
-
-    /// Whether the Files list is in explicit multi-select mode (C8). The list then binds
-    /// `bulkSelection` instead of `selection`, so picking rows never drives the detail column.
+    /// Whether the Files or Trash list is in explicit multi-select mode (C8). The Files list
+    /// then binds `bulkSelection` instead of `selection`, so picking rows never drives the
+    /// detail column.
     @State var isSelecting = false
     /// The ids ticked in select mode.
     @State var bulkSelection: Set<CatalogEntry.ID> = []
 
-    /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
+    /// The search query, bound to the `.searchable` field: on Files it searches file names and
+    /// every file's places; on Trash it filters the rows by name.
     @State var searchQuery = ""
     /// Keyboard focus for the search field, driven by the ⌘F command (see `WindowCommands`).
     @FocusState var isSearchFocused: Bool
@@ -82,6 +79,10 @@ struct HomeView: View {
     /// `placemarks-index.json`. Empty when the query is empty or matches no placemark.
     /// Not `private`: `groupedPlaceHits` lives in the `HomeView+Sections` extension (a separate file).
     @State var placeHits: [PlacemarkIndex.Hit] = []
+    /// Favourites / Seen for the files the "Places" hits come from, by folder name, so a hit
+    /// offers the same actions as the place inside its file. Rebuilt with each search (which
+    /// re-runs when any sidecar changes, via `searchDataRevision`).
+    @State var hitAnnotations: [String: PlacemarkAnnotations] = [:]
 
     /// Debounce before reading every entry's index off disk, matching `KMLDetailView`'s
     /// in-file search debounce so rapid typing doesn't fan out a read storm.
@@ -112,14 +113,23 @@ struct HomeView: View {
         catalog.trashed
     }
 
-    /// Trimmed query; non-empty means the Files segment shows search results instead of the
-    /// plain entry list. Trash is never searched (active entries only).
+    /// Trimmed query; non-empty means Files shows search results instead of the plain list and
+    /// Trash shows only the matching rows.
     var trimmedQuery: String {
         searchQuery.trimmingCharacters(in: .whitespaces)
     }
 
     var isSearching: Bool {
         segment == .files && !trimmedQuery.isEmpty
+    }
+
+    /// Trash, narrowed to the names matching the search query (Trash is searched by name; it
+    /// has no place results). The whole Trash when the query is empty.
+    var visibleTrashed: [CatalogEntry] {
+        let query = trimmedQuery
+        guard !query.isEmpty else { return trashed }
+        // The same matching as Files search (ignores case, accents and width).
+        return trashed.filter { SearchText.contains($0.displayName, query: query) }
     }
 
     // MARK: - Body
@@ -132,23 +142,24 @@ struct HomeView: View {
             fileList
         }
         .navigationTitle("Pinfold")
-        // Catalogue-wide search lives only on the Files segment (active entries); Trash is not
-        // searched. `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F
-        // command move keyboard focus here.
+        // Files searches file names and every file's places; Trash filters its rows by name.
+        // `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F command
+        // move keyboard focus here.
         .searchable(
             text: $searchQuery,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: Text("Search files and places")
+            prompt: segment == .files ? Text("Search files and places") : Text("Search Archive")
         )
         .searchFocused($isSearchFocused)
         // Debounced, off-main search over each active entry's local placemark index. Re-keys on
         // the query AND the segment so returning to Files with a live query recomputes the hits
-        // (Trash isn't searched). Single trigger — simpler than KMLDetailView's two-trigger
+        // (Trash filters by name only, without this task). Single trigger — simpler than KMLDetailView's two-trigger
         // split, which existed only to handle un-debounced collapse toggles.
         .task(id: SearchTrigger(query: searchQuery, segment: segment, dataRevision: catalog.searchDataRevision)) {
             let query = trimmedQuery
             guard segment == .files, !query.isEmpty else {
                 placeHits = []
+                hitAnnotations = [:]
                 return
             }
             try? await Task.sleep(for: Self.searchDebounce)
@@ -171,9 +182,11 @@ struct HomeView: View {
                 return
             }
             placeHits = hits
+            hitAnnotations = annotationsForHits(hits)
         }
         // Menu commands act on THIS window only: published as a focused-scene value.
         .focusedSceneValue(\.windowCommands, windowCommands)
+        .stopUpdatingConfirmation(target: $menuStopUpdatingTarget, stop: runStopUpdating)
         .toolbar { toolbarContent }
         .fileImporter(
             isPresented: $isFileImporterPresented,
@@ -187,34 +200,13 @@ struct HomeView: View {
             prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
         ))
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
-        // Rename alert — a single TextField prefilled with the current name. `presenting` keys
-        // the alert to the entry being renamed; Save commits the trimmed name via
-        // `catalog.rename` (which rejects an empty/whitespace name as a no-op).
-        .alert(
-            "Rename File",
-            isPresented: Binding(
-                get: { renameTarget != nil },
-                set: {
-                    if !$0 {
-                        renameTarget = nil
-                    }
-                }
-            ),
-            presenting: renameTarget
-        ) { entry in
-            TextField("Name", text: $renameText)
-            Button("Save") {
-                let newName = renameText
-                Task { await catalog.rename(entry, to: newName) }
-                renameTarget = nil
-            }
-            Button("Cancel", role: .cancel) { renameTarget = nil }
-        }
         .onChange(of: canSelect) { _, allowed in
             if !allowed {
                 endSelecting()
             }
         }
+        // A selection belongs to one segment's list; switching segments leaves select mode.
+        .onChange(of: segment) { endSelecting() }
         // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
         // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
         // split column, and wraps it in its own NavigationStack so its title bar renders.
@@ -222,7 +214,7 @@ struct HomeView: View {
             NavigationStack {
                 SettingsView()
                     .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button(role: .close) { isSettingsPresented = false }
                         }
                     }

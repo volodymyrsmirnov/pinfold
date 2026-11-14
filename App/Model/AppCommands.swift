@@ -44,23 +44,51 @@ struct AppCommands: Commands {
         }
     }
 
+    /// The selected file's actions, in the order of its row menu: the online-list group, then
+    /// Archive. Share isn't here: a
+    /// menu-bar command can't present the share sheet.
     @ViewBuilder
     private var fileButtons: some View {
-        Button("Rename\u{2026}") { window?.renameSelected() }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!(window?.canRename ?? false))
-        Button("Move to Trash") { window?.trashSelected() }
-            .keyboardShortcut(.delete, modifiers: .command)
-            .disabled(!(window?.canTrash ?? false))
+        Section {
+            Button("Refresh Now") { window?.refreshSelected() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!(window?.canRefreshNow ?? false))
+            Button("Copy URL") { window?.copySelectedURL() }
+                .disabled(!(window?.canCopyURL ?? false))
+            Button("Stop Updating\u{2026}") { window?.stopUpdatingSelected() }
+                .disabled(!(window?.canStopUpdating ?? false))
+        }
+        Section {
+            Button("Archive") { window?.trashSelected() }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .disabled(!(window?.canTrash ?? false))
+        }
     }
 
+    /// The open place's actions, in the order of its "⋯" menu (`PlacemarkActions`), with Open
+    /// in Maps — the place screen's primary button — first. Share isn't here: a menu-bar
+    /// command can't present the share sheet.
     @ViewBuilder
     private var placeButtons: some View {
-        Button("Toggle Favorite") { place?.toggle() }
-            .keyboardShortcut("d", modifiers: .command)
-            .disabled(!(place?.canToggleFavorite ?? false))
-        Button("Open in Maps") { place?.open() }
-            .keyboardShortcut("o", modifiers: [.command, .shift])
-            .disabled(!(place?.canOpenInMaps ?? false))
+        Section {
+            Button("Open in Maps") { place?.open() }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(!(place?.canOpenInMaps ?? false))
+            Button("Show on Map") { place?.showOnMap?() }
+                .disabled(place?.showOnMap == nil)
+        }
+        Section {
+            Button(place?.favoriteTitle ?? String(localized: "Add to Favorites")) { place?.toggle() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(!(place?.canToggleFavorite ?? false))
+            Button(place?.visitedTitle ?? String(localized: "Mark as Seen")) { place?.toggleVisited?() }
+                .disabled(place?.toggleVisited == nil)
+        }
+        Section {
+            Button("Copy Coordinates") { place?.copyCoordinates?() }
+                .disabled(place?.copyCoordinates == nil)
+            Button("Copy Name") { place?.copyName?() }
+                .disabled(place?.copyName == nil)
+        }
     }
 }

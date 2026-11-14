@@ -106,7 +106,7 @@ struct ImportAlertsModifier: ViewModifier {
     // MARK: - Duplicate alert
 
     private var duplicateTitle: LocalizedStringKey {
-        importCoordinator.pendingDuplicate?.kind == .trashed ? "File in Trash" : "Duplicate File"
+        importCoordinator.pendingDuplicate?.kind == .trashed ? "File in Archive" : "Duplicate File"
     }
 
     private func duplicateMessage(for dup: ImportCoordinator.DuplicateAlert) -> LocalizedStringKey {
@@ -115,7 +115,7 @@ struct ImportAlertsModifier: ViewModifier {
         case .active:
             "\"\(name)\" has already been imported. Would you like to import it again?"
         case .trashed:
-            "\"\(name)\" is already in the Trash. Restore it, or import a new copy?"
+            "\"\(name)\" is already in the Archive. Restore it, or import a new copy?"
         }
     }
 
@@ -125,7 +125,7 @@ struct ImportAlertsModifier: ViewModifier {
         case .active:
             Button("Import Anyway") { importAnyway() }
         case .trashed:
-            Button("Restore from Trash") {
+            Button("Restore from Archive") {
                 importCoordinator.restoreTrashedDuplicate(
                     catalog: catalog, cache: resourceCache
                 )

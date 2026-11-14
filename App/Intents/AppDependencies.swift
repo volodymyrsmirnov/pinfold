@@ -56,4 +56,13 @@ final class NavigationRouter {
     func openEntry(folderName: String) {
         pendingEntryFolderName = folderName
     }
+
+    /// Bumped to ask `RootView` to close the open file (clear the selection), e.g. after it is
+    /// moved to Trash from its own screen. A counter, so every request re-fires `.onChange`.
+    private(set) var closeEntryRequests = 0
+
+    /// Closes the open file: back to the file list on iPhone, an empty detail column on iPad.
+    func closeEntry() {
+        closeEntryRequests += 1
+    }
 }

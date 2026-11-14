@@ -134,8 +134,8 @@ Each item has an id, a rough size and an evidence level.
 
 - [X] **C1 ★ Confirm permanent delete, add Empty Trash** · `S` · read
   "Delete" in the Trash is permanent on one tap, from both the swipe and the context menu. There is no Empty Trash and no automatic purge. `App/Views/HomeView.swift:403`. Options to tick separately:
-  - [X] Confirmation dialog on permanent delete
-  - [X] Empty Trash button
+  - [X] Confirmation dialog on permanent delete — later removed (2.1, owner decision): Trash deletes without asking
+  - [X] Empty Trash button — later replaced (2.1) by Select mode with a bulk Delete
   - [ ] Auto-purge after 30 days
 
 - [X] **C2 ★ Search ignores accents** · `S` · read
@@ -160,8 +160,8 @@ Each item has an id, a rough size and an evidence level.
 
 - [X] **C8 iPad and Mac conveniences** · `M` · read. Tick separately:
   - [X] Drag and drop a `.kml`/`.kmz` onto the window to import
-  - [X] Multi-select files for bulk trash and tagging
-  - [X] More menu commands and shortcuts (only ⌘I and ⌘F exist): trash, rename, edit tags, favourite, open in maps
+  - [X] Multi-select files for bulk trash (and bulk delete in Trash); tagging was removed in 2.1
+  - [X] More menu commands and shortcuts (only ⌘I and ⌘F exist): trash, favourite, open in maps, plus (2.1) the online-list, Seen and copy actions; rename and tags were removed in 2.1
 
 - [X] **C9 Storage usage and Clear Cache in Settings** · `S`
   Show how much space files and cached images take, with a way to clear the image cache.

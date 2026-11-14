@@ -123,6 +123,10 @@ struct PhotoViewer: View {
     let item: Item
 
     @State private var selection: Int
+    /// Decoded photos for the current page and its neighbours, by page index.
+    @State private var images: [Int: UIImage] = [:]
+    /// Pages whose file couldn't be decoded, so they aren't retried on every swipe.
+    @State private var failures: Set<Int> = []
     @Environment(\.dismiss) private var dismiss
 
     init(item: Item) {
@@ -134,13 +138,18 @@ struct PhotoViewer: View {
         NavigationStack {
             TabView(selection: $selection) {
                 ForEach(item.urls.indices, id: \.self) { index in
-                    ZoomablePhoto(url: item.urls[index], isCurrent: index == selection)
-                        .accessibilityLabel("Photo \(index + 1) of \(item.urls.count)")
-                        .tag(index)
+                    ZoomablePhoto(
+                        image: images[index],
+                        failed: failures.contains(index),
+                        isCurrent: index == selection
+                    )
+                    .accessibilityLabel("Photo \(index + 1) of \(item.urls.count)")
+                    .tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: item.urls.count > 1 ? .always : .never))
             .background { pagingShortcuts }
+            .task(id: selection) { await loadImages(around: selection) }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -171,6 +180,32 @@ struct PhotoViewer: View {
         }
     }
 
+    /// Keeps the photos for `centre` and the pages either side decoded, and drops the rest.
+    ///
+    /// The neighbours are decoded before they are swiped to, so a page slides in already showing
+    /// its photo instead of flashing the loading state; holding at most three bitmaps keeps
+    /// paging through a long gallery from piling them all up in memory. The current page loads
+    /// first. A decode that finishes after the user has paged on is still kept if its page is
+    /// next to the new one.
+    private func loadImages(around centre: Int) async {
+        let window = (centre - 1 ... centre + 1).filter(item.urls.indices.contains)
+        images = images.filter { window.contains($0.key) }
+        for index in [centre, centre + 1, centre - 1] where window.contains(index) {
+            guard images[index] == nil, !failures.contains(index) else { continue }
+            let loaded = await loadDisplayImage(item.urls[index])
+            if abs(index - selection) <= 1 {
+                if let loaded {
+                    images[index] = loaded
+                } else {
+                    failures.insert(index)
+                }
+            }
+            if Task.isCancelled {
+                return
+            }
+        }
+    }
+
     private func step(_ delta: Int) {
         let target = selection + delta
         guard item.urls.indices.contains(target) else { return }
@@ -185,43 +220,26 @@ struct PhotoViewer: View {
 
 // MARK: - ZoomablePhoto
 
-/// One page of the viewer: loads the cached file off the main thread, then shows it in a
-/// zooming scroll view. Zoom resets when the page is swiped away (`isCurrent` turns false), and
-/// the decoded bitmap is dropped when the page leaves the screen (`.task` reloads it on return),
-/// so paging through many photos doesn't keep every one in memory.
+/// One page of the viewer: the photo in a zooming scroll view once `PhotoViewer` has decoded it,
+/// a spinner until then, or a message if it can't be read. Zoom resets when the page is swiped
+/// away (`isCurrent` turns false).
 private struct ZoomablePhoto: View {
-    let url: URL
+    let image: UIImage?
+    let failed: Bool
     let isCurrent: Bool
 
-    @State private var image: UIImage?
-    @State private var failed = false
-
     var body: some View {
-        Group {
-            if let image {
-                ZoomableImageView(image: image, isCurrent: isCurrent)
-            } else if failed {
-                ContentUnavailableView(
-                    "Image Unavailable",
-                    systemImage: "photo.slash",
-                    description: Text("This photo could not be loaded.")
-                )
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .task(id: url) {
-            guard image == nil else { return }
-            let loaded = await loadDisplayImage(url)
-            if Task.isCancelled {
-                return
-            }
-            image = loaded
-            failed = loaded == nil
-        }
-        .onDisappear {
-            image = nil
+        if let image {
+            ZoomableImageView(image: image, isCurrent: isCurrent)
+        } else if failed {
+            ContentUnavailableView(
+                "Image Unavailable",
+                systemImage: "photo.slash",
+                description: Text("This photo could not be loaded.")
+            )
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
