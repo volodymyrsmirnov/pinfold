@@ -149,9 +149,25 @@ import Testing
         try storage.updateMetadata(forFolderNamed: "f") { $0.favoriteKeys.insert("remote") }
         await catalog.reload()
 
+        // The store already held (an open file) is refreshed by the rescan itself.
+        #expect(store.isFavorite(key: "remote"))
         let again = try catalog.annotations(for: #require(catalog.active.first))
         #expect(again === store)
-        #expect(store.isFavorite(key: "remote"))
+    }
+
+    @Test func annotations_storesOfDeletedFilesAreDropped() async throws {
+        let (catalog, storage) = makeCatalog()
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+        let entry = try #require(catalog.trashed.first)
+        let before = catalog.annotations(for: entry)
+
+        await catalog.deleteForever(entry)
+        try seedFolder(storage, folder: "gone", trashedAt: Date(timeIntervalSince1970: 9))
+        await catalog.reload()
+
+        // A new file in the same folder gets a fresh store, not the deleted file's.
+        #expect(try catalog.annotations(for: #require(catalog.trashed.first)) !== before)
     }
 
     @Test func deleteForever_twiceIsQuietNoOp() async throws {

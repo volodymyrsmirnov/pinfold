@@ -157,6 +157,13 @@ struct KMLDetailView: View {
             refreshError = nil
             stopUpdatingTarget = nil
         }
+        // The iCloud toggle moved storage: take the catalogue's store for the new root, so
+        // favourites and notes keep writing where the sidecar now lives.
+        .onChange(of: catalog?.storage.root) { _, _ in
+            if let catalog {
+                annotations = catalog.annotations(for: liveEntry)
+            }
+        }
         // One cancellable reload per entry and live content hash (see `reloadIfContentChanged`).
         .task(id: contentKey) {
             await reloadIfContentChanged(to: liveEntry)

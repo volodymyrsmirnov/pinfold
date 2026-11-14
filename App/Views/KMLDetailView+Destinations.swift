@@ -33,7 +33,9 @@ extension KMLDetailView {
                         placemarks: outline.mappablePlacemarks,
                         document: document,
                         entry: entry,
-                        initialFocusKey: nil
+                        initialFocusKey: nil,
+                        // A search's results: frame them, not wherever the map was last left.
+                        fitsPlacemarks: !outlineQuery.isEmpty
                     )
                     .environment(annotations)
                 } else {

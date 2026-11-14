@@ -35,6 +35,10 @@ struct PlacemarkDetailView: View {
 
     /// Whether to show the map picker sheet.
     @State private var showMapPicker = false
+    /// Whether this screen is the top of its stack. A screen covered by a pushed map (or a
+    /// place opened from that map) keeps existing, so it stops publishing its menu-bar
+    /// commands, as `KMLDetailView` does, or the scene would hold two for one key.
+    @State private var isOnScreen = false
     /// Fallbacks for macOS "Designed for iPad" navigation/sheet hosts that can drop typed
     /// environment values from pushed destinations. Normal app flows still use the injected
     /// environment instances.
@@ -85,7 +89,9 @@ struct PlacemarkDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarMenu }
         // Favourite / Open in Maps menu commands act on the place open in THIS window.
-        .focusedSceneValue(\.placeCommands, placeCommands)
+        .focusedSceneValue(\.placeCommands, isOnScreen ? placeCommands : nil)
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .sheet(isPresented: $showMapPicker) {
             if let coord = placemark.coordinate {
                 MapPickerSheet(

@@ -17,6 +17,9 @@ struct PlacemarkMapView: View {
     /// shown), instead of the default fit-all-pins. Set by "Show on Embedded Map" on the POI
     /// page; `nil` for the file's Map toolbar button (which fits all pins).
     var initialFocusKey: String?
+    /// Frame `placemarks` instead of restoring the file's saved camera: set for "Show N Results
+    /// on Map", whose matches may lie outside wherever the map was last left.
+    var fitsPlacemarks = false
 
     @Environment(\.resourceCache) private var resourceCache
     @Environment(\.storageLocations) private var storage
@@ -25,6 +28,8 @@ struct PlacemarkMapView: View {
     @Environment(NavigationRouter.self) private var router: NavigationRouter?
 
     @State private var selectedPlacemarkKey: String?
+    /// Whether the map is the top of its stack (see `PlacemarkDetailView.isOnScreen`).
+    @State private var isOnScreen = false
     @State private var locationAuth = LocationAuthorization()
     @State private var network = NetworkStatus()
 
@@ -58,6 +63,7 @@ struct PlacemarkMapView: View {
                 favoriteKeys: annotations?.favoriteKeys ?? [],
                 visitedKeys: annotations?.visitedKeys ?? [],
                 initialFocusKey: initialFocusKey,
+                ignoresSavedCamera: fitsPlacemarks,
                 selectedKey: $selectedPlacemarkKey
             )
             .ignoresSafeArea()
@@ -85,8 +91,10 @@ struct PlacemarkMapView: View {
         // place's long-press menu (Open in Maps and Show on Map belong to the place screen).
         .focusedSceneValue(
             \.placeCommands,
-            selectedPlacemark.map { PlaceCommands(place: PlaceRef($0), annotations: annotations) }
+            isOnScreen ? selectedPlacemark.map { PlaceCommands(place: PlaceRef($0), annotations: annotations) } : nil
         )
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .animation(.snappy, value: selectedPlacemarkKey)
         .animation(.default, value: network.isOnline)
         // Let the map show through the navigation bar; the glass back button floats over
@@ -133,6 +141,11 @@ private struct PlacemarkPreviewCard: View {
                             .foregroundStyle(annotations?.isVisited(placemark) == true ? .secondary : .primary)
                             .lineLimit(1)
                     }
+                    // "Name, Favorite, Seen", as the place's rows and screen read it.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(
+                        annotations?.accessibilityDescription(for: placemark) ?? (placemark.name ?? "Untitled")
+                    )
                     if let html = placemark.descriptionHTML, !html.isEmpty {
                         let preview = AttributedHTML.plainText(html)
                             .trimmingCharacters(in: .whitespacesAndNewlines)

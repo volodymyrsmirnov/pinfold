@@ -95,12 +95,14 @@ extension HomeView {
             isHighlighted: !showsRowDisclosure && selection == entry.id
         )
         .tag(entry.id)
+        // Full swipe left archives, as in Mail. Archiving is recoverable, so it isn't red.
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
+            Button {
                 trash(entry)
             } label: {
-                Label("Trash", systemImage: "trash")
+                Label("Archive", systemImage: "archivebox")
             }
+            .tint(.purple)
             .disabled(entry.isReadOnly)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {

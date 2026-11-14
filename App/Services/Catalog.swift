@@ -82,6 +82,16 @@ import Observation
         let resourceDirs = Set(entries.map { storage.resourcesDirectory(for: $0) })
         let sidecars = Set(entries.map { storage.metadataFile(for: $0) })
         PlacemarkIndexStore.shared.prune(keeping: resourceDirs, sidecars: sidecars)
+        // Shared annotation stores: drop those of files that are gone and of a previous root,
+        // and re-read the rest now, so a file already open sees favourites / Seen / notes that
+        // synced in, or a read-only change, without asking for its store again.
+        let liveEntries = Dictionary(entries.map { (annotationStoreKey(for: $0), $0) }, uniquingKeysWith: { first, _ in first })
+        annotationStores = annotationStores.filter { liveEntries[$0.key] != nil }
+        for (key, cached) in annotationStores {
+            guard let entry = liveEntries[key] else { continue }
+            cached.store.reload(entry: entry)
+            annotationStores[key] = (cached.store, searchDataRevision, entry.isReadOnly)
+        }
     }
 
     /// Starts a single background materialization pass. If one is already running, marks the
@@ -176,7 +186,7 @@ import Observation
     /// entry's read-only state changed; otherwise returned as is, so repeated searches don't
     /// re-read every sidecar.
     func annotations(for entry: CatalogEntry) -> PlacemarkAnnotations {
-        let key = "\(storage.root.path)\n\(entry.storageFolderName)"
+        let key = annotationStoreKey(for: entry)
         if let cached = annotationStores[key] {
             if cached.revision != searchDataRevision || cached.readOnly != entry.isReadOnly {
                 cached.store.reload(entry: entry)
@@ -187,6 +197,10 @@ import Observation
         let store = PlacemarkAnnotations(entry: entry, storage: storage)
         annotationStores[key] = (store, searchDataRevision, entry.isReadOnly)
         return store
+    }
+
+    private func annotationStoreKey(for entry: CatalogEntry) -> String {
+        "\(storage.root.path)\n\(entry.storageFolderName)"
     }
 
     /// Repoints the catalogue at a new root and reloads. Any file migration between roots

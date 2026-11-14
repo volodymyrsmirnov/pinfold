@@ -14,7 +14,7 @@ extension ImportCoordinator {
         }
     }
 
-    /// "Restore from Trash": brings the trashed copy back instead of importing a second one.
+    /// "Restore from Archive": brings the archived (trashed) copy back instead of importing a second one.
     func restoreTrashedDuplicate(catalog: Catalog, cache: ResourceCache) {
         guard let dup = pendingDuplicate, dup.kind == .trashed else { return }
         pendingDuplicate = nil

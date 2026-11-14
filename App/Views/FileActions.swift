@@ -9,7 +9,7 @@ struct FileActionHandlers {
     let refreshNow: () -> Void
     /// Stop Updating (online lists): asks for confirmation first.
     let stopUpdating: () -> Void
-    /// Moves the file to Trash (closing it if it is open); `nil` hides Trash.
+    /// Moves the file to the Archive (closing it if it is open); `nil` hides Archive.
     let trash: (() -> Void)?
 }
 
@@ -18,7 +18,7 @@ struct FileActionHandlers {
 /// Groups, each separated: Share (while the original is on disk); then any actions only the
 /// caller's screen has (`screenActions` — the open file's Sort By and File Description, view
 /// options of that screen); then Refresh Now / Copy URL / Stop Updating for an online list; then
-/// Trash, last and destructive.
+/// Archive, last.
 struct FileActions<ScreenActions: View>: View {
     let entry: CatalogEntry
     /// The original on disk, or `nil` (an iCloud placeholder) to leave Share out.
@@ -69,8 +69,9 @@ struct FileActions<ScreenActions: View>: View {
         }
         if let trash = handlers.trash {
             Section {
-                Button(role: .destructive, action: trash) {
-                    Label("Trash", systemImage: "trash")
+                // Archive is recoverable (Restore from the Archive tab), so not destructive red.
+                Button(action: trash) {
+                    Label("Archive", systemImage: "archivebox")
                 }
                 .disabled(entry.isReadOnly)
             }
@@ -79,7 +80,7 @@ struct FileActions<ScreenActions: View>: View {
 }
 
 /// A file row's swipe-right actions, a subset of `FileActions` with the short labels swipe
-/// buttons need: Share, Refresh (online lists), Trash.
+/// buttons need: Share, Refresh (online lists), Archive.
 struct FileSwipeActions: View {
     let entry: CatalogEntry
     let originalURL: URL?
@@ -99,9 +100,10 @@ struct FileSwipeActions: View {
             .disabled(entry.isReadOnly || isRefreshing)
         }
         if let trash = handlers.trash {
-            Button(role: .destructive, action: trash) {
-                Label("Trash", systemImage: "trash")
+            Button(action: trash) {
+                Label("Archive", systemImage: "archivebox")
             }
+            .tint(.purple)
             .disabled(entry.isReadOnly)
         }
     }

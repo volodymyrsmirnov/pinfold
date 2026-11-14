@@ -45,7 +45,7 @@ struct AppCommands: Commands {
     }
 
     /// The selected file's actions, in the order of its row menu: the online-list group, then
-    /// Move to Trash (the macOS menu-bar wording for the same Trash action). Share isn't here: a
+    /// Archive. Share isn't here: a
     /// menu-bar command can't present the share sheet.
     @ViewBuilder
     private var fileButtons: some View {
@@ -59,7 +59,7 @@ struct AppCommands: Commands {
                 .disabled(!(window?.canStopUpdating ?? false))
         }
         Section {
-            Button("Move to Trash") { window?.trashSelected() }
+            Button("Archive") { window?.trashSelected() }
                 .keyboardShortcut(.delete, modifiers: .command)
                 .disabled(!(window?.canTrash ?? false))
         }

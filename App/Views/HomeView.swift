@@ -148,7 +148,7 @@ struct HomeView: View {
         .searchable(
             text: $searchQuery,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: segment == .files ? Text("Search files and places") : Text("Search Trash")
+            prompt: segment == .files ? Text("Search files and places") : Text("Search Archive")
         )
         .searchFocused($isSearchFocused)
         // Debounced, off-main search over each active entry's local placemark index. Re-keys on

@@ -116,7 +116,7 @@ extension HomeView {
             ToolbarSpacer(.flexible, placement: .bottomBar)
             ToolbarItem(placement: .bottomBar) {
                 if segment == .files {
-                    Button("Trash", systemImage: "trash", role: .destructive) { trashBulkSelection() }
+                    Button("Archive", systemImage: "archivebox") { trashBulkSelection() }
                         .disabled(bulkEntries.isEmpty)
                 } else {
                     // Deleting for good wears the same filled red glyph as a Trash row's Delete,
