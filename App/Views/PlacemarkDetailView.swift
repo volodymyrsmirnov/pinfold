@@ -227,20 +227,61 @@ struct PlacemarkDetailView: View {
         }
     }
 
+    /// One field as a chip: its name above its value. A value that is a single web address
+    /// makes the whole chip a link (tinted, with an arrow), so it can be tapped to open.
+    @ViewBuilder
     private func extendedDataChip(_ item: KMLDataItem) -> some View {
+        if let url = webURL(item.value) {
+            Link(destination: url) {
+                chipContent(item, isLink: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens in Safari")
+        } else {
+            chipContent(item, isLink: false)
+                .textSelection(.enabled)
+        }
+    }
+
+    private func chipContent(_ item: KMLDataItem, isLink: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(item.displayName ?? item.name)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(item.value)
-                .font(.caption.bold())
+            HStack(spacing: 4) {
+                Text(item.value)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if isLink {
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(isLink ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(maxWidth: 280, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.secondary.opacity(0.12))
         )
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The value as a URL when it is a single http(s) address.
+    private func webURL(_ value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.contains(where: \.isWhitespace),
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host() != nil
+        else { return nil }
+        return url
     }
 
     // MARK: - Open in Maps button
