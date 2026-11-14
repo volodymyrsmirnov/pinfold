@@ -9,11 +9,10 @@ import SwiftUI
 /// On appearance the original file is loaded and parsed off the main actor. While
 /// loading a `ProgressView` is shown; on error a `ContentUnavailableView` is shown.
 ///
-/// A search field is rendered as the first (non-sticky) row of the list, styled like
-/// the other groups. Typing in it filters the hierarchy in place — folders that contain
-/// matches stay, the rest are pruned — so results remain grouped by category. Because the
-/// search field lives in the list (not the navigation bar's search mode), the back and
-/// map toolbar buttons stay visible while searching, and the map plots the filtered set.
+/// Search is the system search bar, exactly as on the catalogue: activating it slides the title
+/// and toolbar away and shows a close button. Typing filters the hierarchy in place — folders
+/// that contain matches stay, the rest are pruned — so results remain grouped by category, and
+/// the map (once search is closed with the query kept) plots the filtered set.
 struct KMLDetailView: View {
     // MARK: - Properties
 
@@ -132,42 +131,15 @@ struct KMLDetailView: View {
         }
         .navigationTitle(entry.displayName)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            if refresher != nil, liveEntry.isOnline {
-                ToolbarItem(placement: .topBarTrailing) { onlineMenu }
-            }
-            // Sort menu: Document order vs. Nearest first. "Nearest" is disabled until a
-            // location fix is known (so the user isn't offered a sort that can't be applied).
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("Sort", selection: $nearestFirst) {
-                        Label("Document Order", systemImage: "list.bullet").tag(false)
-                        Label("Nearest First", systemImage: "location").tag(true)
-                    }
-                    .disabled(locationAuth.lastLocation == nil)
-                } label: {
-                    Image(systemName: nearestFirst ? "location.fill" : "arrow.up.arrow.down")
-                }
-                .accessibilityLabel("Sort")
-            }
-            if let info = documentInfo {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        infoSheet = info
-                    } label: {
-                        Image(systemName: "info.circle")
-                    }
-                    .accessibilityLabel("File description")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: EntryRoute.map(focusKey: nil)) {
-                    Image(systemName: "map")
-                }
-                .accessibilityLabel("Map")
-                .disabled((outline?.mappablePlacemarks.isEmpty ?? true))
-            }
-        }
+        // Names, descriptions, details and notes are all searched (C3, D8).
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text("Search places, descriptions and notes")
+        )
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .toolbar { toolbarContent }
         .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
         // An alert or dialog raised here belongs to this screen: never carry one back to the catalogue.
         .onAppear { isOnScreen = true }

@@ -2,8 +2,17 @@ import Foundation
 import PinfoldCore
 
 /// Off-main document loading for `KMLDetailView.loadDocument`, kept in free functions so the
-/// detached closures are compiled outside the view's SIL (see the `ClosureLifetimeFixup` note
-/// in FavoritesView.swift).
+/// detached closures are compiled outside the view's SIL.
+///
+/// ## The `ClosureLifetimeFixup` note
+///
+/// Other files point here. A `Task.detached { … }` closure written inside a `@MainActor async`
+/// method (or a large view `body`) makes the Swift SIL `ClosureLifetimeFixup` pass run a
+/// dominance analysis over the whole captured-closure graph; in big views it has taken minutes
+/// to compile one file. The fix used across the app: snapshot the inputs on the main actor as
+/// `Sendable` values, then call a `nonisolated` async free function (or a static member of a
+/// nonisolated type like this one) that owns the detach. Keep view `body`s small for the same
+/// reason: split large `List`/`ForEach`/`Section` trees into their own `View` structs.
 enum DocumentLoad {
     /// Parses only the document. Unlike `KMLReader.read` this never inflates a KMZ's resources
     /// into memory, so a large photo KMZ cannot exhaust it on open. Throws `CancellationError`

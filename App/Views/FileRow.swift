@@ -1,13 +1,19 @@
 import SwiftUI
 
-/// A list row representing a single imported KML/KMZ file in the catalogue.
+/// A list row representing a single imported file in the catalogue.
 ///
-/// Shows a map SF Symbol in a rounded tile, the file's `displayName` as the primary
-/// label, and a secondary line with the point count and formatted import date.
+/// Leading: a rounded tile whose glyph says where the list comes from — a document for a file
+/// imported from the device, a globe for an online list that refreshes from its URL. Then the
+/// file's `displayName` and a secondary line with the point count and the import date (or, for
+/// an online list, when it last updated). Trailing: a spinner while an online list refreshes,
+/// and a chevron when tapping the row pushes the file (`showsDisclosure`).
 struct FileRow: View {
     let entry: CatalogEntry
     /// The online-list status, or `nil` for a normal list (and for trashed rows).
     var online: OnlineStatus?
+    /// Whether to draw the trailing chevron: on when the row navigates to a new screen
+    /// (a collapsed split view), off in select mode, in Trash, and beside an open detail column.
+    var showsDisclosure = false
 
     /// What an online list's row shows: its glyph and the second line's tail.
     enum OnlineStatus: Equatable {
@@ -18,15 +24,7 @@ struct FileRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Rounded tile icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "map")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
-            }
+            sourceTile
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.displayName)
@@ -42,21 +40,32 @@ struct FileRow: View {
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
-
-                if !entry.tags.isEmpty {
-                    Label(entry.tags.joined(separator: ", "), systemImage: "tag")
-                        .font(.caption2)
-                        .foregroundStyle(.tint)
-                        .labelStyle(.titleAndIcon)
-                        .lineLimit(1)
-                }
             }
-            if let online {
-                Spacer(minLength: 0)
-                onlineGlyph(online)
+            Spacer(minLength: 0)
+            if online == .refreshing {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel("Updating")
+            }
+            if showsDisclosure {
+                RowDisclosureIndicator()
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// The leading tile: a document for an imported file, a globe for an online list.
+    private var sourceTile: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.15))
+                .frame(width: 44, height: 44)
+            Image(systemName: entry.isOnline ? "globe" : "doc")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(entry.isOnline ? "Online list" : "File")
     }
 
     /// Only an idle online list shows a relative time ("Updated 20s ago"); that row is
@@ -72,38 +81,15 @@ struct FileRow: View {
         }
     }
 
+    /// A failed update is called out in orange so it reads at a glance without a glyph.
     private func secondaryText(now: Date) -> some View {
         Text(Self.secondaryLine(entry: entry, online: online, now: now))
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(online == .failed ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
             .lineLimit(1)
     }
 
-    @ViewBuilder
-    private func onlineGlyph(_ status: OnlineStatus) -> some View {
-        switch status {
-        case .idle:
-            Image(systemName: "globe")
-                .foregroundStyle(.secondary)
-                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                .accessibilityLabel("Online list")
-        case .refreshing:
-            ProgressView()
-                .controlSize(.small)
-                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                .accessibilityLabel("Updating")
-        case .failed:
-            Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(.orange)
-                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                .accessibilityLabel("Couldn't update")
-        }
-    }
-
     // MARK: - Private helpers
-
-    /// The online glyph's square, shared by the globe, warning and spinner so they match.
-    private static let glyphSize: CGFloat = 20
 
     private var readOnlyBadge: String {
         entry.sidecarState == .notDownloaded ? "Downloading from iCloud" : "Saved data unreadable"
@@ -144,5 +130,18 @@ struct FileRow: View {
 
     private static func relative(_ date: Date, to now: Date) -> String {
         relativeFormatter.localizedString(for: date, relativeTo: now)
+    }
+}
+
+// MARK: - RowDisclosureIndicator
+
+/// The trailing chevron of a row that pushes a new screen, drawn like a `NavigationLink`'s.
+/// `List(selection:)` rows navigate through the split view and so get no chevron of their own.
+struct RowDisclosureIndicator: View {
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
     }
 }

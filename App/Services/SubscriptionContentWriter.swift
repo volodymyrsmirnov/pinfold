@@ -75,7 +75,7 @@ private struct Applied {
 }
 
 /// Runs the refresh write in a detached task. A `nonisolated` free function so the detached
-/// closure is compiled outside any actor-isolated caller (see FavoritesView.swift).
+/// closure is compiled outside any actor-isolated caller (see DocumentLoad.swift).
 private nonisolated func applyOffMain(
     _ result: ImportResult, to entry: CatalogEntry, storage: StorageLocations, cache: ResourceCache
 ) async throws -> Applied {

@@ -12,8 +12,8 @@ enum Segment: Hashable {
 
 /// The root screen of Pinfold.
 ///
-/// Shows a segmented Files / Trash list. The "+" toolbar button opens a `fileImporter`
-/// to pick KML/KMZ files. The gear toolbar button presents Settings as a modal sheet.
+/// Shows a segmented Files / Trash list. The "+" toolbar menu imports a local file or follows a
+/// remote URL; Select (Files) or Empty (Trash) sits in its own pill before the Settings gear.
 ///
 /// Layout: the `NavigationTitle` "Pinfold" stays in the nav bar; the segmented Picker
 /// lives in a `safeAreaInset` bar above the List so it never replaces the title; empty
@@ -36,16 +36,16 @@ struct HomeView: View {
     // Not `private`: read from the `HomeViewRows` extension (a separate file) for the
     // active-row context menu (Share/Trash).
     @Environment(Catalog.self) var catalog
-    @Environment(AppSettings.self) var settings
     // Not `private`: read from the `HomeViewBanner` extension (a separate file).
     @Environment(ImportFailureLog.self) var importFailureLog
     @Environment(\.resourceCache) var resourceCache
     /// The shared import queue, owned by `RootView`.
     @Environment(ImportCoordinator.self) var importCoordinator
+    /// Whether rows show a chevron (the split view is collapsed into one stack).
+    @Environment(\.showsRowDisclosure) var showsRowDisclosure
 
     // MARK: - Local state
 
-    /// Not `private`: read from the `HomeViewTags` extension (a separate file) for the chips bar.
     @State var segment: Segment = .files
     /// Presents the `fileImporter` picker sheet. Distinct from
     /// `importCoordinator.isImporting`, which tracks the import *pipeline* being busy.
@@ -60,10 +60,8 @@ struct HomeView: View {
     /// Presents the Settings sheet. Settings is a modal sheet (not a pushed/detail screen) so
     /// it covers the whole window on iPad/Mac rather than landing in one split column.
     @State var isSettingsPresented = false
-    /// Presents the consolidated Favorites sheet (catalogue-wide starred placemarks). A sheet,
-    /// like Settings, so it covers the whole window; tapping a favorite dismisses it and drives
-    /// the sidebar selection + deep-link.
-    @State var isFavoritesPresented = false
+    /// Presents the Empty Trash confirmation, anchored to the toolbar's Empty button.
+    @State var isConfirmingEmptyTrash = false
 
     /// The entry currently being renamed (drives the rename alert), or `nil` when no rename is
     /// in progress. Set from the active-row context menu's "Rename" action (in HomeViewRows).
@@ -72,27 +70,11 @@ struct HomeView: View {
     /// current name when the alert opens.
     @State var renameText = ""
 
-    /// The entry currently having its tags edited (drives the tags alert), or `nil`. Set from
-    /// the active-row context menu's "Edit Tags…" action (in HomeViewRows).
-    @State var tagsTarget: CatalogEntry?
-    /// The editable, comma-separated tags text bound to the tags alert's `TextField`, prefilled
-    /// by joining the entry's current tags with ", ". Parsed back by comma on Save.
-    @State var tagsText = ""
-
     /// Whether the Files list is in explicit multi-select mode (C8). The list then binds
     /// `bulkSelection` instead of `selection`, so picking rows never drives the detail column.
     @State var isSelecting = false
     /// The ids ticked in select mode.
     @State var bulkSelection: Set<CatalogEntry.ID> = []
-    /// The entries a bulk "Tag" is about to be applied to (drives the shared tags alert).
-    @State var bulkTagTargets: [CatalogEntry]?
-    /// The editable text for the bulk tags alert.
-    @State var bulkTagsText = ""
-
-    /// The currently-selected filter chip tag (Files segment), or `nil` for "All". Hidden while
-    /// searching (chips are not shown during search to keep filter state simple).
-    /// Not `private`: read/written from the `HomeViewTags` extension (a separate file).
-    @State var selectedTag: String?
 
     /// Catalogue-wide search query, bound to the `.searchable` field (Files segment only).
     @State var searchQuery = ""
@@ -122,11 +104,10 @@ struct HomeView: View {
         catalog.active
     }
 
-    /// `active` reordered by the user's chosen sort. This is the presentation order for the
-    /// Files list and the "Files" search-results section; the catalogue's storage order
-    /// (newest-first, from the scanner) is unchanged — sorting is purely a view concern.
+    /// `active`, newest import first: the order of the Files list, select mode and the "Files"
+    /// search-results section.
     var sortedActive: [CatalogEntry] {
-        settings.entrySort.apply(to: active)
+        CatalogOrder.newestFirst(active)
     }
 
     var trashed: [CatalogEntry] {
@@ -139,7 +120,6 @@ struct HomeView: View {
         searchQuery.trimmingCharacters(in: .whitespaces)
     }
 
-    /// Not `private`: read from the `HomeViewTags` extension (a separate file).
     var isSearching: Bool {
         segment == .files && !trimmedQuery.isEmpty
     }
@@ -150,7 +130,6 @@ struct HomeView: View {
         VStack(spacing: 0) {
             SyncStatusBanner()
             pickerBar
-            tagChipsBar
             importFailureBanner
             fileList
         }
@@ -197,11 +176,6 @@ struct HomeView: View {
         }
         // Menu commands act on THIS window only: published as a focused-scene value.
         .focusedSceneValue(\.windowCommands, windowCommands)
-        // Reset a stale tag filter when its tag vanishes. MUST hang off the always-mounted
-        // body, not `tagChipsBar` (which unmounts when the last tag goes — see HomeViewTags).
-        .onChange(of: allTags) { _, tags in
-            resetStaleTagFilter(tags)
-        }
         .toolbar { toolbarContent }
         .fileImporter(
             isPresented: $isFileImporterPresented,
@@ -238,12 +212,6 @@ struct HomeView: View {
             }
             Button("Cancel", role: .cancel) { renameTarget = nil }
         }
-        // Edit Tags alert — the full alert tree lives in `EditTagsAlertModifier`
-        // (HomeViewTags.swift) so this body chain stays inside the type-checker's budget.
-        .modifier(EditTagsAlertModifier(target: $tagsTarget, text: $tagsText, save: saveTags))
-        .modifier(EditTagsAlertModifier(
-            target: $bulkTagTargets, text: $bulkTagsText, title: "Add Tags", save: saveBulkTags
-        ))
         .onChange(of: canSelect) { _, allowed in
             if !allowed {
                 endSelecting()
@@ -257,16 +225,10 @@ struct HomeView: View {
                 SettingsView()
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { isSettingsPresented = false }
+                            Button(role: .close) { isSettingsPresented = false }
                         }
                     }
             }
-        }
-        // Consolidated Favorites as a modal sheet. It owns its own NavigationStack (title +
-        // Done). Tapping a favorite dismisses the sheet and drives the same selection +
-        // `pendingPlacemarkKey` deep-link the catalogue "Places" search hits use.
-        .sheet(isPresented: $isFavoritesPresented) {
-            FavoritesView(selection: $selection, pendingPlacemarkKey: $pendingPlacemarkKey)
         }
         // Inbox draining (share-extension handoff) is performed once in RootView's
         // .task on launch; it is intentionally NOT duplicated here.

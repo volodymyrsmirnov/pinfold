@@ -16,9 +16,6 @@ struct CatalogEntry: Identifiable, Equatable {
     var contentSHA256: String
     var storageFolderName: String
     var trashedAt: Date?
-    /// User-assigned labels (per-ENTRY), copied from the sidecar so the catalogue list can
-    /// render filter chips and per-row tag text without re-reading metadata. Kept sorted.
-    var tags: [String] = []
     /// Set when the list follows a URL and refreshes itself (see `Subscription`).
     var subscription: Subscription?
     /// Whether the entry's `metadata.json` was read normally. Anything but `.ok` means the
@@ -63,7 +60,6 @@ extension CatalogEntry {
             contentSHA256: metadata.contentSHA256,
             storageFolderName: storageFolderName,
             trashedAt: metadata.trashedAt,
-            tags: metadata.tags,
             subscription: metadata.subscription
         )
     }
@@ -78,7 +74,6 @@ extension CatalogEntry {
             pointCount: pointCount,
             contentSHA256: contentSHA256,
             trashedAt: trashedAt,
-            tags: tags,
             subscription: subscription
         )
     }

@@ -152,31 +152,23 @@ import Testing
         #expect(try storage.readMetadata(forFolderNamed: "f")?.displayName == original)
     }
 
-    @Test func catalog_setTags_persists() async throws {
+    @Test func legacyTags_surviveRenameAndTrash() async throws {
+        // Tagging is gone from the UI, but tags written by older versions must stay in the
+        // sidecar untouched so a device still on that version doesn't lose them on sync.
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "f")
+        try storage.updateMetadata(forFolderNamed: "f") { $0.tags = ["art", "food"] }
         await catalog.reload()
         let entry = try #require(catalog.active.first)
 
-        await catalog.setTags(["food", "art"], for: entry)
+        await catalog.rename(entry, to: "Renamed")
+        let renamed = try #require(catalog.active.first)
+        await catalog.moveToTrash(renamed)
 
-        // Surfaced on the in-memory entry (sorted) after reload.
-        #expect(catalog.active.first?.tags == ["art", "food"])
-        // Persisted to the on-disk sidecar (survives a fresh scan), and sorted there too.
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["art", "food"])
-    }
-
-    @Test func setTags_normalizes() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "f")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-
-        // Whitespace, empties, and case-insensitive duplicates (keep first casing).
-        await catalog.setTags(["  Food ", "", "food", "ART", "art", "   "], for: entry)
-
-        #expect(catalog.active.first?.tags == ["ART", "Food"])
-        #expect(try storage.readMetadata(forFolderNamed: "f")?.tags == ["ART", "Food"])
+        let meta = try #require(try storage.readMetadata(forFolderNamed: "f"))
+        #expect(meta.displayName == "Renamed")
+        #expect(meta.trashedAt != nil)
+        #expect(meta.tags == ["art", "food"])
     }
 
     @Test func setStorage_repointsRootAndReloads() async throws {
@@ -251,17 +243,6 @@ import Testing
         #expect(catalog.active.first?.displayName == "Rome")
     }
 
-    @Test func setTagsOnReadOnlyEntry_setsActionError() async throws {
-        let (catalog, storage) = makeCatalog()
-        _ = try seedUnreadable(storage, folder: "bad")
-        await catalog.reload()
-        let entry = try #require(catalog.active.first)
-
-        await catalog.setTags(["a"], for: entry)
-
-        #expect(catalog.actionError != nil)
-    }
-
     @Test func moveToTrashOnReadOnlyEntry_setsActionError() async throws {
         let (catalog, storage) = makeCatalog()
         _ = try seedUnreadable(storage, folder: "bad")
@@ -320,32 +301,12 @@ import Testing
         #expect(catalog.actionError == nil)
     }
 
-    @Test func bulkAddTags_mergesWithExistingTags() async throws {
-        let (catalog, storage) = makeCatalog()
-        try seedFolder(storage, folder: "a")
-        try seedFolder(storage, folder: "b")
-        try storage.updateMetadata(forFolderNamed: "a") { $0.tags = ["Hiking", "zoo"] }
-        await catalog.reload()
-
-        await catalog.addTags(["hiking", " Food ", ""], to: catalog.active)
-
-        let byName = Dictionary(uniqueKeysWithValues: catalog.active.map { ($0.storageFolderName, $0.tags) })
-        #expect(byName["a"] == ["Food", "Hiking", "zoo"])
-        #expect(byName["b"] == ["Food", "hiking"])
-        #expect(catalog.actionError == nil)
-    }
-
     @Test func bulkActionsSkipReadOnlyEntries() async throws {
         let (catalog, storage) = makeCatalog()
         try seedFolder(storage, folder: "ok")
         let garbage = try seedUnreadable(storage, folder: "bad")
         await catalog.reload()
         let all = catalog.active
-
-        await catalog.addTags(["t"], to: all)
-        #expect(catalog.actionError != nil)
-        #expect(catalog.active.first { $0.storageFolderName == "ok" }?.tags == ["t"])
-        catalog.actionError = nil
 
         await catalog.moveToTrash(all)
 

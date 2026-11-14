@@ -4,18 +4,15 @@ import SwiftUI
 
 //
 // The catalogue list's supporting sections, factored out of `HomeView.swift` to keep that file
-// focused on the root layout, toolbar, and import flow. Merged from the former
-// `HomeViewBanner` / `HomeViewTags` / `HomeViewRows` / `HomeSearchResults` files: everything here
-// is one logical surface (the rows, their menus, the tag-filter chips, the search results, and
-// the import-failure banner), and a single file lets members used only between these pieces be
-// `private` rather than file-spanning `internal`.
+// focused on the root layout, toolbar, and import flow. Everything here is one logical surface
+// (the rows, their menus, the search results, and the import-failure banner), and a single file
+// lets members used only between these pieces be `private` rather than file-spanning `internal`.
 //
 // Note on access control: `private` is file-scoped, so anything `HomeView.body` (in
-// `HomeView.swift`) calls — `importFailureBanner`, `tagChipsBar`, `displayedActive`, `allTags`,
-// `resetStaleTagFilter`, `saveTags`, `activeRowMenu`, `searchResults` — and any stored `@State`
-// the extensions read (`placeHits`, `renameText`, …) stays `internal`. Members both defined and
-// used only within this file (e.g. `matchingFiles`, `groupedPlaceHits`, the row/hit helpers) are
-// `private`.
+// `HomeView.swift`) calls — `importFailureBanner`, `activeRowMenu`, `searchResults` — and any
+// stored `@State` the extensions read (`placeHits`, `renameText`, …) stays `internal`. Members
+// both defined and used only within this file (e.g. `matchingFiles`, `groupedPlaceHits`, the
+// row/hit helpers) are `private`.
 
 // MARK: - Import-failure banner
 
@@ -62,86 +59,7 @@ extension HomeView {
     }
 }
 
-// MARK: - Tag filtering
-
-extension HomeView {
-    /// `sortedActive` narrowed to the selected filter chip's tag, if any. "All" (`selectedTag ==
-    /// nil`) shows everything. Matching is case-insensitive against each entry's stored tags.
-    var displayedActive: [CatalogEntry] {
-        guard let selectedTag else { return sortedActive }
-        return sortedActive.filter { entry in
-            entry.tags.contains { $0.localizedCaseInsensitiveCompare(selectedTag) == .orderedSame }
-        }
-    }
-
-    /// Every distinct tag across the active entries, sorted case-insensitively — the source for
-    /// the filter chips. Empty when no active entry has a tag (the chips bar then hides).
-    var allTags: [String] {
-        var seen: Set<String> = []
-        var result: [String] = []
-        for entry in active {
-            for tag in entry.tags where seen.insert(tag.lowercased()).inserted {
-                result.append(tag)
-            }
-        }
-        return result.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
-
-    /// Clears `selectedTag` when it is no longer one of the live tags, so the Files list never
-    /// silently filters to empty. Called from an `.onChange(of: allTags)` on HomeView's
-    /// always-mounted body — NOT from inside `tagChipsBar` — because the bar is conditionally
-    /// mounted on `!allTags.isEmpty`: when the LAST tagged entry is untagged/trashed while its
-    /// tag is the active filter, the bar (and any `.onChange` attached to it) unmounts in the
-    /// same update WITHOUT firing, leaving `selectedTag` stale, `displayedActive` empty, and no
-    /// chips visible to recover. Hoisted to the body, the reset covers BOTH that all-tags-gone
-    /// case (`tags` empty → `contains` fails → reset) and the partial-vanish case (the selected
-    /// tag gone while other tags remain).
-    func resetStaleTagFilter(_ tags: [String]) {
-        if let selectedTag, !tags.contains(selectedTag) {
-            self.selectedTag = nil
-        }
-    }
-
-    /// Commits the Edit Tags alert: hands the raw comma-split parts to `catalog.setTags`, which
-    /// trims/dedupes/sorts them (see `Catalog.normalizeTags`). A named method (not an inline
-    /// closure in `body`) so the `.modifier(...)` line stays cheap to type-check.
-    func saveTags(_ entry: CatalogEntry, _ parts: [String]) {
-        Task { await catalog.setTags(parts, for: entry) }
-    }
-
-    /// A horizontally-scrolling row of tag filter chips, shown only on the Files segment, only
-    /// when not searching, and only when at least one active entry has a tag. An "All" chip
-    /// clears the filter; each tag chip toggles `selectedTag`. Hidden during search to keep the
-    /// filter state simple (chips + search would otherwise need an AND/OR policy).
-    @ViewBuilder
-    var tagChipsBar: some View {
-        if segment == .files, !isSearching, !allTags.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    TagChip(label: String(localized: "All"), isSelected: selectedTag == nil) {
-                        selectedTag = nil
-                    }
-                    ForEach(allTags, id: \.self) { tag in
-                        TagChip(label: tag, isSelected: selectedTag == tag) {
-                            selectedTag = (selectedTag == tag) ? nil : tag
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 8)
-            // NOTE: the stale-selectedTag reset deliberately does NOT live here. This bar is
-            // conditionally mounted (`!allTags.isEmpty`): when the LAST tagged entry loses its
-            // tag, the bar unmounts in the same update and an `.onChange` attached here would
-            // never fire — `selectedTag` would go stale and the list would filter to empty
-            // with no chips visible to recover. The reset lives on HomeView's always-mounted
-            // body instead (`.onChange(of: allTags)` in HomeView.swift), which calls
-            // `resetStaleTagFilter` above.
-        }
-    }
-}
-
-// MARK: - Active-row actions (context menu + rename/tags plumbing)
+// MARK: - Active-row actions (context menu + rename plumbing)
 
 extension HomeView {
     /// The context menu for an active (non-trashed) file row. Offers Rename, Share (the
@@ -153,12 +71,6 @@ extension HomeView {
             beginRename(entry)
         } label: {
             Label("Rename", systemImage: "pencil")
-        }
-        .disabled(entry.isReadOnly)
-        Button {
-            beginEditTags(entry)
-        } label: {
-            Label("Edit Tags\u{2026}", systemImage: "tag")
         }
         .disabled(entry.isReadOnly)
         // Share the original .kml/.kmz back out. `ShareLink` with a file URL shares the file
@@ -218,13 +130,6 @@ extension HomeView {
         renameText = entry.displayName
         renameTarget = entry
     }
-
-    /// Opens the Edit Tags alert for `entry`, prefilling the field with its current tags joined
-    /// by ", " (the same separator the Save action parses back on).
-    func beginEditTags(_ entry: CatalogEntry) {
-        tagsText = entry.tags.joined(separator: ", ")
-        tagsTarget = entry
-    }
 }
 
 // MARK: - Search results
@@ -265,7 +170,7 @@ extension HomeView {
                 if !files.isEmpty {
                     Section("Files") {
                         ForEach(files) { entry in
-                            FileRow(entry: entry, online: onlineStatus(for: entry))
+                            FileRow(entry: entry, online: onlineStatus(for: entry), showsDisclosure: showsRowDisclosure)
                                 .tag(entry.id)
                                 .contextMenu { activeRowMenu(for: entry) }
                                 .stopUpdatingConfirmation(
@@ -308,6 +213,9 @@ extension HomeView {
                 }
             }
             Spacer(minLength: 0)
+            if showsRowDisclosure {
+                RowDisclosureIndicator()
+            }
         }
         .contentShape(Rectangle())
     }
@@ -325,48 +233,5 @@ extension HomeView {
         // the new selection, reads it on its first load `.task`.
         pendingPlacemarkKey = hit.key
         selection = entry.id
-    }
-}
-
-// MARK: - EditTagsAlertModifier
-
-/// The Edit Tags alert — a single TextField of comma-separated tags, prefilled by joining the
-/// entry's current tags (see `beginEditTags` above). Packaged as a `ViewModifier` so
-/// `HomeView.body`'s already-long modifier chain carries one `.modifier(...)` line instead of
-/// the full alert closure tree, which pushed the expression past the type-checker's budget.
-struct EditTagsAlertModifier<Target>: ViewModifier {
-    /// What is being edited (one entry, or the entries of a bulk action); non-nil presents the
-    /// alert, dismissal nils it.
-    @Binding var target: Target?
-    /// The comma-separated tags text bound to the alert's TextField.
-    @Binding var text: String
-    /// The alert title ("Edit Tags" for one file, "Add Tags" for a bulk action).
-    var title: LocalizedStringKey = "Edit Tags"
-    /// Commit callback: the target plus the raw comma-split parts (normalization is the
-    /// callee's job — see `HomeView.saveTags`).
-    let save: (Target, [String]) -> Void
-
-    func body(content: Content) -> some View {
-        content.alert(
-            title,
-            isPresented: Binding(
-                get: { target != nil },
-                set: {
-                    if !$0 {
-                        target = nil
-                    }
-                }
-            ),
-            presenting: target
-        ) { target in
-            TextField("Tags, comma-separated", text: $text)
-            Button("Save") {
-                save(target, text.split(separator: ",").map(String.init))
-                self.target = nil
-            }
-            Button("Cancel", role: .cancel) { self.target = nil }
-        } message: { _ in
-            Text("Separate tags with commas.")
-        }
     }
 }

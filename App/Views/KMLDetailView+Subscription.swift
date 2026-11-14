@@ -49,47 +49,4 @@ extension KMLDetailView {
             refreshError = message
         }
     }
-
-    /// The ⋯ menu for an online list: Refresh Now / Copy URL / Stop Updating. While a refresh
-    /// runs the label is a spinner and Refresh Now is disabled.
-    @ViewBuilder
-    var onlineMenu: some View {
-        if let refresher, let subscription = liveEntry.subscription {
-            let live = liveEntry
-            let refreshing = refresher.phase(for: live) == .refreshing
-            Menu {
-                Button {
-                    Task { await showRefreshError(refresher.refreshNowMessage(live)) }
-                } label: {
-                    Label("Refresh Now", systemImage: "arrow.clockwise")
-                }
-                .disabled(live.isReadOnly || refreshing)
-                Button {
-                    UIPasteboard.general.url = subscription.url
-                } label: {
-                    Label("Copy URL", systemImage: "link")
-                }
-                Button {
-                    stopUpdatingTarget = live
-                } label: {
-                    Label("Stop Updating", systemImage: "xmark.circle")
-                }
-                .disabled(live.isReadOnly)
-            } label: {
-                // Fixed frame so the toolbar pill keeps its size when the glyph becomes a spinner.
-                Group {
-                    if refreshing {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-                .frame(width: 24, height: 24)
-            }
-            .stopUpdatingConfirmation(target: $stopUpdatingTarget) { target in
-                Task { await showRefreshError(refresher.stopUpdatingMessage(target)) }
-            }
-            .accessibilityLabel("Online list")
-        }
-    }
 }

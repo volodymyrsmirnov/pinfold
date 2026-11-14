@@ -13,10 +13,10 @@ struct AppCommands: Commands {
     var body: some Commands {
         // Placed after the standard "New" group so Import sits with file-creation commands.
         CommandGroup(after: .newItem) {
-            Button("Import\u{2026}") { window?.importIfAllowed() }
+            Button("Import Local File\u{2026}") { window?.importIfAllowed() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(!(window?.canImport ?? false))
-            Button("Subscribe to URL\u{2026}") { window?.subscribeIfAllowed() }
+            Button("Import Remote URL\u{2026}") { window?.subscribeIfAllowed() }
                 .disabled(!(window?.canImport ?? false))
         }
         CommandGroup(after: .textEditing) {
@@ -37,9 +37,6 @@ struct AppCommands: Commands {
         Button("Rename\u{2026}") { window?.renameSelected() }
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(!(window?.canRename ?? false))
-        Button("Edit Tags\u{2026}") { window?.editTagsOfSelected() }
-            .keyboardShortcut("t", modifiers: .command)
-            .disabled(!(window?.canEditTags ?? false))
         Button("Move to Trash") { window?.trashSelected() }
             .keyboardShortcut(.delete, modifiers: .command)
             .disabled(!(window?.canTrash ?? false))

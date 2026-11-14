@@ -25,9 +25,9 @@ struct EntryMetadata: Codable, Equatable {
     var favoriteKeys: Set<String> = []
     /// Stable keys of placemarks marked visited/seen.
     var visitedKeys: Set<String> = []
-    /// User-assigned labels on this entry (per-ENTRY, not per-placemark). Normalized by
-    /// `Catalog.setTags` (trimmed, de-duplicated case-insensitively, sorted); stored as a
-    /// plain array so the order is exactly the diff-stable sorted order written to disk.
+    /// Labels written by Pinfold versions that had tagging (removed in 2.2). Nothing reads or
+    /// edits them any more, but they are decoded, merged and re-encoded unchanged so a device
+    /// still on an older version doesn't lose them when iCloud syncs this sidecar.
     var tags: [String] = []
     /// Personal notes keyed by `KMLPlacemark.stableKey`. An empty-text note is a tombstone.
     /// Notes are kept even when their key no longer resolves (see `PlacemarkNote`).

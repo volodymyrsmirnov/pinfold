@@ -54,6 +54,9 @@ struct RootView: View {
     @State var storageQueue: StorageApplyQueue
     /// Keeps online lists up to date while the app is open; started after `bootstrap()`.
     @State var refresher: SubscriptionRefresher
+    /// The window's width class. Compact collapses the split view into one stack, so the
+    /// catalogue rows navigate and show a chevron (see `showsRowDisclosure`).
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
 
     /// The sidebar selection, stored by **entry id** rather than by value. `CatalogEntry` is a
     /// value type rebuilt from disk on every `catalog.reload()`, so a stored value would go
@@ -64,9 +67,9 @@ struct RootView: View {
     @State var selectedEntryID: CatalogEntry.ID?
 
     /// A one-shot deep-link target handed to the detail view when a selection is triggered by a
-    /// catalogue-wide placemark hit (a "Places" search result, a favorite, or a Spotlight
-    /// result). It carries the placemark's durable `stableKey` so `KMLDetailView` resolves it
-    /// against the parsed document and pushes `PlacemarkDetailView` (the POI page).
+    /// catalogue-wide placemark hit (a "Places" search result or a Spotlight result). It
+    /// carries the placemark's durable `stableKey` so `KMLDetailView` resolves it against the
+    /// parsed document and pushes `PlacemarkDetailView` (the POI page).
     ///
     /// Consume-once flow: the source sets this AND `selectedEntryID` together when a hit is
     /// tapped; `activeRestore` wraps it into a `RestoreBundle` passed to
@@ -109,7 +112,7 @@ struct RootView: View {
     }
 
     /// The one-shot bundle for the CURRENT detail view, or nil. A live deep link (Spotlight,
-    /// App Intent, a Places/favorites hit — all funnelled through `pendingPlacemarkKey`)
+    /// App Intent, a Places search hit — all funnelled through `pendingPlacemarkKey`)
     /// outranks session restore; a restore bundle is only handed to the entry it was saved
     /// for (folder-name match).
     var activeRestore: RestoreBundle? {
@@ -150,6 +153,7 @@ struct RootView: View {
                 // 320–380pt keeps file rows comfortable on iPad/Mac without crowding the map
                 // detail; the system still lets the user drag the divider.
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380)
+                .environment(\.showsRowDisclosure, horizontalSizeClass != .regular)
         } detail: {
             // The detail column owns its own NavigationStack so KMLDetailView's placemark and
             // map pushes stay within this column on regular width. `.id(entry.id)` forces a

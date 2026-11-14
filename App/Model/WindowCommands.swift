@@ -17,7 +17,6 @@ struct WindowCommands {
     let subscribeToURL: () -> Void
     let focusSearch: () -> Void
     let rename: (CatalogEntry) -> Void
-    let editTags: (CatalogEntry) -> Void
     let trash: (CatalogEntry) -> Void
 
     /// The selection when it may be changed; read-only entries (B12) are excluded.
@@ -27,10 +26,6 @@ struct WindowCommands {
     }
 
     var canRename: Bool {
-        editableSelection != nil
-    }
-
-    var canEditTags: Bool {
         editableSelection != nil
     }
 
@@ -57,12 +52,6 @@ struct WindowCommands {
     func renameSelected() {
         if let entry = editableSelection {
             rename(entry)
-        }
-    }
-
-    func editTagsOfSelected() {
-        if let entry = editableSelection {
-            editTags(entry)
         }
     }
 

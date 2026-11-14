@@ -21,8 +21,8 @@ extension HomeView {
                 // detail on compact width (collapsed split view) — replacing the old explicit
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
-                    ForEach(displayedActive) { entry in
-                        FileRow(entry: entry, online: onlineStatus(for: entry))
+                    ForEach(sortedActive) { entry in
+                        FileRow(entry: entry, online: onlineStatus(for: entry), showsDisclosure: showsRowDisclosure)
                             .tag(entry.id)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -48,7 +48,7 @@ extension HomeView {
                     Text("Files you trash will appear here.")
                 }
             } else {
-                TrashList(trashed: trashed, isSelecting: isSelecting)
+                TrashList(trashed: trashed)
             }
         }
     }

@@ -5,7 +5,7 @@ import Foundation
 /// Reads `url`'s bytes and prepares the import, both off the main actor in one detached hop.
 /// A `nonisolated` free function (not a method on the `@MainActor` coordinator) so the
 /// `Task.detached` closure is compiled here, not inside the coordinator's SIL — see the
-/// `ClosureLifetimeFixup` note in FavoritesView.swift. The caller owns the security-scoped
+/// `ClosureLifetimeFixup` note in DocumentLoad.swift. The caller owns the security-scoped
 /// access bracket, which spans the `await` on this function.
 ///
 /// Cancelling the calling task cancels the detached read-and-parse, which then throws

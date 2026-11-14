@@ -333,7 +333,7 @@ private func removeFailedImport(_ entry: CatalogEntry, storage: StorageLocations
 
 /// Starts the background download of `hrefs`. A free function so the `Task.detached` closure
 /// is compiled outside `ImportService.commit` (see the `ClosureLifetimeFixup` note in
-/// FavoritesView.swift).
+/// DocumentLoad.swift).
 private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to resourcesDir: URL) {
     Task.detached {
         await cache.downloadRemote(hrefs, to: resourcesDir)
@@ -342,7 +342,7 @@ private func downloadRemoteResources(_ hrefs: [String], cache: ResourceCache, to
 
 /// Runs `ImportService.commit` in a detached task. A `nonisolated` free function so the
 /// `Task.detached` closure is compiled outside any `@MainActor` caller's SIL (see the
-/// `ClosureLifetimeFixup` note in FavoritesView.swift).
+/// `ClosureLifetimeFixup` note in DocumentLoad.swift).
 private func detachedCommit(
     _ result: ImportResult,
     storage: StorageLocations,
