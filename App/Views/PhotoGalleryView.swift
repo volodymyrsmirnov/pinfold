@@ -275,8 +275,9 @@ private struct ZoomableImageView: UIViewRepresentable {
 /// A scroll view that fits its image to the bounds, centres it, and zooms from 1× to 4× with a
 /// pinch or a double tap.
 ///
-/// At 1× scrolling is switched off entirely, so a vertical drag goes to the sheet (dismiss) and a
-/// horizontal one to the pager; the pinch still works because zooming doesn't need scrolling.
+/// At 1× only the pan gesture is switched off, so a vertical drag goes to the sheet (dismiss) and
+/// a horizontal one to the pager, while the pinch gesture stays live to start a zoom. (Turning off
+/// `isScrollEnabled` instead would forward every touch up the responder chain, pinch included.)
 /// Zoomed in, it pans; if the sheet takes over a drag at the top edge, the offset is put back
 /// inside the content when the drag ends, so the photo never stays parked off-centre.
 final class ZoomingImageScrollView: UIScrollView, UIScrollViewDelegate {
@@ -299,7 +300,7 @@ final class ZoomingImageScrollView: UIScrollView, UIScrollViewDelegate {
         alwaysBounceHorizontal = false
         bouncesZoom = true
         decelerationRate = .fast
-        isScrollEnabled = false
+        panGestureRecognizer.isEnabled = false
         contentInsetAdjustmentBehavior = .never
         backgroundColor = .clear
         imageView.contentMode = .scaleAspectFit
@@ -379,11 +380,11 @@ final class ZoomingImageScrollView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_: UIScrollView) {
         centreContent()
-        isScrollEnabled = zoomScale > minimumZoomScale
+        panGestureRecognizer.isEnabled = zoomScale > minimumZoomScale
     }
 
     func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale scale: CGFloat) {
-        isScrollEnabled = scale > minimumZoomScale
+        panGestureRecognizer.isEnabled = scale > minimumZoomScale
         settleIntoContent()
     }
 
