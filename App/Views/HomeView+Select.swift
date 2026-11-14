@@ -36,7 +36,7 @@ extension HomeView {
                     .tag(entry.id)
             }
         }
-        .listStyle(.insetGrouped)
+        .catalogueListStyle()
         .environment(\.editMode, .constant(.active))
     }
 

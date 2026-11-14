@@ -14,7 +14,7 @@ struct TrashList: View {
                 row(for: entry)
             }
         }
-        .listStyle(.insetGrouped)
+        .catalogueListStyle()
     }
 
     private func row(for entry: CatalogEntry) -> some View {

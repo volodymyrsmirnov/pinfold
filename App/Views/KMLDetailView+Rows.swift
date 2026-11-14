@@ -215,6 +215,7 @@ extension KMLDetailView {
                 distance: PlacemarkDistance.format(from: location, to: placemark.coordinate)
             )
         }
+        // Swipe right: the quick toggles plus Share, with the short labels swipe buttons need.
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if let annotations {
                 Button {
@@ -231,25 +232,16 @@ extension KMLDetailView {
                     let on = annotations.isVisited(placemark)
                     Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
                 }
-                .tint(.blue)
+                .tint(.indigo)
+            }
+            if let url = PlacemarkActions.shareURL(for: placemark) {
+                PlacemarkShareLink(placemark: placemark, url: url)
+                    .tint(.blue)
             }
         }
+        // Long press: the same actions as the place screen's "⋯" menu, from the same view.
         .contextMenu {
-            if let annotations {
-                Button {
-                    annotations.toggleFavorite(placemark)
-                } label: {
-                    let on = annotations.isFavorite(placemark)
-                    Label(on ? "Unfavorite" : "Favorite", systemImage: on ? "star.slash" : "star")
-                }
-
-                Button {
-                    annotations.toggleVisited(placemark)
-                } label: {
-                    let on = annotations.isVisited(placemark)
-                    Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
-                }
-            }
+            PlacemarkActions(placemark: placemark, annotations: annotations)
         }
     }
 }

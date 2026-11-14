@@ -92,6 +92,32 @@ extension HomeView {
         }
     }
 
+    /// An active file's row with all of its actions, the same wherever the file is listed (the
+    /// Files list and the "Files" search results): swipe right for Share / Refresh / Trash, a
+    /// full swipe left to Trash, and the long-press menu.
+    func activeFileRow(_ entry: CatalogEntry) -> some View {
+        FileRow(
+            entry: entry,
+            online: onlineStatus(for: entry),
+            showsDisclosure: showsRowDisclosure,
+            isHighlighted: !showsRowDisclosure && selection == entry.id
+        )
+        .tag(entry.id)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                Task { await catalog.moveToTrash(entry) }
+            } label: {
+                Label("Trash", systemImage: "trash")
+            }
+            .disabled(entry.isReadOnly)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            fileRowLeadingActions(for: entry)
+        }
+        .contextMenu { activeRowMenu(for: entry) }
+        .stopUpdatingConfirmation(target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating)
+    }
+
     /// The actions revealed by swiping a file row to the right, as place rows offer theirs:
     /// Share, Refresh (online lists only) and Trash. Share is left out while the original isn't
     /// on disk (an iCloud placeholder), as in the row menu.
@@ -190,12 +216,7 @@ extension HomeView {
                 if !files.isEmpty {
                     Section("Files") {
                         ForEach(files) { entry in
-                            FileRow(entry: entry, online: onlineStatus(for: entry), showsDisclosure: showsRowDisclosure)
-                                .tag(entry.id)
-                                .contextMenu { activeRowMenu(for: entry) }
-                                .stopUpdatingConfirmation(
-                                    target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
-                                )
+                            activeFileRow(entry)
                         }
                     }
                 }
@@ -212,7 +233,7 @@ extension HomeView {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .catalogueListStyle()
         }
     }
 

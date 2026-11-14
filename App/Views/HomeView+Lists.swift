@@ -22,26 +22,10 @@ extension HomeView {
                 // `NavigationLink(destination:)`. Selection is by entry id (see `selection`).
                 List(selection: $selection) {
                     ForEach(sortedActive) { entry in
-                        FileRow(entry: entry, online: onlineStatus(for: entry), showsDisclosure: showsRowDisclosure)
-                            .tag(entry.id)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    Task { await catalog.moveToTrash(entry) }
-                                } label: {
-                                    Label("Trash", systemImage: "trash")
-                                }
-                                .disabled(entry.isReadOnly)
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                fileRowLeadingActions(for: entry)
-                            }
-                            .contextMenu { activeRowMenu(for: entry) }
-                            .stopUpdatingConfirmation(
-                                target: $stopUpdatingTarget, entryID: entry.id, stop: runStopUpdating
-                            )
+                        activeFileRow(entry)
                     }
                 }
-                .listStyle(.insetGrouped)
+                .catalogueListStyle()
             }
         } else {
             if trashed.isEmpty {

@@ -53,6 +53,7 @@ MV + `@Observable` (no view-model layer); see **Persistence & storage** for the 
 
 ## Conventions
 
+- **UI action consistency (owner rule):** an item's actions are the same wherever they are offered. A row's long-press menu matches the "⋯" menu on that item's own screen (minus what tapping the row already does, e.g. a place row omits "Show on Map"); swipe actions are a subset of the same actions; the same item listed in two places (Files list and search results) gets the same row. Build each set once and reuse it — `PlacemarkActions` for places, `activeRowMenu` / `activeFileRow` / `fileRowLeadingActions` for files — and add a new action there, never to a single menu. Group menu items with `Section`s (Share first, destructive last).
 - Git: branch for non-trivial work and merge to `main` with `--no-ff`; **commit only when explicitly asked**.
 - The App Group / share-extension handoff only works on a **signed** build — it's inactive on the unsigned simulator builds (the app guards on `AppGroup.inboxURL != nil`).
 - SwiftFormat's `redundantSendable` rule strips explicit `Sendable` from internal all-value-type structs; the conformance is then implicit and compiler-enforced, so don't re-add it to fight the formatter.

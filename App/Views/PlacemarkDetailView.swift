@@ -13,7 +13,8 @@ import SwiftUI
 /// 5. "My Notes" block.
 /// 6. "Open in Maps" primary action button.
 ///
-/// Toolbar menu provides secondary actions: Copy Coordinates, Share, Copy Name.
+/// Toolbar menu: Show on Map, then the shared `PlacemarkActions` (favourite, seen, copy
+/// coordinates, share, copy name) — the same set the place's row offers on a long press.
 struct PlacemarkDetailView: View {
     // MARK: - Properties
 
@@ -312,58 +313,15 @@ struct PlacemarkDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 if hasCoordinate {
-                    Button {
-                        activeRouter?.path.append(.map(focusKey: placemark.stableKey))
-                    } label: {
-                        Label("Show on Map", systemImage: "map")
-                    }
-                    Divider()
-                }
-                if let annotations {
-                    Button {
-                        annotations.toggleFavorite(placemark)
-                    } label: {
-                        let on = annotations.isFavorite(placemark)
-                        Label(on ? "Remove from Favorites" : "Add to Favorites",
-                              systemImage: on ? "star.slash" : "star")
-                    }
-                    Button {
-                        annotations.toggleVisited(placemark)
-                    } label: {
-                        let on = annotations.isVisited(placemark)
-                        Label(on ? "Mark as Unseen" : "Mark as Seen",
-                              systemImage: on ? "eye.slash" : "eye")
-                    }
-                    Divider()
-                }
-                if let coordStr = coordinateString {
-                    Button {
-                        UIPasteboard.general.string = coordStr
-                    } label: {
-                        Label("Copy Coordinates", systemImage: "doc.on.doc")
-                    }
-
-                    if let coord = placemark.coordinate {
-                        let q = (placemark.name ?? "")
-                            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        // Apple Maps' `ll` wants `lat,lon` with a `.` decimal separator; pin the
-                        // locale so a comma-decimal region doesn't corrupt the URL.
-                        let ll = String(format: "%f,%f", locale: Locale(identifier: "en_US_POSIX"),
-                                        coord.latitude, coord.longitude)
-                        let mapsURL = "https://maps.apple.com/?ll=\(ll)&q=\(q)"
-                        if let url = URL(string: mapsURL) {
-                            ShareLink(item: url, subject: Text(placemark.name ?? "Placemark")) {
-                                Label("Share", systemImage: "square.and.arrow.up")
-                            }
+                    Section {
+                        Button {
+                            activeRouter?.path.append(.map(focusKey: placemark.stableKey))
+                        } label: {
+                            Label("Show on Map", systemImage: "map")
                         }
                     }
                 }
-
-                Button {
-                    UIPasteboard.general.string = placemark.name ?? ""
-                } label: {
-                    Label("Copy Name", systemImage: "character.cursor.ibeam")
-                }
+                PlacemarkActions(placemark: placemark, annotations: annotations)
             } label: {
                 Label("More", systemImage: "ellipsis")
             }

@@ -121,6 +121,7 @@
 		84DA65D36A05EC2CAAADDA0B /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA47B0705B8C4F7C9E5C555 /* AppSettings.swift */; };
 		85479DB8EBA550B77B0AF0FD /* SidecarConflictTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF3A322F9E43C8B5A996944 /* SidecarConflictTests.swift */; };
 		8599BE9600FA92F5D3B9B49F /* StorageLocations+Recovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8EA6CEEF3A2FAB7C434F32 /* StorageLocations+Recovery.swift */; };
+		865944F5B5296091C531D072 /* PlacemarkActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1308E0C2EC2109960BF3DA5 /* PlacemarkActions.swift */; };
 		8802E19715D64F6C6F228D20 /* ImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D113BB096484B5D6F35E78 /* ImportService.swift */; };
 		89516814407A6572DEEBA0B2 /* PlacemarkSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796376A6E3A337DA5374C8F8 /* PlacemarkSearch.swift */; };
 		89E737807F53BD641A6F7CB8 /* SettingsSyncSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CFF3A9D05FF6BBB39B51A89 /* SettingsSyncSection.swift */; };
@@ -455,6 +456,7 @@
 		BA1DB26A303C33B89F485D65 /* MapUserLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapUserLocationTests.swift; sourceTree = "<group>"; };
 		BF408B189935735D399B70B0 /* CoordinateFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateFormatterTests.swift; sourceTree = "<group>"; };
 		BFF76306C1EF070BEEF36A66 /* PendingImportInboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingImportInboxTests.swift; sourceTree = "<group>"; };
+		C1308E0C2EC2109960BF3DA5 /* PlacemarkActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacemarkActions.swift; sourceTree = "<group>"; };
 		C30CE69256565F2DA9EC962C /* PinfoldApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinfoldApp.swift; sourceTree = "<group>"; };
 		C4443D7A25E04BFA90E42E5A /* EnvironmentKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentKeys.swift; sourceTree = "<group>"; };
 		C84C19C3BB891D1FE502DB91 /* SubscriptionContentWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionContentWriter.swift; sourceTree = "<group>"; };
@@ -835,6 +837,7 @@
 				D471141B9841B3BE899B3AB8 /* OfflineMapBanner.swift */,
 				FCEE3565867EACF6C42333F4 /* OrphanedNotesSection.swift */,
 				A0FD2928ED2455FDB9131D72 /* PhotoGalleryView.swift */,
+				C1308E0C2EC2109960BF3DA5 /* PlacemarkActions.swift */,
 				419471F0972B00D44B2ACEE8 /* PlacemarkDetailView.swift */,
 				73075BCA8DB4549426521B90 /* PlacemarkMapCoordinator.swift */,
 				41B7516835BF7CBCB1DFD878 /* PlacemarkMapCoordinator+Overlays.swift */,
@@ -1087,6 +1090,7 @@
 				A163C6B153416C01ED484B81 /* PinDecorationCache.swift in Sources */,
 				FB76A2B6EC5F051953E9E033 /* PinfoldApp.swift in Sources */,
 				6625EA9E41C38568808CB159 /* PinfoldIntents.swift in Sources */,
+				865944F5B5296091C531D072 /* PlacemarkActions.swift in Sources */,
 				6C210314449EF164E533F59C /* PlacemarkAnnotations.swift in Sources */,
 				4FD8690EA1B1517A1A28ACA6 /* PlacemarkDetailView.swift in Sources */,
 				F027FC439F99946A4F118077 /* PlacemarkDistance.swift in Sources */,
