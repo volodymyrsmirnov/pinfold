@@ -215,8 +215,13 @@ extension KMLDetailView {
                 distance: PlacemarkDistance.format(from: location, to: placemark.coordinate)
             )
         }
-        // Swipe right: the quick toggles plus Share, with the short labels swipe buttons need.
+        // Swipe right: Share first (as on file rows), then the quick toggles, with the short labels
+        // swipe buttons need.
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if let url = PlacemarkShareLink.url(for: placemark) {
+                PlacemarkShareLink(placemark: placemark, url: url)
+                    .tint(.blue)
+            }
             if let annotations {
                 Button {
                     annotations.toggleFavorite(placemark)
@@ -233,10 +238,6 @@ extension KMLDetailView {
                     Label(on ? "Mark Unseen" : "Mark Seen", systemImage: on ? "eye.slash" : "eye")
                 }
                 .tint(.indigo)
-            }
-            if let url = PlacemarkActions.shareURL(for: placemark) {
-                PlacemarkShareLink(placemark: placemark, url: url)
-                    .tint(.blue)
             }
         }
         // Long press: the same actions as the place screen's "⋯" menu, from the same view.

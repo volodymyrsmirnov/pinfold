@@ -5,14 +5,35 @@ import SwiftUI
 /// screen's "⋯" menu and the long-press menu on a place row. Keeping them in one view is what
 /// keeps those menus identical (same items, same labels, same order, same behaviour).
 ///
-/// Groups: Add to Favorites / Mark as Seen (when favourites are available), then Copy
-/// Coordinates / Share (when the place has a coordinate) / Copy Name. The place screen puts
-/// its own "Show on Map" above these; a row doesn't, since tapping it already opens the place.
-struct PlacemarkActions: View {
+/// Groups, each separated: Share (when the place has a coordinate); then any actions only the
+/// caller's screen has (`screenActions` — the place screen's "Show on Map"; a row passes none,
+/// since tapping it already opens the place); then Add to Favorites / Mark as Seen (when
+/// favourites are available); then Copy Coordinates / Copy Name. Share leads, as in the file
+/// menus (see "UI action consistency" in CLAUDE.md).
+struct PlacemarkActions<ScreenActions: View>: View {
     let placemark: KMLPlacemark
     let annotations: PlacemarkAnnotations?
+    let screenActions: ScreenActions
+
+    init(
+        placemark: KMLPlacemark,
+        annotations: PlacemarkAnnotations?,
+        @ViewBuilder screenActions: () -> ScreenActions = { EmptyView() }
+    ) {
+        self.placemark = placemark
+        self.annotations = annotations
+        self.screenActions = screenActions()
+    }
 
     var body: some View {
+        if let url = PlacemarkShareLink.url(for: placemark) {
+            Section {
+                PlacemarkShareLink(placemark: placemark, url: url)
+            }
+        }
+        Section {
+            screenActions
+        }
         if let annotations {
             Section {
                 Button {
@@ -37,29 +58,12 @@ struct PlacemarkActions: View {
                     Label("Copy Coordinates", systemImage: "doc.on.doc")
                 }
             }
-            if let url = Self.shareURL(for: placemark) {
-                PlacemarkShareLink(placemark: placemark, url: url)
-            }
             Button {
                 UIPasteboard.general.string = placemark.name ?? ""
             } label: {
                 Label("Copy Name", systemImage: "character.cursor.ibeam")
             }
         }
-    }
-
-    /// What Share sends for a place: an Apple Maps link to its coordinate, labelled with its
-    /// name, or `nil` when the place has no coordinate.
-    static func shareURL(for placemark: KMLPlacemark) -> URL? {
-        guard let coord = placemark.coordinate else { return nil }
-        let query = (placemark.name ?? "")
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        // Apple Maps' `ll` wants `lat,lon` with a `.` decimal separator; pin the locale so a
-        // comma-decimal region doesn't corrupt the URL.
-        let ll = String(
-            format: "%f,%f", locale: Locale(identifier: "en_US_POSIX"), coord.latitude, coord.longitude
-        )
-        return URL(string: "https://maps.apple.com/?ll=\(ll)&q=\(query)")
     }
 }
 
@@ -72,5 +76,19 @@ struct PlacemarkShareLink: View {
         ShareLink(item: url, subject: Text(placemark.name ?? "Placemark")) {
             Label("Share", systemImage: "square.and.arrow.up")
         }
+    }
+
+    /// What Share sends for a place: an Apple Maps link to its coordinate, labelled with its
+    /// name, or `nil` when the place has no coordinate.
+    static func url(for placemark: KMLPlacemark) -> URL? {
+        guard let coord = placemark.coordinate else { return nil }
+        let query = (placemark.name ?? "")
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        // Apple Maps' `ll` wants `lat,lon` with a `.` decimal separator; pin the locale so a
+        // comma-decimal region doesn't corrupt the URL.
+        let ll = String(
+            format: "%f,%f", locale: Locale(identifier: "en_US_POSIX"), coord.latitude, coord.longitude
+        )
+        return URL(string: "https://maps.apple.com/?ll=\(ll)&q=\(query)")
     }
 }

@@ -13,8 +13,8 @@ import SwiftUI
 /// 5. "My Notes" block.
 /// 6. "Open in Maps" primary action button.
 ///
-/// Toolbar menu: Show on Map, then the shared `PlacemarkActions` (favourite, seen, copy
-/// coordinates, share, copy name) — the same set the place's row offers on a long press.
+/// Toolbar menu: the shared `PlacemarkActions` (share, favourite, seen, copy coordinates, copy
+/// name) — the same set the place's row offers on a long press — with Show on Map after Share.
 struct PlacemarkDetailView: View {
     // MARK: - Properties
 
@@ -312,8 +312,8 @@ struct PlacemarkDetailView: View {
     private var toolbarMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                if hasCoordinate {
-                    Section {
+                PlacemarkActions(placemark: placemark, annotations: annotations) {
+                    if hasCoordinate {
                         Button {
                             activeRouter?.path.append(.map(focusKey: placemark.stableKey))
                         } label: {
@@ -321,7 +321,6 @@ struct PlacemarkDetailView: View {
                         }
                     }
                 }
-                PlacemarkActions(placemark: placemark, annotations: annotations)
             } label: {
                 Label("More", systemImage: "ellipsis")
             }
