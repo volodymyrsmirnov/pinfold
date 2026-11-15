@@ -34,8 +34,9 @@ enum PinAnchor {
 ///
 /// Resolution order (mirrors `StyleIcon`):
 /// 1. If the placemark's resolved style has an icon `href` cached on disk, that image is
-///    loaded directly via `UIImage(contentsOfFile:)`, scaled down to fit, and anchored by
-///    its centre.
+///    loaded via `UIImage(contentsOfFile:)`, sized by its visible shape (`OpticalIcon`) with
+///    its colours untouched, and anchored by its centre; `GlassPinAnnotationView` draws it on
+///    a Liquid Glass disc.
 /// 2. Otherwise, a teardrop "balloon" pin tinted by the style's `iconColor` (or accent
 ///    color) is drawn, anchored by its bottom tip. A white outline, white inner dot, and
 ///    soft drop shadow keep it legible on any basemap — including a dark-colored pin on a
@@ -44,10 +45,9 @@ enum PinAnchor {
 /// All work is synchronous file/CoreGraphics I/O — call it on the main actor when
 /// building annotations (placemark counts are typically small).
 enum PlacemarkPinImage {
-    /// Target max edge length of a *custom* (href-backed) pin image, in points, and the
-    /// teardrop head diameter. Kept fairly small so pins collide (and therefore cluster)
-    /// less aggressively — MapKit has no cluster-radius API, so annotation-view size is the
-    /// main lever.
+    /// The teardrop head diameter, in points (href-backed icons use `GlassPinAnnotationView`).
+    /// Kept fairly small so pins collide (and therefore cluster) less aggressively — MapKit
+    /// has no cluster-radius API, so annotation-view size is the main lever.
     static let dimension: CGFloat = 24
 
     /// Teardrop geometry, in points. `pinHeight` is the distance from the head's top to the
@@ -94,7 +94,8 @@ enum PlacemarkPinImage {
                let image = UIImage(contentsOfFile: localURL.path)
             {
                 // swiftlint:enable opening_brace
-                return (resized(image, maxDimension: dimension), .center)
+                // Colours untouched; `GlassPinAnnotationView` draws the glass disc around it.
+                return (OpticalIcon.render(image, radius: GlassPinAnnotationView.iconRadius), .center)
             }
         }
 
@@ -203,19 +204,6 @@ enum PlacemarkPinImage {
                 let starRect = CGRect(x: canvas.width - badge - pad / 2, y: pad / 2, width: badge, height: badge)
                 star?.draw(in: starRect)
             }
-        }
-    }
-
-    /// Scales `image` down so its longest edge is at most `maxDimension` (never upscales).
-    private static func resized(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
-        let size = image.size
-        guard size.width > 0, size.height > 0 else { return image }
-        let scale = min(maxDimension / size.width, maxDimension / size.height, 1)
-        guard scale < 1 else { return image }
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: newSize))
         }
     }
 }

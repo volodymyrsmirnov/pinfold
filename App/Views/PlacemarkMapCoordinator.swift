@@ -87,6 +87,11 @@ extension PlacemarkMapRepresentable {
         /// The cached value carries the pin's `PinAnchor` alongside its base image.
         var pinImageCache: [PlacemarkPinImage.CacheKey: (image: UIImage, anchor: PinAnchor)] = [:]
 
+        /// Glass tint per pin base image (`IconPalette.glassTint`), so each icon is analysed
+        /// once. Keyed by the image's identity; the image is kept alive in the value so the
+        /// identifier can't be reused by another image.
+        var glassTints: [ObjectIdentifier: (image: UIImage, tint: UIColor?)] = [:]
+
         init(_ parent: PlacemarkMapRepresentable) {
             self.parent = parent
         }
@@ -183,28 +188,26 @@ extension PlacemarkMapRepresentable {
             }
 
             if let cluster = annotation as? MKClusterAnnotation {
-                let view = mapView.dequeueReusableAnnotationView(
-                    withIdentifier: PlacemarkMapRepresentable.clusterReuseID
-                ) as? MKMarkerAnnotationView
-                    ?? MKMarkerAnnotationView(
-                        annotation: annotation,
-                        reuseIdentifier: PlacemarkMapRepresentable.clusterReuseID
-                    )
-                view.annotation = annotation
-                view.markerTintColor = .systemBlue
-                view.glyphText = "\(cluster.memberAnnotations.count)"
-                return view
+                return clusterView(for: cluster, in: mapView)
             }
 
             guard let placemark = annotation as? PlacemarkAnnotation else { return nil }
-            let view = mapView.dequeueReusableAnnotationView(
-                withIdentifier: PlacemarkMapRepresentable.placemarkReuseID
-            ) ?? MKAnnotationView(
-                annotation: annotation,
-                reuseIdentifier: PlacemarkMapRepresentable.placemarkReuseID
-            )
+            // A style with an icon gets a glass pin; the icon-less teardrop stays an image.
+            let view: MKAnnotationView = if placemark.anchor == .center {
+                mapView.dequeueReusableAnnotationView(withIdentifier: GlassPinAnnotationView.reuseID)
+                    ?? GlassPinAnnotationView(annotation: annotation, reuseIdentifier: GlassPinAnnotationView.reuseID)
+            } else {
+                mapView.dequeueReusableAnnotationView(withIdentifier: PlacemarkMapRepresentable.placemarkReuseID)
+                    ?? MKAnnotationView(
+                        annotation: annotation, reuseIdentifier: PlacemarkMapRepresentable.placemarkReuseID
+                    )
+            }
             view.annotation = annotation
-            view.image = placemark.image
+            if let glass = view as? GlassPinAnnotationView {
+                configureGlass(glass, for: placemark)
+            } else {
+                view.image = placemark.image
+            }
             // Cluster only when enabled (or forced on above the threshold). With clustering
             // off, `.none` collision keeps every overlapping pin visible; with it on,
             // `.circle` clusters less aggressively than the default rectangle.
@@ -215,8 +218,10 @@ extension PlacemarkMapRepresentable {
             view.collisionMode = clustering ? .circle : .none
             view.canShowCallout = false
             // Anchor per the pin's PinAnchor: the teardrop fallback is tip-anchored (points
-            // at its coordinate); custom KML icons stay centre-anchored (no hotSpot parsing).
-            view.centerOffset = placemark.anchor.centerOffset(forImageOfHeight: placemark.image.size.height)
+            // at its coordinate); glass icon pins are centred (no hotSpot parsing).
+            view.centerOffset = view is GlassPinAnnotationView
+                ? .zero
+                : placemark.anchor.centerOffset(forImageOfHeight: placemark.image.size.height)
             // Reset any highlight left over from view reuse.
             view.transform = .identity
             view.zPriority = .defaultUnselected
@@ -293,6 +298,7 @@ extension PlacemarkMapRepresentable {
         private func setHighlighted(_ highlighted: Bool, for annotation: MKAnnotation, in mapView: MKMapView) {
             guard let view = mapView.view(for: annotation) else { return }
             view.zPriority = highlighted ? .max : .defaultUnselected
+            (view as? GlassPinAnnotationView)?.setPinSelected(highlighted)
             UIView.animate(withDuration: 0.2) {
                 view.transform = highlighted
                     ? CGAffineTransform(scaleX: PlacemarkMapRepresentable.selectedScale,

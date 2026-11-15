@@ -61,7 +61,6 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
 
     static let clusteringIdentifier = "kml.placemark"
     static let placemarkReuseID = "placemark"
-    static let clusterReuseID = "cluster"
     static let edgePadding = UIEdgeInsets(top: 80, left: 60, bottom: 140, right: 60)
     static let selectedScale: CGFloat = 1.5
 
@@ -262,7 +261,22 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 annotation.baseImage = base.image
                 annotation.anchor = base.anchor
                 redecorate(annotation, on: mapView, coordinator: coordinator)
+                swapToGlassView(annotation, on: mapView)
             }
+        }
+        coordinator.refreshVisibleClusters(on: mapView)
+    }
+
+    /// A pin whose style just gained its icon is still showing in a teardrop
+    /// `MKAnnotationView`; re-add it so `viewFor` builds a `GlassPinAnnotationView`, keeping
+    /// it selected if it was. Offscreen pins need nothing: `viewFor` runs when they appear.
+    private func swapToGlassView(_ annotation: PlacemarkAnnotation, on mapView: MKMapView) {
+        guard let view = mapView.view(for: annotation), !(view is GlassPinAnnotationView) else { return }
+        let wasSelected = mapView.selectedAnnotations.contains { $0 === annotation }
+        mapView.removeAnnotation(annotation)
+        mapView.addAnnotation(annotation)
+        if wasSelected {
+            mapView.selectAnnotation(annotation, animated: false)
         }
     }
 
@@ -279,7 +293,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             anchor: annotation.anchor
         )
         annotation.image = fresh
-        if let view = mapView.view(for: annotation) {
+        if let glass = mapView.view(for: annotation) as? GlassPinAnnotationView {
+            coordinator.configureGlass(glass, for: annotation)
+        } else if let view = mapView.view(for: annotation) {
             view.image = fresh
             view.centerOffset = annotation.anchor.centerOffset(forImageOfHeight: fresh.size.height)
         }
