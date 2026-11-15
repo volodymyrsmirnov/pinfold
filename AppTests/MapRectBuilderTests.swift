@@ -27,14 +27,13 @@ struct MapRectBuilderTests {
             Coordinate(longitude: -121.0, latitude: 38.0),
             Coordinate(longitude: -123.0, latitude: 36.0),
         ]
-        let rect = MapRectBuilder.boundingRect(for: coords)
-        #expect(rect != nil)
+        let rect = try #require(MapRectBuilder.boundingRect(for: coords))
         for coord in coords {
             let point = MKMapPoint(CLLocationCoordinate2D(latitude: coord.latitude, longitude: coord.longitude))
-            #expect(try #require(rect?.contains(point)))
+            #expect(rect.contains(point))
         }
-        #expect(try #require(rect?.size.width) > 0)
-        #expect(try #require(rect?.size.height) > 0)
+        #expect(rect.size.width > 0)
+        #expect(rect.size.height > 0)
     }
 
     /// The headline case: two pins straddling the antimeridian (1° apart across the seam)

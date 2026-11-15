@@ -53,6 +53,19 @@ struct OpticalIconTests {
         #expect(abs(box.width / box.height - 4) <= 0.5)
     }
 
+    /// `maxSide` keeps a compact round icon from swelling to the whole safe circle, so the
+    /// disc keeps air around it; the radius limit still holds for edge-to-edge squares.
+    @Test func maxSide_capsTheVisibleBox() throws {
+        let round = OpticalIcon.render(IconFixtures.circle(.red), radius: radius, maxSide: 18)
+        let roundBox = try #require(IconFixtures.visibleBox(of: round))
+        #expect(abs(roundBox.width - 18) <= slack)
+
+        let square = OpticalIcon.render(IconFixtures.filled(.red), radius: radius, maxSide: 18)
+        let squareBox = try #require(IconFixtures.visibleBox(of: square))
+        #expect(squareBox.width <= 18 + slack)
+        #expect(IconFixtures.reach(of: square) <= radius + slack)
+    }
+
     @Test func blankIcon_isReturnedUnchanged() {
         let blank = IconFixtures.blank()
         #expect(OpticalIcon.render(blank, radius: radius) === blank)

@@ -158,7 +158,7 @@ struct CatalogScanner {
     private func writeLocalCache(for result: ImportResult, to resourcesDir: URL) {
         try? FileManager.default.createDirectory(at: resourcesDir, withIntermediateDirectories: true)
         if result.format == .kmz {
-            try? cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
+            _ = try? cache.extractEmbedded(fromKMZ: result.originalData, to: resourcesDir)
         }
         if (try? PlacemarkIndex.write(result.indexEntries, to: resourcesDir)) != nil {
             PlacemarkIndex.writeSourceStamp(result.contentSHA256, to: resourcesDir)

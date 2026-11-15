@@ -39,12 +39,12 @@ struct IconPaletteTests {
         #expect(kind(IconFixtures.blank()) == nil)
     }
 
-    @Test func glassTint_onlyForHuedIcons() throws {
-        let tint = try #require(IconPalette.glassTint(for: IconFixtures.circle(IconFixtures.orange)))
+    @Test func accentColor_onlyForHuedIcons() throws {
+        let tint = try #require(IconPalette.accentColor(for: IconFixtures.circle(IconFixtures.orange)))
         #expect(IconFixtures.isClose(tint, IconFixtures.orange))
-        #expect(IconPalette.glassTint(for: IconFixtures.circle(.white)) == nil)
-        #expect(IconPalette.glassTint(for: IconFixtures.circle(.black)) == nil)
-        #expect(IconPalette.glassTint(for: IconFixtures.twoColor()) == nil)
-        #expect(IconPalette.glassTint(for: IconFixtures.blank()) == nil)
+        #expect(IconPalette.accentColor(for: IconFixtures.circle(.white)) == nil)
+        #expect(IconPalette.accentColor(for: IconFixtures.circle(.black)) == nil)
+        #expect(IconPalette.accentColor(for: IconFixtures.twoColor()) == nil)
+        #expect(IconPalette.accentColor(for: IconFixtures.blank()) == nil)
     }
 }

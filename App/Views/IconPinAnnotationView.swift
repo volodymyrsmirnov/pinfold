@@ -1,26 +1,29 @@
 import MapKit
 import UIKit
 
-/// A placemark pin for a style with an icon: the file's icon, colours untouched, on a
-/// `GlassDiscView` tinted with the icon's hue.
+/// A placemark pin for a style with an icon: the file's icon, in its own colours, centred
+/// on a neutral `PinDiscView`.
 ///
 /// - Favourite: a small yellow star badge on the disc's top-right rim.
 /// - Visited: the icon is dimmed.
-/// - Selected (`setPinSelected`): stronger tint and a ring, on top of the coordinator's
-///   scale-up.
+/// - Selected (`setPinSelected`): a 2 pt ring in the icon's own colour, on top of the
+///   coordinator's scale-up.
 ///
-/// The icon arrives pre-sized by `OpticalIcon` into a `2·iconRadius` square, so it always
-/// sits clear of the disc edge and the selection ring.
-final class GlassPinAnnotationView: MKAnnotationView {
-    static let reuseID = "placemark.glass"
-    static let diameter: CGFloat = 32
-    /// Radius of the safe circle every icon is sized to: 3.5 pt clear of the disc edge, so
-    /// the 2 pt selection ring never touches the icon.
-    static let iconRadius: CGFloat = 12.5
+/// The icon arrives pre-sized by `OpticalIcon` into a `2·iconRadius` square (at most
+/// `iconMaxSide` across), leaving clear air between it and the disc edge.
+final class IconPinAnnotationView: MKAnnotationView {
+    static let reuseID = "placemark.icon"
+    static let diameter: CGFloat = 34
+    /// Every visible icon pixel stays within this radius of the centre — at least 5 pt
+    /// clear of the disc edge.
+    /// `nonisolated`: read off the main actor by `PlacemarkPinImage` when sizing icons.
+    nonisolated static let iconRadius: CGFloat = 12
+    /// The visible icon is at most this wide or tall.
+    nonisolated static let iconMaxSide: CGFloat = 18
     static let visitedIconAlpha: CGFloat = 0.45
     private static let starSide: CGFloat = 14
 
-    private let disc = GlassDiscView()
+    private let disc = PinDiscView()
     private let iconView = UIImageView()
     private let starView = UIView()
 
@@ -61,22 +64,22 @@ final class GlassPinAnnotationView: MKAnnotationView {
         !starView.isHidden
     }
 
-    var discView: GlassDiscView {
+    var discView: PinDiscView {
         disc
     }
 
     /// Everything the pin shows. `icon` is the un-decorated base image (favourite and
-    /// visited are drawn here, not baked into it).
-    func configure(icon: UIImage, tint: UIColor?, isFavorite: Bool, isVisited: Bool, isFlat: Bool) {
+    /// visited are drawn here, not baked into it); `ringColor` colours the selection ring.
+    func configure(icon: UIImage, ringColor: UIColor?, isFavorite: Bool, isVisited: Bool) {
         iconView.image = icon
         iconView.alpha = isVisited ? Self.visitedIconAlpha : 1
         starView.isHidden = !isFavorite
-        disc.configure(tint: tint, isFlat: isFlat, isEmphasized: isPinSelected)
+        disc.configure(ringColor: ringColor, isEmphasized: isPinSelected)
     }
 
     func setPinSelected(_ selected: Bool) {
         isPinSelected = selected
-        disc.configure(tint: disc.tint, isFlat: disc.isFlat, isEmphasized: selected)
+        disc.configure(ringColor: disc.ringColor, isEmphasized: selected)
     }
 
     override func prepareForReuse() {
