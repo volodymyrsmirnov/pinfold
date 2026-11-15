@@ -213,7 +213,7 @@ extension RootView {
 /// A `nonisolated` free function so the `Task.detached` closure is compiled outside the view.
 private nonisolated func removeStrayCacheFolder(inSyncedRoot root: URL) async {
     await Task.detached {
-        StorageLocations.removeStrayCacheFolder(inSyncedRoot: root)
+        _ = StorageLocations.removeStrayCacheFolder(inSyncedRoot: root)
     }.value
 }
 
@@ -234,6 +234,6 @@ private nonisolated func recoverStranded(
 
 private nonisolated func pruneOrphanedCache(storage: StorageLocations, status: SyncStatus.State) async {
     await Task.detached(priority: .utility) {
-        LaunchReconciler.pruneCache(storage: storage, status: status)
+        _ = LaunchReconciler.pruneCache(storage: storage, status: status)
     }.value
 }

@@ -16,9 +16,10 @@ final class IconPinAnnotationView: MKAnnotationView {
     static let diameter: CGFloat = 34
     /// Every visible icon pixel stays within this radius of the centre — at least 5 pt
     /// clear of the disc edge.
-    static let iconRadius: CGFloat = 12
+    /// `nonisolated`: read off the main actor by `PlacemarkPinImage` when sizing icons.
+    nonisolated static let iconRadius: CGFloat = 12
     /// The visible icon is at most this wide or tall.
-    static let iconMaxSide: CGFloat = 18
+    nonisolated static let iconMaxSide: CGFloat = 18
     static let visitedIconAlpha: CGFloat = 0.45
     private static let starSide: CGFloat = 14
 

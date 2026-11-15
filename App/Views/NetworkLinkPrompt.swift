@@ -95,7 +95,7 @@ struct NetworkLinkPrompt: View {
     /// part (a retry finds the links already added as existing lists) or found its list being
     /// added by another subscribe that may still fail; once it finished, tapping again would
     /// only subscribe the same links twice.
-    static func showsButton(for status: NetworkLinkStatus) -> Bool {
+    nonisolated static func showsButton(for status: NetworkLinkStatus) -> Bool {
         switch status {
         case .idle, .partial, .pending, .failed: true
         case .subscribing, .finished: false

@@ -46,7 +46,7 @@ import Testing
     // MARK: - Sequential processing
 
     @Test func import_queueProcessesSequentially() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         coordinator.enqueuePrepared(
             [(kml(lon: 1, lat: 1), "a.kml"), (kml(lon: 2, lat: 2), "b.kml")],
             catalog: catalog, cache: cache
@@ -59,7 +59,7 @@ import Testing
     // MARK: - Duplicate handling
 
     @Test func import_duplicateStallsUntilDecision_skip() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let content = kml(lon: 3, lat: 3)
         coordinator.enqueuePrepared([(content, "first.kml")], catalog: catalog, cache: cache)
         await coordinator.drainForTesting()
@@ -83,7 +83,7 @@ import Testing
     }
 
     @Test func import_duplicateImportAnyway_addsSecondCopy() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let content = kml(lon: 4, lat: 4)
         coordinator.enqueuePrepared([(content, "first.kml")], catalog: catalog, cache: cache)
         await coordinator.drainForTesting()
@@ -100,7 +100,7 @@ import Testing
     // MARK: - isImporting flag
 
     @Test func import_isImportingTrueWhileProcessing() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         #expect(coordinator.isImporting == false)
 
         coordinator.enqueuePrepared([(kml(lon: 5, lat: 5), "x.kml")], catalog: catalog, cache: cache)
@@ -127,7 +127,7 @@ import Testing
     /// against a temporarily-reintroduced fire-and-forget commit) — so the exact asserts below
     /// pin the awaited behaviour.
     @Test func importAnyway_awaitsReloadBeforeNext() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let content = kml(lon: 6, lat: 6)
 
         // Seed an existing entry with this content.
@@ -175,7 +175,7 @@ import Testing
     }
 
     @Test func sameBytesFromOpenedFileAndInboxScan_importOnce() async throws {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let inboxURL = try makeInbox()
         let bytes = kml(lon: 10, lat: 10)
         let opened = inboxURL.appendingPathComponent("opened.kml")
@@ -237,7 +237,7 @@ import Testing
     }
 
     @Test func sameFileEnqueuedTwice_importsOnce() async throws {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let file = try makeInbox().appendingPathComponent("a.kml")
         try kml(lon: 11, lat: 11).write(to: file)
 
@@ -283,7 +283,7 @@ import Testing
     }
 
     @Test func nonInteractiveActiveDuplicate_isSkippedSilently() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let log = ImportFailureLog()
         coordinator.failureLog = log
         let content = kml(lon: 14, lat: 14)
@@ -385,7 +385,7 @@ import Testing
     }
 
     @Test func progressCountsAdvance() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let first = kml(lon: 30, lat: 30)
         coordinator.enqueuePrepared(
             [(first, "a.kml"), (first, "dup.kml"), (kml(lon: 31, lat: 31), "b.kml")],
@@ -413,7 +413,7 @@ import Testing
     }
 
     @Test func cancel_dropsRemainingItems_currentItemCompletes() async {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         coordinator.enqueuePrepared(
             [(kml(lon: 40, lat: 40), "a.kml"), (kml(lon: 41, lat: 41), "b.kml"), (kml(lon: 42, lat: 42), "c.kml")],
             catalog: catalog, cache: cache
@@ -466,7 +466,7 @@ import Testing
     }
 
     @Test func cancel_deletesPendingInboxCopies() async throws {
-        let (coordinator, catalog, storage, cache) = makeEnvironment()
+        let (coordinator, catalog, _, cache) = makeEnvironment()
         let dir = try makeInbox()
         var files: [URL] = []
         for index in 0 ..< 3 {

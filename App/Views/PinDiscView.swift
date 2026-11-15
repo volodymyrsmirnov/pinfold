@@ -55,9 +55,9 @@ final class PinDiscView: UIView {
         edge.layer.borderWidth
     }
 
-    /// The disc's fill colour for the current appearance.
-    var fillColor: UIColor? {
-        fill.backgroundColor
+    /// The neutral fill: near-black on dark maps, near-white on light ones, both near-opaque.
+    static func fillColor(isDark: Bool) -> UIColor {
+        isDark ? UIColor(white: 0.12, alpha: 0.92) : UIColor(white: 1, alpha: 0.95)
     }
 
     func configure(ringColor: UIColor?, isEmphasized: Bool) {
@@ -78,7 +78,7 @@ final class PinDiscView: UIView {
 
     private func refresh() {
         let isDark = traitCollection.userInterfaceStyle == .dark
-        fill.backgroundColor = isDark ? UIColor(white: 0.12, alpha: 0.92) : UIColor(white: 1, alpha: 0.95)
+        fill.backgroundColor = Self.fillColor(isDark: isDark)
         layer.shadowOpacity = isDark ? 0.45 : 0.25
         layer.shadowRadius = isDark ? 2 : 2.5
         if isEmphasized {

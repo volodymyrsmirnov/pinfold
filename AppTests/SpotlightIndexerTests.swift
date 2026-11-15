@@ -86,42 +86,42 @@ struct SpotlightIndexerTests {
         #expect(items.count == 3)
     }
 
-    @Test func entryItemHasEntryDomainAndDisplayName() {
+    @Test func entryItemHasEntryDomainAndDisplayName() throws {
         let entry = makeEntry(displayName: "Rome Trip")
         let items = SpotlightIndexer.items(for: entry, indexEntries: [])
         // No placemarks → just the entry item.
         #expect(items.count == 1)
-        let entryItem = try? #require(items.first)
-        #expect(entryItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "11111111-1111-1111-1111-111111111111"))
-        #expect(entryItem?.uniqueIdentifier == "11111111-1111-1111-1111-111111111111")
-        #expect(entryItem?.attributeSet.title == "Rome Trip")
+        let entryItem = try #require(items.first)
+        #expect(entryItem.domainIdentifier == SpotlightIndexer.domain(forFolderName: "11111111-1111-1111-1111-111111111111"))
+        #expect(entryItem.uniqueIdentifier == "11111111-1111-1111-1111-111111111111")
+        #expect(entryItem.attributeSet.title == "Rome Trip")
     }
 
-    @Test func placemarkItemCarriesTitleCoordsDomainAndEntryName() {
+    @Test func placemarkItemCarriesTitleCoordsDomainAndEntryName() throws {
         let entry = makeEntry(folderName: "FOLDER", displayName: "Rome Trip")
         let indexEntries = [
             PlacemarkIndex.Entry(key: "h:1", name: "Colosseum", lat: 41.89, lon: 12.49),
         ]
         let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
-        let placemarkItem = try? #require(items.first { $0.uniqueIdentifier != "FOLDER" })
-        #expect(placemarkItem?.uniqueIdentifier == "FOLDER/h:1")
-        #expect(placemarkItem?.domainIdentifier == SpotlightIndexer.domain(forFolderName: "FOLDER"))
-        #expect(placemarkItem?.attributeSet.title == "Colosseum")
-        #expect(placemarkItem?.attributeSet.contentDescription == "Rome Trip")
-        #expect(placemarkItem?.attributeSet.latitude == 41.89)
-        #expect(placemarkItem?.attributeSet.longitude == 12.49)
-        #expect(placemarkItem?.attributeSet.supportsNavigation == 1)
+        let placemarkItem = try #require(items.first { $0.uniqueIdentifier != "FOLDER" })
+        #expect(placemarkItem.uniqueIdentifier == "FOLDER/h:1")
+        #expect(placemarkItem.domainIdentifier == SpotlightIndexer.domain(forFolderName: "FOLDER"))
+        #expect(placemarkItem.attributeSet.title == "Colosseum")
+        #expect(placemarkItem.attributeSet.contentDescription == "Rome Trip")
+        #expect(placemarkItem.attributeSet.latitude == 41.89)
+        #expect(placemarkItem.attributeSet.longitude == 12.49)
+        #expect(placemarkItem.attributeSet.supportsNavigation == 1)
     }
 
-    @Test func placemarkItemWithoutCoordsHasNoLatLon() {
+    @Test func placemarkItemWithoutCoordsHasNoLatLon() throws {
         let entry = makeEntry(folderName: "FOLDER")
         let indexEntries = [
             PlacemarkIndex.Entry(key: "h:9", name: "Pantheon", lat: nil, lon: nil),
         ]
         let items = SpotlightIndexer.items(for: entry, indexEntries: indexEntries)
-        let placemarkItem = try? #require(items.first { $0.uniqueIdentifier != "FOLDER" })
-        #expect(placemarkItem?.attributeSet.latitude == nil)
-        #expect(placemarkItem?.attributeSet.longitude == nil)
+        let placemarkItem = try #require(items.first { $0.uniqueIdentifier != "FOLDER" })
+        #expect(placemarkItem.attributeSet.latitude == nil)
+        #expect(placemarkItem.attributeSet.longitude == nil)
     }
 }
 

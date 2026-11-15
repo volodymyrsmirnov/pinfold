@@ -51,17 +51,12 @@ struct PinViewsTests {
 
     /// The disc is a neutral, near-opaque fill in both appearances — never tinted with the
     /// icon's colour, which blended icons into their backing.
-    @Test func disc_isNeutralAndNearOpaqueInBothAppearances() throws {
-        for style in [UIUserInterfaceStyle.light, .dark] {
-            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
-            window.overrideUserInterfaceStyle = style
-            let disc = PinDiscView(frame: CGRect(x: 0, y: 0, width: 34, height: 34))
-            window.addSubview(disc)
-            disc.configure(ringColor: .red, isEmphasized: false)
-            let fill = try #require(disc.fillColor).rgbaComponents
-            #expect(fill.alpha >= 0.9, "fill too translucent in \(style)")
-            #expect(abs(fill.red - fill.green) < 0.01 && abs(fill.green - fill.blue) < 0.01, "fill tinted in \(style)")
-            #expect(style == .dark ? fill.red < 0.3 : fill.red > 0.9)
+    @Test func disc_isNeutralAndNearOpaqueInBothAppearances() {
+        for isDark in [false, true] {
+            let fill = PinDiscView.fillColor(isDark: isDark).rgbaComponents
+            #expect(fill.alpha >= 0.9, "fill too translucent (dark: \(isDark))")
+            #expect(abs(fill.red - fill.green) < 0.01 && abs(fill.green - fill.blue) < 0.01, "fill tinted (dark: \(isDark))")
+            #expect(isDark ? fill.red < 0.3 : fill.red > 0.9)
         }
     }
 
