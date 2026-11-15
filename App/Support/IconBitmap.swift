@@ -13,7 +13,7 @@ struct IconBitmap {
     let pixels: [SIMD4<Double>]
 
     init?(_ icon: UIImage) {
-        guard let cgImage = Self.cgImage(of: icon), cgImage.width > 0, cgImage.height > 0 else { return nil }
+        guard let cgImage = Self.source(for: icon), cgImage.width > 0, cgImage.height > 0 else { return nil }
         let scale = min(1, Double(Self.maxSide) / Double(max(cgImage.width, cgImage.height)))
         let width = max(1, Int((Double(cgImage.width) * scale).rounded()))
         let height = max(1, Int((Double(cgImage.height) * scale).rounded()))
@@ -47,13 +47,25 @@ struct IconBitmap {
         )
     }
 
-    private static func cgImage(of icon: UIImage) -> CGImage? {
-        // Only an upright image's raw pixels match how it is drawn; anything else (an EXIF-
-        // rotated JPEG) is redrawn so the bitmap is in display orientation.
+    /// The pixels to analyse, in display orientation. An upright image's raw pixels are used
+    /// as they are (the init scales them down); anything else (an EXIF-rotated JPEG) is
+    /// redrawn upright **directly at the capped size** and 1× scale — redrawing a large photo
+    /// at full size first could need gigabytes.
+    static func source(for icon: UIImage) -> CGImage? {
         if icon.imageOrientation == .up, let cgImage = icon.cgImage {
             return cgImage
         }
-        guard icon.size.width > 0, icon.size.height > 0 else { return nil }
-        return UIGraphicsImageRenderer(size: icon.size).image { _ in icon.draw(at: .zero) }.cgImage
+        let pixelSize = CGSize(width: icon.size.width * icon.scale, height: icon.size.height * icon.scale)
+        guard pixelSize.width > 0, pixelSize.height > 0 else { return nil }
+        let fit = min(1, CGFloat(maxSide) / max(pixelSize.width, pixelSize.height))
+        let size = CGSize(
+            width: max(1, (pixelSize.width * fit).rounded()),
+            height: max(1, (pixelSize.height * fit).rounded())
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            icon.draw(in: CGRect(origin: .zero, size: size))
+        }.cgImage
     }
 }

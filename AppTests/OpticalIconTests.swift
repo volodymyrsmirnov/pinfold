@@ -58,3 +58,17 @@ struct OpticalIconTests {
         #expect(OpticalIcon.render(blank, radius: radius) === blank)
     }
 }
+
+/// Tests for `IconBitmap`'s source image.
+struct IconBitmapTests {
+    /// A rotated image (EXIF orientation) is redrawn upright straight at the analysis size —
+    /// never at full size first, which for a large photo would need gigabytes.
+    @Test func rotatedImage_isRedrawnUprightAtTheCappedSize() throws {
+        let raw = try #require(IconFixtures.filled(.red, size: CGSize(width: 400, height: 300)).cgImage)
+        let rotated = UIImage(cgImage: raw, scale: 1, orientation: .right)
+        let source = try #require(IconBitmap.source(for: rotated))
+        #expect(max(source.width, source.height) <= IconBitmap.maxSide)
+        // `.right` turns the 400×300 landscape into a portrait.
+        #expect(source.height > source.width)
+    }
+}
