@@ -1,6 +1,6 @@
 import UIKit
 
-/// Works out an icon's colour family, so its glass pin can be tinted with it.
+/// Works out an icon's colour family, so its pin's selection ring can match it.
 ///
 /// Real map icons are rarely one flat colour: Google My Maps glyphs carry a black outline,
 /// classic Google icons add gradients and black detail, and downsampling blends the two. So
@@ -37,9 +37,9 @@ enum IconPalette {
     /// brightest, so anti-aliased blends with the outline don't muddy it.
     private static let brightShare = 0.75
 
-    /// The glass tint for `icon`: its hue for a single-hue icon; `nil` for white, grey,
-    /// black, multi-coloured or blank icons, which get plain glass.
-    static func glassTint(for icon: UIImage) -> UIColor? {
+    /// The accent colour for `icon`: its hue for a single-hue icon; `nil` for white, grey,
+    /// black, multi-coloured or blank icons, which fall back to the app's tint colour.
+    static func accentColor(for icon: UIImage) -> UIColor? {
         guard let bitmap = IconBitmap(icon), case let .hue(color) = kind(of: bitmap) else { return nil }
         return color
     }

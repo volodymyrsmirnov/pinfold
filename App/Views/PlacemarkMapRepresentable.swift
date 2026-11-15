@@ -261,17 +261,16 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 annotation.baseImage = base.image
                 annotation.anchor = base.anchor
                 redecorate(annotation, on: mapView, coordinator: coordinator)
-                swapToGlassView(annotation, on: mapView)
+                swapToIconPinView(annotation, on: mapView)
             }
         }
-        coordinator.refreshVisibleClusters(on: mapView)
     }
 
     /// A pin whose style just gained its icon is still showing in a teardrop
-    /// `MKAnnotationView`; re-add it so `viewFor` builds a `GlassPinAnnotationView`, keeping
+    /// `MKAnnotationView`; re-add it so `viewFor` builds an `IconPinAnnotationView`, keeping
     /// it selected if it was. Offscreen pins need nothing: `viewFor` runs when they appear.
-    private func swapToGlassView(_ annotation: PlacemarkAnnotation, on mapView: MKMapView) {
-        guard let view = mapView.view(for: annotation), !(view is GlassPinAnnotationView) else { return }
+    private func swapToIconPinView(_ annotation: PlacemarkAnnotation, on mapView: MKMapView) {
+        guard let view = mapView.view(for: annotation), !(view is IconPinAnnotationView) else { return }
         let wasSelected = mapView.selectedAnnotations.contains { $0 === annotation }
         mapView.removeAnnotation(annotation)
         mapView.addAnnotation(annotation)
@@ -293,8 +292,8 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             anchor: annotation.anchor
         )
         annotation.image = fresh
-        if let glass = mapView.view(for: annotation) as? GlassPinAnnotationView {
-            coordinator.configureGlass(glass, for: annotation)
+        if let iconPin = mapView.view(for: annotation) as? IconPinAnnotationView {
+            coordinator.configureIconPin(iconPin, for: annotation)
         } else if let view = mapView.view(for: annotation) {
             view.image = fresh
             view.centerOffset = annotation.anchor.centerOffset(forImageOfHeight: fresh.size.height)

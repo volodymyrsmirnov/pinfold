@@ -1,6 +1,6 @@
 # Map glass pins — design
 
-**Status:** approved by the owner after a simulator/device prototype · 2026-11-15.
+**Status:** approved by the owner after a simulator/device prototype · 2026-11-15. Backing revised by `2026-11-15-map-pin-contrast-design.md` (no live glass, no tint).
 Supersedes `2026-11-15-map-pin-badges-design.md` (solid badges), which was built, then
 replaced after the owner compared both on device.
 

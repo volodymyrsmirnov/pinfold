@@ -35,8 +35,8 @@ enum PinAnchor {
 /// Resolution order (mirrors `StyleIcon`):
 /// 1. If the placemark's resolved style has an icon `href` cached on disk, that image is
 ///    loaded via `UIImage(contentsOfFile:)`, sized by its visible shape (`OpticalIcon`) with
-///    its colours untouched, and anchored by its centre; `GlassPinAnnotationView` draws it on
-///    a Liquid Glass disc.
+///    its colours untouched, and anchored by its centre; `IconPinAnnotationView` draws it on
+///    a neutral disc.
 /// 2. Otherwise, a teardrop "balloon" pin tinted by the style's `iconColor` (or accent
 ///    color) is drawn, anchored by its bottom tip. A white outline, white inner dot, and
 ///    soft drop shadow keep it legible on any basemap — including a dark-colored pin on a
@@ -45,7 +45,7 @@ enum PinAnchor {
 /// All work is synchronous file/CoreGraphics I/O — call it on the main actor when
 /// building annotations (placemark counts are typically small).
 enum PlacemarkPinImage {
-    /// The teardrop head diameter, in points (href-backed icons use `GlassPinAnnotationView`).
+    /// The teardrop head diameter, in points (href-backed icons use `IconPinAnnotationView`).
     /// Kept fairly small so pins collide (and therefore cluster) less aggressively — MapKit
     /// has no cluster-radius API, so annotation-view size is the main lever.
     static let dimension: CGFloat = 24
@@ -94,8 +94,13 @@ enum PlacemarkPinImage {
                let image = UIImage(contentsOfFile: localURL.path)
             {
                 // swiftlint:enable opening_brace
-                // Colours untouched; `GlassPinAnnotationView` draws the glass disc around it.
-                return (OpticalIcon.render(image, radius: GlassPinAnnotationView.iconRadius), .center)
+                // Colours untouched; `IconPinAnnotationView` draws the disc around it.
+                let icon = OpticalIcon.render(
+                    image,
+                    radius: IconPinAnnotationView.iconRadius,
+                    maxSide: IconPinAnnotationView.iconMaxSide
+                )
+                return (icon, .center)
             }
         }
 
