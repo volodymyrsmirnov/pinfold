@@ -53,7 +53,6 @@ extension HomeView {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal)
             .padding(.bottom, 8)
         }
     }
@@ -158,9 +157,11 @@ extension HomeView {
         let files = matchingFiles
         let grouped = groupedPlaceHits
         if files.isEmpty, grouped.isEmpty {
-            ContentUnavailableView.search(text: trimmedQuery)
+            withListControls { ContentUnavailableView.search(text: trimmedQuery) }
         } else {
             List(selection: $selection) {
+                // The picker and banners lead the results, as they lead the file list.
+                Section {} header: { listControls }
                 if !files.isEmpty {
                     Section("Files") {
                         ForEach(files) { entry in

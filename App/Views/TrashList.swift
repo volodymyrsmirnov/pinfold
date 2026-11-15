@@ -3,15 +3,21 @@ import SwiftUI
 /// The Trash segment's list. Swipe a row to the right (or long-press it) to Restore it or Delete
 /// it for good. Deleting asks no confirmation: it's Trash, so a file there is already on its way
 /// out. Bulk deletion is the toolbar's Select mode (`HomeView`).
-struct TrashList: View {
+struct TrashList<Header: View>: View {
     let trashed: [CatalogEntry]
+    /// Leads the list (Home's picker and banners), scrolling with the rows.
+    @ViewBuilder let header: Header
 
     @Environment(Catalog.self) private var catalog
 
     var body: some View {
         List {
-            ForEach(trashed) { entry in
-                row(for: entry)
+            Section {
+                ForEach(trashed) { entry in
+                    row(for: entry)
+                }
+            } header: {
+                header
             }
         }
         .catalogueListStyle()

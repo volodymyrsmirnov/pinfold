@@ -135,19 +135,11 @@ struct HomeView: View {
     // MARK: - Body
 
     var body: some View {
-        // The list is the screen's content and the picker and banners ride above it in a safe-area
-        // bar, so the navigation bar finds the list's scroll view: the large title collapses and
-        // rows scroll under the glass, exactly as on a file's own screen. (In a plain VStack the
-        // list sat below a fixed header and the title never collapsed.)
+        // The list is the screen's whole content (the picker and banners are its first header,
+        // `listControls`), so the navigation bar tracks its scroll view: the large title collapses
+        // and stretches and the search bar pins, exactly as on a file's own screen.
         fileList
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaBar(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    SyncStatusBanner()
-                    pickerBar
-                    importFailureBanner
-                }
-            }
             .navigationTitle("Pinfold")
             // Files searches file names and every file's places; Trash filters its rows by name.
             // `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F command
