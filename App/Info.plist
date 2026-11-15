@@ -170,7 +170,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Pinfold shows your current location on the map alongside a file's placemarks. Your location never leaves your device.</string>
+	<string>Pinfold shows your current location on the map alongside a file's places. Your location never leaves your device.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.tech.inkhorn.pinfold</key>

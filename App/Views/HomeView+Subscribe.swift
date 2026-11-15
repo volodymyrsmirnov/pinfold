@@ -195,7 +195,7 @@ extension View {
     ) -> some View {
         confirmationDialog(
             target.wrappedValue.map {
-                String(localized: "Stop updating \u{201C}\($0.displayName)\u{201D}? The current copy stays as a normal list.")
+                String(localized: "Stop Updating \u{201C}\($0.displayName)\u{201D}?")
             } ?? "",
             isPresented: Binding(
                 get: { target.wrappedValue != nil && (entryID == nil || target.wrappedValue?.id == entryID) },
@@ -210,6 +210,8 @@ extension View {
         ) { entry in
             Button("Stop Updating", role: .destructive) { stop(entry) }
             Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The current copy stays as a normal list.")
         }
     }
 }

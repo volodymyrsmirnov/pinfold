@@ -31,9 +31,13 @@ extension HomeView {
     /// edit mode is forced on so the selection checkmarks render on iPhone, iPad and Mac alike.
     var selectionList: some View {
         List(selection: $bulkSelection) {
-            ForEach(selectableEntries) { entry in
-                FileRow(entry: entry, online: segment == .files ? onlineStatus(for: entry) : nil)
-                    .tag(entry.id)
+            Section {
+                ForEach(selectableEntries) { entry in
+                    FileRow(entry: entry, online: segment == .files ? onlineStatus(for: entry) : nil)
+                        .tag(entry.id)
+                }
+            } header: {
+                listControls
             }
         }
         .catalogueListStyle()

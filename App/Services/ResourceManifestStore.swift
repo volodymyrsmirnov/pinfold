@@ -107,14 +107,20 @@ final class ResourceManifestStore: Sendable {
     }
 
     /// Atomically mutates the manifest. Skips the write when `body` changes nothing.
+    /// A real change (a download landing, a skip, a clear) is reported to `ResourceRevisions`, so
+    /// views showing this entry's images re-resolve them.
     func updateManifest(in dir: URL, _ body: (inout [String: String]) -> Void) throws {
-        try withLock(dir) {
+        let changed = try withLock(dir) {
             let old = read([String: String].self, Self.manifestFilename, in: dir) ?? [:]
             var new = old
             body(&new)
             if new != old || !fileExists(Self.manifestFilename, in: dir) {
                 try write(new, Self.manifestFilename, in: dir)
             }
+            return new != old
+        }
+        if changed {
+            ResourceRevisions.noteChange(in: dir)
         }
     }
 

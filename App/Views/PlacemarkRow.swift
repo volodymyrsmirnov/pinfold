@@ -110,7 +110,7 @@ struct PlacemarkRow: View {
     private var thumbnailView: some View {
         if let firstLink = placemark.photoLinks.first {
             let resourcesDir = storage.resourcesDirectory(for: entry)
-            if let localURL = resourceCache.localURL(forHref: firstLink, in: resourcesDir) {
+            if let localURL = resourceCache.observedLocalURL(forHref: firstLink, in: resourcesDir) {
                 AsyncImage(url: localURL) { phase in
                     switch phase {
                     case let .success(image):

@@ -38,6 +38,8 @@ extension PlacemarkMapRepresentable {
         var highlightedOverlayKey: String?
         var lastFavoriteKeys: Set<String> = []
         var lastVisitedKeys: Set<String> = []
+        /// The `ResourceRevisions` value the pins' icons were last resolved at.
+        var lastResourceRevision = 0
         /// The set of placemark `stableKey`s currently realized as annotations on the map.
         /// Compared against the desired set each `updateUIView` to skip reconciliation when
         /// nothing changed.

@@ -72,7 +72,7 @@ struct EntryQuery: EntityStringQuery {
 /// dependencies aren't wired yet.
 struct OpenEntryIntent: AppIntent {
     static let title: LocalizedStringResource = "Open File"
-    static let description = IntentDescription("Opens a file from your Pinfold catalogue.")
+    static let description = IntentDescription("Opens a file in Pinfold.")
 
     /// Bring the app to the foreground — the catalogue UI is where the file actually opens.
     static let openAppWhenRun = true

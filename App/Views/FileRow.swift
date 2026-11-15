@@ -69,7 +69,7 @@ struct FileRow: View {
                 .foregroundStyle(isHighlighted ? Color.white : Color.accentColor)
         }
         .accessibilityElement()
-        .accessibilityLabel(entry.isOnline ? "Online list" : "File")
+        .accessibilityLabel(entry.isOnline ? "Online List" : "File")
     }
 
     /// Only an idle online list shows a relative time ("Updated 20s ago"); that row is

@@ -67,7 +67,7 @@ struct MapPickerSheet: View {
         let apps = mapService.availableApps(enabledIDs: settings.enabledMapAppIDs)
         return Section {
             if apps.isEmpty {
-                Text("No map apps enabled.")
+                Text("No map apps are turned on. Choose them in Settings.")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(apps) { app in
