@@ -55,7 +55,9 @@ final class GlassClusterAnnotationView: MKAnnotationView {
     func configure(count: Int, tint: UIColor?, isFlat: Bool) {
         countLabel.text = "\(count)"
         let width = Self.width(forCountText: countLabel.text ?? "", font: countLabel.font)
-        frame = CGRect(x: 0, y: 0, width: width, height: Self.height)
+        // Resize around the current centre: MapKit positions the view, and a bubble already
+        // on screen (a tint refresh) must not jump.
+        bounds.size = CGSize(width: width, height: Self.height)
         disc.frame = bounds
         countLabel.frame = disc.bounds
         disc.configure(tint: tint, isFlat: isFlat, isEmphasized: false)

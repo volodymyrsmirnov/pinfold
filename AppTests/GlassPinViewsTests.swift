@@ -72,6 +72,17 @@ struct GlassPinViewsTests {
         }
     }
 
+    /// Reconfiguring a cluster already on the map (a tint refresh) keeps it where MapKit
+    /// placed it, even when its width changes.
+    @Test func cluster_reconfigureKeepsItsPosition() {
+        let cluster = GlassClusterAnnotationView(annotation: nil, reuseIdentifier: nil)
+        cluster.configure(count: 7, tint: nil, isFlat: false)
+        cluster.center = CGPoint(x: 120, y: 240)
+        cluster.configure(count: 12345, tint: .red, isFlat: false)
+        #expect(cluster.center == CGPoint(x: 120, y: 240))
+        #expect(cluster.bounds.width > GlassClusterAnnotationView.height)
+    }
+
     @Test func cluster_majorityTint() {
         let red = UIColor.red, blue = UIColor.blue
         #expect(GlassClusterAnnotationView.majorityTint(of: [red, red, blue]) == red)
