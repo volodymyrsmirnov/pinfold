@@ -264,6 +264,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
                 swapToGlassView(annotation, on: mapView)
             }
         }
+        coordinator.refreshVisibleClusters(on: mapView)
     }
 
     /// A pin whose style just gained its icon is still showing in a teardrop

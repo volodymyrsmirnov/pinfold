@@ -63,6 +63,15 @@ struct GlassPinViewsTests {
         #expect(!cluster.discView.isShowingLiveGlass)
     }
 
+    /// The count stays visible on both the live glass and the flat fallback disc.
+    @Test func cluster_countIsVisibleInBothModes() {
+        let cluster = GlassClusterAnnotationView(annotation: nil, reuseIdentifier: nil)
+        for isFlat in [false, true] {
+            cluster.configure(count: 7, tint: nil, isFlat: isFlat)
+            #expect(cluster.isCountVisible, "count hidden when isFlat = \(isFlat)")
+        }
+    }
+
     @Test func cluster_majorityTint() {
         let red = UIColor.red, blue = UIColor.blue
         #expect(GlassClusterAnnotationView.majorityTint(of: [red, red, blue]) == red)

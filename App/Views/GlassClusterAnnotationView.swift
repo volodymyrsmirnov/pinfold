@@ -36,6 +36,18 @@ final class GlassClusterAnnotationView: MKAnnotationView {
         countLabel.text
     }
 
+    /// Whether the count label and every view above it, up to this one, is shown.
+    var isCountVisible: Bool {
+        var view: UIView? = countLabel
+        while let current = view, current !== self {
+            if current.isHidden || current.alpha == 0 {
+                return false
+            }
+            view = current.superview
+        }
+        return view === self
+    }
+
     var discView: GlassDiscView {
         disc
     }

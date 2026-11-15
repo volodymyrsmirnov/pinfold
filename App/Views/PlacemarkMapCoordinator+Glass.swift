@@ -43,6 +43,22 @@ extension PlacemarkMapRepresentable.Coordinator {
             as? GlassClusterAnnotationView
             ?? GlassClusterAnnotationView(annotation: cluster, reuseIdentifier: GlassClusterAnnotationView.reuseID)
         view.annotation = cluster
+        configureCluster(view, for: cluster)
+        return view
+    }
+
+    /// Re-derives the tint of every cluster bubble on screen — after icons arrive, a
+    /// cluster's members may now share a hue they didn't before. Offscreen clusters are
+    /// configured by `viewFor` when they appear.
+    func refreshVisibleClusters(on mapView: MKMapView) {
+        for case let cluster as MKClusterAnnotation in mapView.annotations {
+            if let view = mapView.view(for: cluster) as? GlassClusterAnnotationView {
+                configureCluster(view, for: cluster)
+            }
+        }
+    }
+
+    private func configureCluster(_ view: GlassClusterAnnotationView, for cluster: MKClusterAnnotation) {
         let tints = cluster.memberAnnotations.map { member in
             (member as? PlacemarkAnnotation).flatMap(glassTint(for:))
         }
@@ -51,6 +67,5 @@ extension PlacemarkMapRepresentable.Coordinator {
             tint: GlassClusterAnnotationView.majorityTint(of: tints),
             isFlat: usesFlatGlass
         )
-        return view
     }
 }

@@ -22,6 +22,7 @@ final class GlassDiscView: UIView {
     private let flatDisc = UIView()
     private let flatTint = UIView()
     private let edge = UIView()
+    private let foreground = UIView()
 
     private(set) var tint: UIColor?
     private(set) var isFlat = false
@@ -36,13 +37,14 @@ final class GlassDiscView: UIView {
         layer.shadowOffset = CGSize(width: 0, height: 1)
 
         glass.cornerConfiguration = .capsule()
-        for part in [flatDisc, flatTint, edge] {
+        for part in [flatDisc, flatTint, edge, foreground] {
             part.clipsToBounds = true
             part.isUserInteractionEnabled = false
         }
         addSubview(flatDisc)
         flatDisc.addSubview(flatTint)
         addSubview(glass)
+        addSubview(foreground)
         addSubview(edge)
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: Self, _) in
@@ -56,9 +58,10 @@ final class GlassDiscView: UIView {
         fatalError("init(coder:) is not supported")
     }
 
-    /// The glass content view — put labels here so they sit on the glass.
+    /// Where content (a cluster's count) goes: above both the live glass and the flat
+    /// disc, so it shows whichever backing is active.
     var contentView: UIView {
-        glass.contentView
+        foreground
     }
 
     var isShowingLiveGlass: Bool {
@@ -79,10 +82,10 @@ final class GlassDiscView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         let radius = bounds.height / 2
-        for part in [glass, flatDisc, flatTint, edge] {
+        for part in [glass, flatDisc, flatTint, edge, foreground] {
             part.frame = bounds
         }
-        for part in [flatDisc, flatTint, edge] {
+        for part in [flatDisc, flatTint, edge, foreground] {
             part.layer.cornerRadius = radius
         }
         layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
