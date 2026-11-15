@@ -55,10 +55,12 @@ extension HomeView {
     // MARK: - List controls
 
     /// The sync notice, the Files / Archive picker and the import-failure banner. They are the
-    /// header of the first section of whichever list is showing, so they scroll — and stretch on
-    /// a pull-down — with the rows under the large title and search bar, as a file's own rows do.
-    /// (Pinned above the list instead, the title never collapsed; pinned in a safe-area bar, a
-    /// pull-down slid the title and search bar over them.)
+    /// header of the first section of whichever list is showing, so they move with the list under
+    /// the large title and search bar — stretching on a pull-down, as a file's own rows do. On
+    /// iPhone (inset grouped) they scroll away; in the iPad/Mac sidebar's plain list the header is
+    /// sticky, so the picker stays in reach while the rows scroll, as it did before 2.2. (Pinned
+    /// above the list instead, the title never collapsed; pinned in a safe-area bar, a pull-down
+    /// slid the title and search bar over them.)
     var listControls: some View {
         controlsStack
             // An inset-grouped header (iPhone) already lines up with the cards; a plain list's

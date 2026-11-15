@@ -84,7 +84,7 @@ struct ImportAlertsModifier: ViewModifier {
             }
             // Import error alert
             .alert(
-                "Import Failed",
+                "Couldn't Import File",
                 isPresented: Binding(
                     get: { importCoordinator.importError != nil },
                     set: {
