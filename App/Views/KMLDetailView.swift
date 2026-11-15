@@ -124,7 +124,7 @@ struct KMLDetailView: View {
         Group {
             if let error = loadError {
                 ContentUnavailableView {
-                    Label("Cannot Open File", systemImage: "exclamationmark.triangle")
+                    Label("Couldn't Open File", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(error.localizedDescription)
                 }
@@ -141,7 +141,7 @@ struct KMLDetailView: View {
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: Text("Search places, descriptions and notes")
+            prompt: Text("Search Places and Notes")
         )
         .searchFocused($isSearchFocused)
         .textInputAutocapitalization(.never)

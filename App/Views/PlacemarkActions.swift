@@ -186,7 +186,7 @@ struct PlacemarkShareLink: View {
     let url: URL
 
     var body: some View {
-        ShareLink(item: url, subject: Text(place.name ?? "Placemark")) {
+        ShareLink(item: url, subject: Text(place.name ?? String(localized: "Place"))) {
             Label("Share", systemImage: "square.and.arrow.up")
         }
     }

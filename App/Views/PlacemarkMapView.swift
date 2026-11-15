@@ -62,6 +62,7 @@ struct PlacemarkMapView: View {
                 clusterPins: settings.clusterMapPins,
                 favoriteKeys: annotations?.favoriteKeys ?? [],
                 visitedKeys: annotations?.visitedKeys ?? [],
+                resourceRevision: ResourceRevisions.shared.revision(for: storage.resourcesDirectory(for: entry)),
                 initialFocusKey: initialFocusKey,
                 ignoresSavedCamera: fitsPlacemarks,
                 selectedKey: $selectedPlacemarkKey
@@ -176,7 +177,7 @@ private struct PlacemarkPreviewCard: View {
     private var thumbnail: some View {
         if let firstLink = placemark.photoLinks.first {
             let resourcesDir = storage.resourcesDirectory(for: entry)
-            if let localURL = resourceCache.localURL(forHref: firstLink, in: resourcesDir) {
+            if let localURL = resourceCache.observedLocalURL(forHref: firstLink, in: resourcesDir) {
                 AsyncImage(url: localURL) { phase in
                     if case let .success(image) = phase {
                         image

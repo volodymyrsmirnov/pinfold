@@ -30,7 +30,7 @@ extension HomeView {
         } else {
             if trashed.isEmpty {
                 ContentUnavailableView {
-                    Label("Archive is Empty", systemImage: "archivebox")
+                    Label("No Archived Files", systemImage: "archivebox")
                 } description: {
                     Text("Files you archive will appear here.")
                 }

@@ -29,7 +29,7 @@ extension KMLDetailView {
                     }
                     if outline.rows.isEmpty, !query.isEmpty {
                         Section {
-                            Text("No placemarks match \u{201C}\(query)\u{201D}.")
+                            Text("No places match \u{201C}\(query)\u{201D}.")
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
                         }

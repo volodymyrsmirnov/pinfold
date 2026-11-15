@@ -243,7 +243,7 @@ struct PlacemarkDetailView: View {
                 chipContent(item, isLink: true)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens the link")
+            .accessibilityHint("Opens the link.")
         } else {
             chipContent(item, isLink: false)
                 .textSelection(.enabled)

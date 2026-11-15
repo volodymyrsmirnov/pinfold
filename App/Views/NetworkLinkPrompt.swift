@@ -109,7 +109,7 @@ struct NetworkLinkPrompt: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("This file links to online data", systemImage: "globe")
+            Label("This File Links to Online Data", systemImage: "globe")
                 .font(.headline)
             Text(detail)
                 .font(.footnote)

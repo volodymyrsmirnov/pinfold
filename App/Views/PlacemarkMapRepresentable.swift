@@ -27,6 +27,9 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
     let clusterPins: Bool
     let favoriteKeys: Set<String>
     let visitedKeys: Set<String>
+    /// The entry's `ResourceRevisions` value: when it moves, pins still showing the fallback
+    /// look up their style's icon again (it may have just been downloaded, e.g. after a clear).
+    var resourceRevision = 0
     /// When non-nil and it matches a realized pin, the map opens zoomed to and with that
     /// pin selected (its preview card shown) instead of fitting all pins — the "Show on
     /// Embedded Map" deep link from the POI page. `nil` → fit all pins (the default).
@@ -129,6 +132,7 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
             coordinator.didInitialFrame = true
         }
 
+        context.coordinator.lastResourceRevision = resourceRevision
         addControls(to: mapView, coordinator: context.coordinator)
         context.coordinator.installOverlayTapRecognizer(on: mapView)
         return mapView
@@ -219,6 +223,44 @@ struct PlacemarkMapRepresentable: UIViewRepresentable {
         coordinator.lastVisitedKeys = visitedKeys
         for key in changedKeys {
             for annotation in coordinator.pins(forKey: key) {
+                redecorate(annotation, on: mapView, coordinator: coordinator)
+            }
+        }
+
+        if resourceRevision != coordinator.lastResourceRevision {
+            coordinator.lastResourceRevision = resourceRevision
+            refreshPinIcons(on: mapView, coordinator: coordinator)
+        }
+    }
+
+    /// Re-resolves the icons of pins still showing the fallback teardrop, after the entry's
+    /// cached resources changed: a style whose icon has since been downloaded gets it. Resolved
+    /// icons are kept (a clear while the map is open leaves them until it is reopened), so this
+    /// is one cache lookup per fallback style plus a walk of the realized pins.
+    private func refreshPinIcons(on mapView: MKMapView, coordinator: Coordinator) {
+        let fallbackKeys = coordinator.pinImageCache.filter { $0.value.anchor == .bottomTip }.map(\.key)
+        guard !fallbackKeys.isEmpty else { return }
+        for key in fallbackKeys {
+            coordinator.pinImageCache[key] = nil
+        }
+        for placemark in placemarks {
+            let pins = coordinator.pins(forKey: placemark.stableKey)
+            guard let first = pins.first, first.anchor == .bottomTip else { continue }
+            let key = PlacemarkPinImage.cacheKey(for: placemark, document: document)
+            let base: (image: UIImage, anchor: PinAnchor)
+            if let cached = coordinator.pinImageCache[key] {
+                base = cached
+            } else {
+                base = PlacemarkPinImage.image(
+                    for: placemark, document: document, entry: entry,
+                    resourceCache: resourceCache, storage: storage
+                )
+                coordinator.pinImageCache[key] = base
+            }
+            guard base.anchor == .center else { continue }
+            for annotation in pins {
+                annotation.baseImage = base.image
+                annotation.anchor = base.anchor
                 redecorate(annotation, on: mapView, coordinator: coordinator)
             }
         }

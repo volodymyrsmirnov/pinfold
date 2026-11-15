@@ -16,14 +16,15 @@ final class PlacemarkAnnotation: NSObject, MKAnnotation {
     let title: String?
     /// The un-decorated base image (loaded from disk or SF Symbol). Stored so
     /// `updateUIView` can re-composite favorite/visited badges cheaply without re-reading disk.
-    let baseImage: UIImage
+    /// Replaced (with `anchor`) when the style's icon finishes downloading after the pin was made.
+    var baseImage: UIImage
     /// The currently decorated pin image. Updated in `updateUIView` when favorite/visited
     /// state changes; the `viewFor` delegate reads this to set `view.image`.
     var image: UIImage
     /// How this pin sits on its coordinate — constant per placemark (it follows the resolved
     /// style: tip-anchored teardrop fallback vs centre-anchored custom icon). `viewFor` and
     /// the re-decoration pass derive `centerOffset` from this and the current image height.
-    let anchor: PinAnchor
+    var anchor: PinAnchor
 
     init(
         stableKey: String,
@@ -181,7 +182,9 @@ extension PlacemarkMapRepresentable {
         var order: [String] = []
         for placemark in desired {
             let key = placemark.stableKey
-            if byKey[key] == nil { order.append(key) }
+            if byKey[key] == nil {
+                order.append(key)
+            }
             byKey[key] = placemark
         }
         let desiredKeys = Set(order)
@@ -230,7 +233,11 @@ extension PlacemarkMapRepresentable {
     /// additional pin sharing the placemark's `stableKey`.
     nonisolated static func extraPoints(of placemark: KMLPlacemark) -> [Coordinate] {
         placemark.geometries.compactMap { geometry in
-            if case let .point(coordinate) = geometry { coordinate } else { nil }
+            if case let .point(coordinate) = geometry {
+                coordinate
+            } else {
+                nil
+            }
         }
     }
 

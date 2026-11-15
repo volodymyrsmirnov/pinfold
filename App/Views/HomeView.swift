@@ -135,91 +135,98 @@ struct HomeView: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(spacing: 0) {
-            SyncStatusBanner()
-            pickerBar
-            importFailureBanner
-            fileList
-        }
-        .navigationTitle("Pinfold")
-        // Files searches file names and every file's places; Trash filters its rows by name.
-        // `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F command
-        // move keyboard focus here.
-        .searchable(
-            text: $searchQuery,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: segment == .files ? Text("Search files and places") : Text("Search Archive")
-        )
-        .searchFocused($isSearchFocused)
-        // Debounced, off-main search over each active entry's local placemark index. Re-keys on
-        // the query AND the segment so returning to Files with a live query recomputes the hits
-        // (Trash filters by name only, without this task). Single trigger — simpler than KMLDetailView's two-trigger
-        // split, which existed only to handle un-debounced collapse toggles.
-        .task(id: SearchTrigger(query: searchQuery, segment: segment, dataRevision: catalog.searchDataRevision)) {
-            let query = trimmedQuery
-            guard segment == .files, !query.isEmpty else {
-                placeHits = []
-                hitAnnotations = [:]
-                return
+        // The list is the screen's content and the picker and banners ride above it in a safe-area
+        // bar, so the navigation bar finds the list's scroll view: the large title collapses and
+        // rows scroll under the glass, exactly as on a file's own screen. (In a plain VStack the
+        // list sat below a fixed header and the title never collapsed.)
+        fileList
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaBar(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    SyncStatusBanner()
+                    pickerBar
+                    importFailureBanner
+                }
             }
-            try? await Task.sleep(for: Self.searchDebounce)
-            if Task.isCancelled {
-                return
+            .navigationTitle("Pinfold")
+            // Files searches file names and every file's places; Trash filters its rows by name.
+            // `.searchable` is the iOS 26 native placement; `.searchFocused` lets the ⌘F command
+            // move keyboard focus here.
+            .searchable(
+                text: $searchQuery,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: segment == .files ? Text("Search Files and Places") : Text("Search Archive")
+            )
+            .searchFocused($isSearchFocused)
+            // Debounced, off-main search over each active entry's local placemark index. Re-keys on
+            // the query AND the segment so returning to Files with a live query recomputes the hits
+            // (Trash filters by name only, without this task). Single trigger — simpler than KMLDetailView's two-trigger
+            // split, which existed only to handle un-debounced collapse toggles.
+            .task(id: SearchTrigger(query: searchQuery, segment: segment, dataRevision: catalog.searchDataRevision)) {
+                let query = trimmedQuery
+                guard segment == .files, !query.isEmpty else {
+                    placeHits = []
+                    hitAnnotations = [:]
+                    return
+                }
+                try? await Task.sleep(for: Self.searchDebounce)
+                if Task.isCancelled {
+                    return
+                }
+                // Snapshot the (folderName, resourcesDir) pairs on the main actor, then read the
+                // index files off-main — the read is pure disk I/O over Sendable URLs.
+                let sources = active.map {
+                    PlacemarkIndex.Source(
+                        folderName: $0.storageFolderName,
+                        resourcesDir: catalog.storage.resourcesDirectory(for: $0),
+                        sidecarURL: catalog.storage.metadataFile(for: $0)
+                    )
+                }
+                let hits = await Task.detached(priority: .userInitiated) {
+                    PlacemarkIndex.search(query, in: sources)
+                }.value
+                if Task.isCancelled {
+                    return
+                }
+                placeHits = hits
+                hitAnnotations = annotationsForHits(hits)
             }
-            // Snapshot the (folderName, resourcesDir) pairs on the main actor, then read the
-            // index files off-main — the read is pure disk I/O over Sendable URLs.
-            let sources = active.map {
-                PlacemarkIndex.Source(
-                    folderName: $0.storageFolderName,
-                    resourcesDir: catalog.storage.resourcesDirectory(for: $0),
-                    sidecarURL: catalog.storage.metadataFile(for: $0)
-                )
+            // Menu commands act on THIS window only: published as a focused-scene value.
+            .focusedSceneValue(\.windowCommands, windowCommands)
+            .stopUpdatingConfirmation(target: $menuStopUpdatingTarget, stop: runStopUpdating)
+            .toolbar { toolbarContent }
+            .fileImporter(
+                isPresented: $isFileImporterPresented,
+                allowedContentTypes: ImportFormats.allowedContentTypes,
+                allowsMultipleSelection: true
+            ) { result in
+                handleFileImporterResult(result)
             }
-            let hits = await Task.detached(priority: .userInitiated) {
-                PlacemarkIndex.search(query, in: sources)
-            }.value
-            if Task.isCancelled {
-                return
+            .modifier(ImportAlertsModifier(importCoordinator: importCoordinator))
+            .modifier(SubscribeAlertsModifier(
+                prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
+            ))
+            .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
+            .onChange(of: canSelect) { _, allowed in
+                if !allowed {
+                    endSelecting()
+                }
             }
-            placeHits = hits
-            hitAnnotations = annotationsForHits(hits)
-        }
-        // Menu commands act on THIS window only: published as a focused-scene value.
-        .focusedSceneValue(\.windowCommands, windowCommands)
-        .stopUpdatingConfirmation(target: $menuStopUpdatingTarget, stop: runStopUpdating)
-        .toolbar { toolbarContent }
-        .fileImporter(
-            isPresented: $isFileImporterPresented,
-            allowedContentTypes: ImportFormats.allowedContentTypes,
-            allowsMultipleSelection: true
-        ) { result in
-            handleFileImporterResult(result)
-        }
-        .modifier(ImportAlertsModifier(importCoordinator: importCoordinator))
-        .modifier(SubscribeAlertsModifier(
-            prompt: $subscribePrompt, isSubscribing: isSubscribing, subscribe: runSubscribe
-        ))
-        .modifier(OnlineListDialogsModifier(refreshError: $refreshError))
-        .onChange(of: canSelect) { _, allowed in
-            if !allowed {
-                endSelecting()
-            }
-        }
-        // A selection belongs to one segment's list; switching segments leaves select mode.
-        .onChange(of: segment) { endSelecting() }
-        // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
-        // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
-        // split column, and wraps it in its own NavigationStack so its title bar renders.
-        .sheet(isPresented: $isSettingsPresented) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(role: .close) { isSettingsPresented = false }
+            // A selection belongs to one segment's list; switching segments leaves select mode.
+            .onChange(of: segment) { endSelecting() }
+            // Settings as a modal sheet (was a pushed NavigationLink under the old single-stack
+            // root). A sheet keeps Settings full-window on iPad/Mac instead of landing in one
+            // split column, and wraps it in its own NavigationStack so its title bar renders.
+            .sheet(isPresented: $isSettingsPresented) {
+                NavigationStack {
+                    SettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button(role: .close) { isSettingsPresented = false }
+                            }
                         }
-                    }
+                }
             }
-        }
         // Inbox draining (share-extension handoff) is performed once in RootView's
         // .task on launch; it is intentionally NOT duplicated here.
     }

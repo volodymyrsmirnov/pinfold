@@ -101,7 +101,7 @@ struct StyleIcon: View {
     private func cachedIconURL(href: String?) -> URL? {
         guard let href, !href.isEmpty else { return nil }
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        return resourceCache.localURL(forHref: href, in: resourcesDir)
+        return resourceCache.observedLocalURL(forHref: href, in: resourcesDir)
     }
 
     private func fallbackPin(tint: Color) -> some View {

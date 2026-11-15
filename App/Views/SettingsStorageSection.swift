@@ -31,7 +31,7 @@ struct SettingsStorageSection: View {
         Button("Clear Downloaded Images", role: .destructive) { confirmClear = true }
             .disabled(isClearing || (usage?.downloadedImages ?? 0) == 0)
             .confirmationDialog(
-                "Clear downloaded images?", isPresented: $confirmClear, titleVisibility: .visible
+                "Clear Downloaded Images?", isPresented: $confirmClear, titleVisibility: .visible
             ) {
                 Button("Clear Images", role: .destructive) { Task { await clear() } }
             } message: {

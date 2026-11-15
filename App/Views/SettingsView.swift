@@ -89,7 +89,7 @@ struct SettingsView: View {
                 get: { settings.defaultMapAppID },
                 set: { settings.defaultMapAppID = $0 }
             )) {
-                Text("None \u{2014} always ask").tag(String?.none)
+                Text("Always Ask").tag(String?.none)
                 ForEach(enabled) { app in
                     Text(app.displayName).tag(Optional(app.id))
                 }

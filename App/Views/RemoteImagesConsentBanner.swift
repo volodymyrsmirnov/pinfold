@@ -31,7 +31,7 @@ struct RemoteImagesConsentBanner: View {
     }
 
     private var title: String {
-        pending.count == 1 ? "Download 1 image?" : "Download \(pending.count) images?"
+        pending.count == 1 ? "Download 1 Image?" : "Download \(pending.count) Images?"
     }
 
     private var detail: String {

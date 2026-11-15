@@ -178,7 +178,7 @@ struct RootView: View {
                     ContentUnavailableView(
                         "No File Selected",
                         systemImage: "sidebar.leading",
-                        description: Text("Select a file from the catalogue to view its placemarks.")
+                        description: Text("Select a file to see its places.")
                     )
                 }
             }

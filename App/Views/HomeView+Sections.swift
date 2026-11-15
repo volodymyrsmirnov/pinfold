@@ -26,9 +26,9 @@ extension HomeView {
                 HStack {
                     Label {
                         if importFailureLog.failures.count == 1 {
-                            Text("1 file couldn't be imported")
+                            Text("1 File Couldn't Be Imported")
                         } else {
-                            Text("\(importFailureLog.failures.count) files couldn't be imported")
+                            Text("\(importFailureLog.failures.count) Files Couldn't Be Imported")
                         }
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -85,8 +85,9 @@ extension HomeView {
     }
 
     /// An active file's row with all of its actions, the same wherever the file is listed (the
-    /// Files list and the "Files" search results): swipe right for Share / Refresh / Trash, a
-    /// full swipe left to Trash, and the long-press menu.
+    /// Files list and the "Files" search results): swipe right for Share / Refresh / Archive,
+    /// and the long-press menu. There is deliberately no swipe left: Archive lives in the one
+    /// swipe set, as on place and Archive rows (owner decision, 2.2).
     func activeFileRow(_ entry: CatalogEntry) -> some View {
         FileRow(
             entry: entry,
@@ -95,16 +96,6 @@ extension HomeView {
             isHighlighted: !showsRowDisclosure && selection == entry.id
         )
         .tag(entry.id)
-        // Full swipe left archives, as in Mail. Archiving is recoverable, so it isn't red.
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button {
-                trash(entry)
-            } label: {
-                Label("Archive", systemImage: "archivebox")
-            }
-            .tint(.purple)
-            .disabled(entry.isReadOnly)
-        }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             fileRowLeadingActions(for: entry)
         }
@@ -237,7 +228,7 @@ extension HomeView {
                             .foregroundStyle(.yellow)
                             .accessibilityLabel("Favorite")
                     }
-                    Text(hit.name.isEmpty ? "Unnamed place" : hit.name)
+                    Text(hit.name.isEmpty ? String(localized: "Untitled") : hit.name)
                         .strikethrough(isVisited)
                         .foregroundStyle(isVisited ? .secondary : .primary)
                         .lineLimit(1)

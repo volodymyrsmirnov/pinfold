@@ -56,7 +56,7 @@ struct PhotoGalleryView: View {
     /// The cached file for each link, in link order (`nil` where it isn't on disk yet).
     private var localURLs: [URL?] {
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        return photoLinks.map { resourceCache.localURL(forHref: $0, in: resourcesDir) }
+        return photoLinks.map { resourceCache.observedLocalURL(forHref: $0, in: resourcesDir) }
     }
 
     /// Opens the viewer on the tapped photo, paging through only the photos that are on disk.

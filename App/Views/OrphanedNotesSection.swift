@@ -13,9 +13,9 @@ struct OrphanedNotesSection: View {
                     OrphanedNoteRow(note: item.note)
                 }
             } header: {
-                Text("Notes for removed placemarks")
+                Text("Notes for Removed Places")
             } footer: {
-                Text("These placemarks are no longer in this file. Your notes are kept.")
+                Text("These places are no longer in this file. Your notes are kept.")
             }
         }
     }
@@ -26,7 +26,7 @@ private struct OrphanedNoteRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(note.placemarkName ?? "Unnamed placemark")
+            Text(note.placemarkName ?? String(localized: "Untitled"))
                 .font(.subheadline.bold())
             Text(note.text)
                 .font(.body)

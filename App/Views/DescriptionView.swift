@@ -93,7 +93,7 @@ private struct DescriptionImage: View {
     @Environment(\.storageLocations) private var storage
 
     var body: some View {
-        if let url = resourceCache.localURL(forHref: src, in: storage.resourcesDirectory(for: entry)) {
+        if let url = resourceCache.observedLocalURL(forHref: src, in: storage.resourcesDirectory(for: entry)) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
