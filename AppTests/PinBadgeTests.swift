@@ -38,6 +38,33 @@ struct PinBadgeTests {
         }
     }
 
+    /// A 32×32 disc in `color` with a 3 px black outline — the My Maps glyph look.
+    private static func outlinedIcon(_ color: UIColor, detail: Bool = false) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32), format: format).image { context in
+            UIColor.black.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: 32, height: 32)).fill()
+            color.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 3, y: 3, width: 26, height: 26)).fill()
+            if detail {
+                // A black mark in the middle, like the star on a pushpin.
+                UIColor.black.setFill()
+                context.fill(CGRect(x: 11, y: 11, width: 10, height: 10))
+            }
+        }
+    }
+
+    /// A 32×32 icon whose colour sweeps across the hue circle — a photo-like, multi-hue icon.
+    private static func hueSweepIcon() -> UIImage {
+        UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32)).image { context in
+            for column in 0 ..< 32 {
+                UIColor(hue: CGFloat(column) / 32, saturation: 0.9, brightness: 0.9, alpha: 1).setFill()
+                context.fill(CGRect(x: column, y: 0, width: 1, height: 32))
+            }
+        }
+    }
+
     // MARK: Helpers
 
     private static func isClose(_ lhs: UIColor, _ rhs: UIColor, tolerance: CGFloat = 0.05) -> Bool {
@@ -83,6 +110,28 @@ struct PinBadgeTests {
 
     @Test func dominantColor_twoColorIcon_isNil() {
         #expect(PinBadge.dominantColor(of: Self.twoColorIcon()) == nil)
+    }
+
+    /// A My Maps glyph: one colour with a black outline is single-colour (the outline is
+    /// ignored), and its colour is the glyph's.
+    @Test func dominantColor_outlinedGlyph() throws {
+        let color = try #require(PinBadge.dominantColor(of: Self.outlinedIcon(Self.orange)))
+        #expect(Self.isClose(color, Self.orange, tolerance: 0.08))
+    }
+
+    /// White/grey icons (a star, a fork and knife) read as white, so the fill falls back.
+    @Test func dominantColor_lightAchromaticIcon_isWhite() throws {
+        let color = try #require(PinBadge.dominantColor(of: Self.outlinedIcon(UIColor(white: 0.8, alpha: 1))))
+        #expect(Self.isClose(color, .white))
+    }
+
+    @Test func dominantColor_blackIcon_isBlack() throws {
+        let color = try #require(PinBadge.dominantColor(of: Self.circleIcon(.black)))
+        #expect(Self.isClose(color, .black))
+    }
+
+    @Test func dominantColor_hueSweep_isNil() {
+        #expect(PinBadge.dominantColor(of: Self.hueSweepIcon()) == nil)
     }
 
     @Test func dominantColor_blankIcon_isNil() {
@@ -141,6 +190,24 @@ struct PinBadgeTests {
         let center = CGPoint(x: badge.size.width / 2, y: badge.size.height / 2)
         let nearEdge = Self.pixel(of: badge, at: CGPoint(x: PinBadge.margin + 3.5, y: center.y))
         #expect(Self.isClose(nearEdge, .white, tolerance: 0.08))
+    }
+
+    /// Near-black detail inside a glyph (a pushpin's star) is cut out so the fill shows
+    /// through, while the glyph body takes the glyph colour.
+    @Test func badge_cutsOutDarkDetail() {
+        let icon = Self.outlinedIcon(Self.yellow, detail: true)
+        let badge = PinBadge.badge(for: icon, kmlTint: nil, fallback: .systemBlue)
+        let center = CGPoint(x: badge.size.width / 2, y: badge.size.height / 2)
+        #expect(Self.isClose(Self.pixel(of: badge, at: center), Self.yellow, tolerance: 0.08))
+        let body = Self.pixel(of: badge, at: CGPoint(x: center.x + 4, y: center.y))
+        #expect(Self.isClose(body, PinBadge.glyphColor(onFill: Self.yellow), tolerance: 0.08))
+    }
+
+    /// A black glyph has no detail to cut: its whole shape is drawn in the glyph colour.
+    @Test func badge_blackGlyphIsDrawnWhole() {
+        let badge = PinBadge.badge(for: Self.circleIcon(.black), kmlTint: nil, fallback: .systemBlue)
+        let center = CGPoint(x: badge.size.width / 2, y: badge.size.height / 2)
+        #expect(Self.isClose(Self.pixel(of: badge, at: center), .white, tolerance: 0.08))
     }
 
     /// A wide icon keeps its aspect ratio: the plate/disc above and below the bar is not the

@@ -2,11 +2,13 @@ import UIKit
 
 /// Draws a KML icon on the map inside a round badge so it reads on any basemap.
 ///
-/// - **Solid badge** — for a single-colour icon (a Google My Maps glyph): a disc filled with
-///   the icon's colour (or the KML `iconColor` tint), a white ring, and the icon redrawn as a
-///   silhouette in white, or near-black when the fill is light.
-/// - **Plate badge** — for a multi-colour icon (a flag, a photo, a pushpin with a star) or a
-///   blank one: the original icon, untouched, on a white disc with a hairline outline.
+/// - **Solid badge** — for a single-colour icon (a Google My Maps glyph, even with a black
+///   outline or black detail): a disc filled with the icon's colour (or the KML `iconColor`
+///   tint), a white ring, and the icon redrawn as a silhouette in white, or near-black when the
+///   fill is light. Near-black outline and detail (a pushpin's star) are knocked out of the
+///   silhouette so the fill shows through and the detail survives.
+/// - **Plate badge** — for a multi-colour icon (a photo, an emoji-like icon in several hues) or
+///   a blank one: the original icon, untouched, on a white disc with a hairline outline.
 ///
 /// Both share the size and drop shadow of the teardrop fallback pin and are centre-anchored.
 /// Work is synchronous CoreGraphics; the result is cached per style by `PlacemarkPinImage`.
@@ -19,14 +21,8 @@ enum PinBadge {
     private static let ringWidth: CGFloat = 2
     private static let glyphSide: CGFloat = 16
     private static let plateIconSide: CGFloat = 18
-    /// Side of the bitmap an icon is sampled at when classifying it.
-    private static let sampleSide = 16
-    /// Fewer opaque sample pixels than this is a blank icon.
+    /// Fewer opaque pixels than this is a blank icon.
     private static let minimumOpaquePixels = 4
-    /// Share of opaque pixels that must sit near the mean colour for a single-colour icon.
-    private static let singleColorShare = 0.9
-    /// Euclidean RGB distance (0…1 per channel) that counts as "near the mean colour".
-    private static let colorTolerance = 0.2
     /// Fill relative luminance above which the glyph turns dark (yellow #F5C400 is ≈ 0.59,
     /// orange #E8740C ≈ 0.30).
     private static let lightFillLuminance: CGFloat = 0.45
@@ -36,26 +32,20 @@ enum PinBadge {
     /// The badge for `icon`. `kmlTint` is the style's `iconColor`; `fallback` fills a solid
     /// badge whose icon is near-white and untinted (the accent colour, as the teardrop uses).
     static func badge(for icon: UIImage, kmlTint: UIColor?, fallback: UIColor) -> UIImage {
-        guard let iconColor = dominantColor(of: icon) else { return plateBadge(icon: icon) }
-        let fill = fillColor(kmlTint: kmlTint, iconColor: iconColor, fallback: fallback)
-        return solidBadge(icon: icon, fill: fill)
+        guard let bitmap = IconBitmap(icon), let kind = IconPalette.classify(bitmap) else {
+            return plateBadge(icon: icon)
+        }
+        let fill = fillColor(kmlTint: kmlTint, iconColor: kind.color, fallback: fallback)
+        return solidBadge(bitmap: bitmap, iconSize: icon.size, fill: fill, knockOutDark: kind.knocksOutDark)
     }
 
     // MARK: Classification and colours
 
-    /// The icon's colour if nearly all its opaque pixels share one colour; `nil` when it is
-    /// multi-coloured or (nearly) blank.
+    /// The icon's colour when it is single-colour (see `IconPalette`): its hue for a coloured
+    /// glyph, white for a white/grey one, black for a dark one; `nil` when it is multi-coloured
+    /// or (nearly) blank.
     static func dominantColor(of icon: UIImage) -> UIColor? {
-        let pixels = opaqueSamples(of: icon)
-        guard pixels.count >= minimumOpaquePixels else { return nil }
-        let count = Double(pixels.count)
-        let mean = pixels.reduce(SIMD3<Double>()) { $0 + $1 } / count
-        let near = pixels.count { pixel in
-            let delta = pixel - mean
-            return (delta * delta).sum().squareRoot() <= colorTolerance
-        }
-        guard Double(near) / count >= singleColorShare else { return nil }
-        return UIColor(red: mean.x, green: mean.y, blue: mean.z, alpha: 1)
+        IconBitmap(icon).flatMap(IconPalette.classify)?.color
     }
 
     /// The solid badge's fill: a meaningful KML tint wins; otherwise the icon's own colour,
@@ -93,50 +83,13 @@ enum PinBadge {
         return 0.2126 * linear(rgba.red) + 0.7152 * linear(rgba.green) + 0.0722 * linear(rgba.blue)
     }
 
-    /// The un-premultiplied RGB of every pixel with alpha ≥ 50 % when `icon` is drawn
-    /// aspect-fit into a `sampleSide`-square bitmap.
-    private static func opaqueSamples(of icon: UIImage) -> [SIMD3<Double>] {
-        guard let cgImage = cgImage(of: icon) else { return [] }
-        let side = sampleSide
-        var bytes = [UInt8](repeating: 0, count: side * side * 4)
-        let drawn: Bool = bytes.withUnsafeMutableBytes { buffer in
-            guard let context = CGContext(
-                data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8,
-                bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else { return false }
-            let rect = aspectFit(
-                CGSize(width: cgImage.width, height: cgImage.height),
-                in: CGRect(x: 0, y: 0, width: side, height: side)
-            )
-            context.draw(cgImage, in: rect)
-            return true
-        }
-        guard drawn else { return [] }
-        var samples: [SIMD3<Double>] = []
-        for offset in stride(from: 0, to: bytes.count, by: 4) where bytes[offset + 3] >= 128 {
-            let alpha = Double(bytes[offset + 3])
-            samples.append(SIMD3(
-                Double(bytes[offset]) / alpha,
-                Double(bytes[offset + 1]) / alpha,
-                Double(bytes[offset + 2]) / alpha
-            ))
-        }
-        return samples
-    }
-
-    private static func cgImage(of icon: UIImage) -> CGImage? {
-        if let cgImage = icon.cgImage {
-            return cgImage
-        }
-        guard icon.size.width > 0, icon.size.height > 0 else { return nil }
-        return UIGraphicsImageRenderer(size: icon.size).image { _ in icon.draw(at: .zero) }.cgImage
-    }
-
     // MARK: Drawing
 
-    private static func solidBadge(icon: UIImage, fill: UIColor) -> UIImage {
-        render { context, disc in
+    private static func solidBadge(bitmap: IconBitmap, iconSize: CGSize, fill: UIColor, knockOutDark: Bool) -> UIImage {
+        let glyph = bitmap.glyph(color: glyphColor(onFill: fill)) { pixel in
+            knockOutDark ? IconPalette.glyphWeight(of: pixel) : 1
+        }
+        return render { context, disc in
             fill.setFill()
             drawShadowed(context) { UIBezierPath(ovalIn: disc).fill() }
 
@@ -145,14 +98,9 @@ enum PinBadge {
             UIColor.white.setStroke()
             ring.stroke()
 
-            // Silhouette: draw the icon, then paint the glyph colour only where it is opaque.
-            // The transparency layer keeps `.sourceIn` from wiping the disc beneath.
-            let glyphRect = aspectFit(icon.size, in: centeredSquare(side: glyphSide, in: disc))
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
-            icon.draw(in: glyphRect)
-            glyphColor(onFill: fill).setFill()
-            UIRectFillUsingBlendMode(glyphRect, .sourceIn)
-            context.endTransparencyLayer()
+            if let glyph {
+                UIImage(cgImage: glyph).draw(in: aspectFit(iconSize, in: centeredSquare(side: glyphSide, in: disc)))
+            }
         }
     }
 
