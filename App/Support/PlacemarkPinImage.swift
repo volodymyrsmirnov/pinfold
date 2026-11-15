@@ -34,9 +34,9 @@ enum PinAnchor {
 ///
 /// Resolution order (mirrors `StyleIcon`):
 /// 1. If the placemark's resolved style has an icon `href` cached on disk, that image is
-///    loaded via `UIImage(contentsOfFile:)` and drawn inside a `PinBadge` (a solid disc with a
-///    silhouette for single-colour icons, a white plate for multi-colour ones) so it reads on
-///    any basemap; anchored by its centre.
+///    loaded via `UIImage(contentsOfFile:)`, sized by its visible shape (`OpticalIcon`) with
+///    its colours untouched, and anchored by its centre; `GlassPinAnnotationView` draws it on
+///    a Liquid Glass disc.
 /// 2. Otherwise, a teardrop "balloon" pin tinted by the style's `iconColor` (or accent
 ///    color) is drawn, anchored by its bottom tip. A white outline, white inner dot, and
 ///    soft drop shadow keep it legible on any basemap — including a dark-colored pin on a
@@ -45,7 +45,7 @@ enum PinAnchor {
 /// All work is synchronous file/CoreGraphics I/O — call it on the main actor when
 /// building annotations (placemark counts are typically small).
 enum PlacemarkPinImage {
-    /// The teardrop head diameter, in points (href-backed icons use `PinBadge.diameter`).
+    /// The teardrop head diameter, in points (href-backed icons use `GlassPinAnnotationView`).
     /// Kept fairly small so pins collide (and therefore cluster) less aggressively — MapKit
     /// has no cluster-radius API, so annotation-view size is the main lever.
     static let dimension: CGFloat = 24
@@ -94,9 +94,8 @@ enum PlacemarkPinImage {
                let image = UIImage(contentsOfFile: localURL.path)
             {
                 // swiftlint:enable opening_brace
-                let tint = style?.iconColor.flatMap { UIColor(kmlHex: $0) }
-                let badge = PinBadge.badge(for: image, kmlTint: tint, fallback: UIColor(Color.accentColor))
-                return (badge, .center)
+                // Colours untouched; `GlassPinAnnotationView` draws the glass disc around it.
+                return (OpticalIcon.render(image, radius: GlassPinAnnotationView.iconRadius), .center)
             }
         }
 

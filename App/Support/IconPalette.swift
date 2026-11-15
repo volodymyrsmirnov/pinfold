@@ -1,7 +1,6 @@
 import UIKit
 
-/// Decides whether a KML icon is "single-colour" — and so can be redrawn as a silhouette on a
-/// solid `PinBadge` — and which colour it is.
+/// Works out an icon's colour family, so its glass pin can be tinted with it.
 ///
 /// Real map icons are rarely one flat colour: Google My Maps glyphs carry a black outline,
 /// classic Google icons add gradients and black detail, and downsampling blends the two. So
@@ -12,13 +11,14 @@ import UIKit
 ///
 /// Thresholds were tuned on the Rome fixture's classic icons and synthetic My Maps glyphs.
 enum IconPalette {
-    struct Classification {
-        /// The icon's colour: the coloured pixels' (brighter) mean, `.white` for a white/grey
-        /// icon, `.black` for a dark one.
-        let color: UIColor
-        /// Whether near-black pixels should be knocked out of the silhouette (outline and
-        /// detail). False for a dark icon, whose dark pixels *are* the glyph.
-        let knocksOutDark: Bool
+    /// An icon's colour family.
+    enum Kind: Equatable {
+        /// Its coloured pixels share one hue; the colour is their (brighter) mean.
+        case hue(UIColor)
+        /// Mostly white/grey (a white star, a grey fork and knife).
+        case light
+        /// Mostly near-black (a black glyph).
+        case dark
     }
 
     /// Minimum HSV saturation and value for a pixel to count as coloured.
@@ -37,8 +37,15 @@ enum IconPalette {
     /// brightest, so anti-aliased blends with the outline don't muddy it.
     private static let brightShare = 0.75
 
+    /// The glass tint for `icon`: its hue for a single-hue icon; `nil` for white, grey,
+    /// black, multi-coloured or blank icons, which get plain glass.
+    static func glassTint(for icon: UIImage) -> UIColor? {
+        guard let bitmap = IconBitmap(icon), case let .hue(color) = kind(of: bitmap) else { return nil }
+        return color
+    }
+
     /// Classifies `bitmap`; `nil` for a multi-coloured or (nearly) blank icon.
-    static func classify(_ bitmap: IconBitmap) -> Classification? {
+    static func kind(of bitmap: IconBitmap) -> Kind? {
         let opaque = bitmap.pixels.filter { $0.w >= 0.5 }
         guard opaque.count >= 4 else { return nil }
 
@@ -55,10 +62,10 @@ enum IconPalette {
 
         let nonDark = chromatic.count + lightCount
         if Double(nonDark) < darkIconShare * Double(opaque.count) {
-            return Classification(color: .black, knocksOutDark: false)
+            return .dark
         }
         guard !chromatic.isEmpty, Double(chromatic.count) >= chromaticShare * Double(nonDark) else {
-            return Classification(color: .white, knocksOutDark: true)
+            return .light
         }
 
         let meanHue = circularMean(chromatic.map(\.hue))
@@ -68,14 +75,7 @@ enum IconPalette {
         let brightest = chromatic.map(\.value).max() ?? 1
         let bright = chromatic.filter { $0.value >= brightShare * brightest }.map(\.rgb)
         let mean = bright.reduce(SIMD3<Double>()) { $0 + $1 } / Double(max(bright.count, 1))
-        return Classification(color: UIColor(red: mean.x, green: mean.y, blue: mean.z, alpha: 1), knocksOutDark: true)
-    }
-
-    /// How much of a pixel belongs to the silhouette when dark detail is knocked out: 0 for
-    /// near-black (value ≤ 0.15), 1 from value 0.4 up, linear between so edges stay smooth.
-    static func glyphWeight(of pixel: SIMD4<Double>) -> Double {
-        let value = max(pixel.x, pixel.y, pixel.z)
-        return min(max((value - 0.15) / 0.25, 0), 1)
+        return .hue(UIColor(red: mean.x, green: mean.y, blue: mean.z, alpha: 1))
     }
 
     private static func circularMean(_ hues: [Double]) -> Double {
@@ -116,5 +116,23 @@ enum IconPalette {
             let turn = sector / 6
             hue = turn < 0 ? turn + 1 : turn
         }
+    }
+}
+
+// MARK: - RGBAComponents
+
+/// A colour's sRGB channels, 0…1.
+struct RGBAComponents {
+    let red: CGFloat
+    let green: CGFloat
+    let blue: CGFloat
+    let alpha: CGFloat
+}
+
+extension UIColor {
+    var rgbaComponents: RGBAComponents {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return RGBAComponents(red: red, green: green, blue: blue, alpha: alpha)
     }
 }

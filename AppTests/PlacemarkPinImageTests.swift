@@ -3,7 +3,7 @@ import Testing
 import UIKit
 
 /// Tests for `PlacemarkPinImage`. The cached-icon path needs on-disk files and is
-/// verified manually on the simulator (its badge drawing is covered by `PinBadgeTests`);
+/// verified manually on the simulator (its icon sizing is covered by `OpticalIconTests`);
 /// here we only assert the symbol fallback produces a usable, non-empty image.
 struct PlacemarkPinImageTests {
     @Test func fallbackImage_isNonEmpty() {

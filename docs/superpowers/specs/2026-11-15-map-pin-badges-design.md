@@ -1,6 +1,6 @@
 # Map pin badges — design
 
-**Status:** proposed · 2026-11-15 · small change
+**Status:** superseded by `2026-11-15-map-glass-pins-design.md` · 2026-11-15
 
 ## Why
 
