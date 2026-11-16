@@ -86,23 +86,25 @@ extension KMLDetailView {
     // MARK: - Outline row
 
     /// Renders a single flattened outline row by kind, indented by its depth. Folder rows
-    /// toggle their membership in `collapsedFolderIDs` (and rotate a chevron like a
-    /// `DisclosureGroup`); while searching the outline ignores that set, so the chevron is
+    /// toggle their membership in `collapsedFolderIDs`, saved via `annotations` (and rotate a
+    /// chevron like a `DisclosureGroup`); while searching the outline ignores that set, so the chevron is
     /// shown expanded and tapping it has no visible effect until the query is cleared.
     @ViewBuilder
     func outlineRow(
         _ row: PlacemarkOutline.Row, document: KMLDocument, location: CLLocation?
     ) -> some View {
         switch row.kind {
-        case let .folder(name, id):
-            folderRow(name: name, id: id, descriptionHTML: document.root.container(atPath: id)?.descriptionHTML)
-                .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
-                .onGeometryChange(for: CGRect.self) { geometry in
-                    geometry.frame(in: .global)
-                } action: { frame in
-                    rowFrames.frames[row.id] = frame
-                }
-                .onDisappear { rowFrames.frames[row.id] = nil }
+        case let .folder(name, id, key):
+            folderRow(
+                name: name, id: id, key: key, descriptionHTML: document.root.container(atPath: id)?.descriptionHTML
+            )
+            .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
+            .onGeometryChange(for: CGRect.self) { geometry in
+                geometry.frame(in: .global)
+            } action: { frame in
+                rowFrames.frames[row.id] = frame
+            }
+            .onDisappear { rowFrames.frames[row.id] = nil }
         case let .placemark(placemark):
             placemarkLink(placemark, document: document, location: location)
                 .listRowInsets(EdgeInsets(top: 6, leading: leadingInset(row.depth), bottom: 6, trailing: 16))
@@ -123,10 +125,10 @@ extension KMLDetailView {
     /// A tappable folder header row with a disclosure chevron that rotates with the
     /// collapsed state. A non-empty search ignores the collapsed set, so the chevron is
     /// pinned open while searching.
-    func folderRow(name: String, id: String, descriptionHTML: String? = nil) -> some View {
+    func folderRow(name: String, id: String, key: String, descriptionHTML: String? = nil) -> some View {
         let preview = Self.folderPreview(descriptionHTML)
         return HStack(spacing: 8) {
-            folderToggle(name: name, id: id, preview: preview)
+            folderToggle(name: name, key: key, preview: preview)
             if let descriptionHTML, preview != nil || descriptionHTML.contains("<img") {
                 Button {
                     infoSheet = DescriptionSheetContent(id: "folder-\(id)", title: name, html: descriptionHTML)
@@ -142,15 +144,11 @@ extension KMLDetailView {
         }
     }
 
-    private func folderToggle(name: String, id: String, preview: String?) -> some View {
+    private func folderToggle(name: String, key: String, preview: String?) -> some View {
         let searching = !searchText.trimmingCharacters(in: .whitespaces).isEmpty
-        let collapsed = !searching && collapsedFolderIDs.contains(id)
+        let collapsed = !searching && collapsedFolderIDs.contains(key)
         return Button {
-            if collapsedFolderIDs.contains(id) {
-                collapsedFolderIDs.remove(id)
-            } else {
-                collapsedFolderIDs.insert(id)
-            }
+            annotations?.setFolder(key, collapsed: !collapsedFolderIDs.contains(key))
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")

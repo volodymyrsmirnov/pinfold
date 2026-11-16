@@ -71,9 +71,13 @@ struct KMLDetailView: View {
     /// The document `searchCorpus` was built from; lets the appearance-bound corpus task skip
     /// a rebuild (and the transient `nil`) when the view re-appears with the same document.
     @State var searchCorpusDocument: KMLDocument?
-    /// Collapsed folder ids (tree paths like "0/2"). Toggled by tapping a folder row;
-    /// ignored while searching (the outline force-expands then).
-    @State var collapsedFolderIDs: Set<String> = []
+    /// Collapsed folders by durable key (`PlacemarkOutline.childFolderKeys`). Toggled by tapping a folder row;
+    /// ignored while searching (the outline force-expands then). Owned by `annotations`, which
+    /// saves them to the entry's `metadata.json`, so the file reopens the same way everywhere.
+    var collapsedFolderIDs: Set<String> {
+        annotations?.collapsedFolderIDs ?? []
+    }
+
     /// The memoized flattened outline, recomputed off-main via the two `.task(id:)`
     /// modifiers below. `nil` until the first build completes.
     @State var outline: PlacemarkOutline?
@@ -188,7 +192,6 @@ struct KMLDetailView: View {
             outline = nil
             searchCorpus = nil
             searchCorpusDocument = nil
-            collapsedFolderIDs = []
             nearestFirst = false
             searchText = ""
             networkLinkStatus = .idle
@@ -244,6 +247,10 @@ struct KMLDetailView: View {
         // The per-file half of the resume snapshot (RootView writes selection + routes on
         // the same transition). `.inactive` always precedes backgrounding, BEFORE iOS's
         // snapshot passes can re-lay the list out under us.
+        // A folder whose places are now all seen folds itself away (see `autoCollapseSeenFolders`).
+        .onChange(of: annotations?.visitedKeys) { oldKeys, newKeys in
+            autoCollapseSeenFolders(from: oldKeys, to: newKeys)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .inactive else { return }
             saveResumeSlice()

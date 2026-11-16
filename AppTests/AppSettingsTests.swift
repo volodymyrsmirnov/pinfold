@@ -85,7 +85,6 @@ import Testing
         settings.resumeEntryFolderName = "folder-a"
         settings.resumeRoutes = Data([1, 2, 3])
         settings.resumeSearchText = "cafe"
-        settings.resumeCollapsedFolderIDs = ["0", "0/1"]
         settings.resumeNearestFirst = true
         settings.resumeScrollAnchorRowID = "0/1/p2"
 
@@ -93,7 +92,6 @@ import Testing
         #expect(fresh.resumeEntryFolderName == "folder-a")
         #expect(fresh.resumeRoutes == Data([1, 2, 3]))
         #expect(fresh.resumeSearchText == "cafe")
-        #expect(fresh.resumeCollapsedFolderIDs == ["0", "0/1"])
         #expect(fresh.resumeNearestFirst == true)
         #expect(fresh.resumeScrollAnchorRowID == "0/1/p2")
     }

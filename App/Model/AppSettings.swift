@@ -57,7 +57,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
         static let resumeEntryFolderName = "settings.resumeEntryFolderName"
         static let resumeRoutes = "settings.resumeRoutes"
         static let resumeSearchText = "settings.resumeSearchText"
-        static let resumeCollapsedFolderIDs = "settings.resumeCollapsedFolderIDs"
         static let resumeNearestFirst = "settings.resumeNearestFirst"
         static let resumeScrollAnchorRowID = "settings.resumeScrollAnchorRowID"
     }
@@ -104,7 +103,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
             resumeEntryFolderName = nil
             resumeRoutes = nil
             resumeSearchText = nil
-            resumeCollapsedFolderIDs = nil
             resumeNearestFirst = false
             resumeScrollAnchorRowID = nil
         }
@@ -120,7 +118,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
             guard !isBootstrapping, resumeEntryFolderName != oldValue else { return }
             resumeRoutes = nil
             resumeSearchText = nil
-            resumeCollapsedFolderIDs = nil
             resumeNearestFirst = false
             resumeScrollAnchorRowID = nil
         }
@@ -134,11 +131,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
     /// The placemark list's search text at deactivation. `nil` = nothing saved.
     var resumeSearchText: String? {
         didSet { defaults.set(resumeSearchText, forKey: Key.resumeSearchText) }
-    }
-
-    /// Collapsed folder ids (positional tree paths) at deactivation. `nil` = nothing saved.
-    var resumeCollapsedFolderIDs: [String]? {
-        didSet { defaults.set(resumeCollapsedFolderIDs, forKey: Key.resumeCollapsedFolderIDs) }
     }
 
     /// Whether the nearest-first sort was active at deactivation.
@@ -165,7 +157,6 @@ enum RemoteImagePolicy: String, CaseIterable, Identifiable {
         resumeEntryFolderName = defaults.string(forKey: Key.resumeEntryFolderName)
         resumeRoutes = defaults.data(forKey: Key.resumeRoutes)
         resumeSearchText = defaults.string(forKey: Key.resumeSearchText)
-        resumeCollapsedFolderIDs = defaults.stringArray(forKey: Key.resumeCollapsedFolderIDs)
         resumeNearestFirst = defaults.bool(forKey: Key.resumeNearestFirst)
         resumeScrollAnchorRowID = defaults.string(forKey: Key.resumeScrollAnchorRowID)
         isBootstrapping = false

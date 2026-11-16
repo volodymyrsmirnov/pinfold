@@ -39,7 +39,6 @@ extension RootView {
             entryFolderName: folderName,
             routes: EntryRoute.decodeForResume(settings.resumeRoutes),
             searchText: settings.resumeSearchText ?? "",
-            collapsedFolderIDs: Set(settings.resumeCollapsedFolderIDs ?? []),
             nearestFirst: settings.resumeNearestFirst,
             scrollAnchorRowID: settings.resumeScrollAnchorRowID
         )

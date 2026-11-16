@@ -318,4 +318,32 @@ struct EntryMetadataTests {
         #expect(sampleMetadata(subscription: a).merging(conflicts: [sampleMetadata(subscription: b)]).subscription == a)
         #expect(sampleMetadata().merging(conflicts: [sampleMetadata(subscription: b)]).subscription == nil)
     }
+
+    // MARK: - Collapsed folders
+
+    @Test func collapsedFolders_roundTripAndOmittedWhenEmpty() throws {
+        var meta = EntryMetadata(
+            id: UUID(), displayName: "Trip", sourceFilename: "trip.kml",
+            importDate: Date(timeIntervalSince1970: 1000), pointCount: 3,
+            contentSHA256: "deadbeef", trashedAt: nil
+        )
+        #expect(try String(bytes: meta.encoded(), encoding: .utf8)?.contains("collapsedFolderIDs") == false)
+        meta.collapsedFolderIDs = ["1", "0/2"]
+        let decoded = try EntryMetadata.decoded(from: meta.encoded())
+        #expect(decoded.collapsedFolderIDs == ["1", "0/2"])
+        #expect(decoded == meta)
+    }
+
+    @Test func collapsedFolders_mergeKeepsCurrent() {
+        let base = EntryMetadata(
+            id: UUID(), displayName: "Trip", sourceFilename: "trip.kml",
+            importDate: Date(timeIntervalSince1970: 1000), pointCount: 3,
+            contentSHA256: "deadbeef", trashedAt: nil
+        )
+        var current = base
+        current.collapsedFolderIDs = ["0"]
+        var other = base
+        other.collapsedFolderIDs = ["1"]
+        #expect(current.merging(conflicts: [other]).collapsedFolderIDs == ["0"])
+    }
 }

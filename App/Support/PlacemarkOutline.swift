@@ -1,4 +1,6 @@
 import CoreLocation
+import CryptoKit
+import Foundation
 import PinfoldCore
 
 // MARK: - PlacemarkOutline
@@ -15,9 +17,12 @@ import PinfoldCore
 /// A folder's `id` is its **tree path of child indices**: the root is `""`, the root's
 /// first child folder is `"0"`, that folder's second child folder is `"0/1"`, and so on.
 /// This is stable across rebuilds as long as the parsed tree's shape is unchanged (it is —
-/// the tree is re-parsed identically from the same file), which is exactly what is needed
-/// to key the collapse state. Folder rows for the root container itself are never emitted
+/// the tree is re-parsed identically from the same file), which is what row identity and the
+/// scroll anchor need. Folder rows for the root container itself are never emitted
 /// (the root is implicit), so the smallest folder id is a single index like `"0"`.
+///
+/// The saved collapse state uses a different, durable key — `folderKey` (a hash of the folder's
+/// name chain) — so it survives folders being added, removed or reordered around it.
 ///
 /// A placemark row's `id` is its **document position** — the container's tree path plus the
 /// placemark's index within that container (e.g. `"0/1/p2"`; root-level placemarks are `"p2"`).
@@ -35,6 +40,28 @@ import PinfoldCore
 /// `collapsed` set is ignored (force-expanded), so a match nested in a collapsed folder
 /// is never hidden.
 struct PlacemarkOutline {
+    // MARK: - Folder keys
+
+    /// The durable key of each child folder of `container`, for the saved collapse state:
+    /// a hash of the parent's key, the folder's (trimmed) name and its occurrence among
+    /// same-named siblings. Unlike the positional id it survives folders being added, removed
+    /// or reordered around it; renaming a folder (or an ancestor) forgets its state. The root's
+    /// key is `""`.
+    static func childFolderKeys(of container: KMLContainer, parentKey: String) -> [String] {
+        var occurrences: [String: Int] = [:]
+        return container.children.map { child in
+            let name = (child.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let occurrence = occurrences[name, default: 0]
+            occurrences[name] = occurrence + 1
+            return folderKey(parentKey: parentKey, name: name, occurrence: occurrence)
+        }
+    }
+
+    private static func folderKey(parentKey: String, name: String, occurrence: Int) -> String {
+        let digest = SHA256.hash(data: Data("\(parentKey)\u{1F}\(name)\u{1F}\(occurrence)".utf8))
+        return digest.prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
     // MARK: - Sort
 
     /// How the outline orders its placemark rows.
@@ -88,7 +115,8 @@ struct PlacemarkOutline {
         // The row's kind discriminator. Naturally nested in Row.
         // swiftlint:disable:next nesting
         enum Kind {
-            case folder(name: String, id: String)
+            /// `id` is the positional tree path; `key` the durable collapse key (`folderKey`).
+            case folder(name: String, id: String, key: String)
             case placemark(KMLPlacemark)
         }
 
@@ -130,6 +158,7 @@ struct PlacemarkOutline {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let isSearching = !trimmed.isEmpty
         // While searching, ignore the collapse state so matches in collapsed folders show.
+        // The set holds durable folder keys (`childFolderKeys`), not positional ids.
         let effectiveCollapsed = isSearching ? Set<String>() : collapsed
 
         var rows: [Row] = []
@@ -141,11 +170,12 @@ struct PlacemarkOutline {
         }
 
         /// Walks a container, appending rows for its matching placemarks and surviving
-        /// child folders. `path` is the container's own tree path; `depth` its indent level.
-        /// Returns true when this container contributed any visible row (a matching
-        /// placemark or a surviving child) — used to prune empty folders while searching.
+        /// child folders. `path` is the container's own tree path, `key` its durable folder key;
+        /// `depth` its indent level. Returns true when this container contributed any visible
+        /// row (a matching placemark or a surviving child) — used to prune empty folders while
+        /// searching.
         @discardableResult
-        func walk(_ container: KMLContainer, path: String, depth: Int, hidden: Bool) -> Bool {
+        func walk(_ container: KMLContainer, path: String, key: String, depth: Int, hidden: Bool) -> Bool {
             var contributed = false
 
             // Enumerate the FULL placemark list (not the filtered subset) so a row's id is its
@@ -167,21 +197,23 @@ struct PlacemarkOutline {
                 contributed = true
             }
 
+            let childKeys = childFolderKeys(of: container, parentKey: key)
             for (index, child) in container.children.enumerated() {
                 let childPath = path.isEmpty ? "\(index)" : "\(path)/\(index)"
-                let childCollapsed = effectiveCollapsed.contains(childPath)
+                let childKey = childKeys[index]
+                let childCollapsed = effectiveCollapsed.contains(childKey)
                 // Build the child's rows into a temporary buffer so we can decide whether
                 // to emit the folder header at all (prune empty folders when searching).
                 let headerIndex = rows.count
                 let folderHidden = hidden || childCollapsed
                 if !hidden {
                     rows.append(Row(
-                        kind: .folder(name: child.name ?? "Folder", id: childPath),
+                        kind: .folder(name: child.name ?? "Folder", id: childPath, key: childKey),
                         depth: depth, id: childPath
                     ))
                 }
                 let childContributed = walk(
-                    child, path: childPath, depth: depth + 1, hidden: folderHidden
+                    child, path: childPath, key: childKey, depth: depth + 1, hidden: folderHidden
                 )
                 if childContributed {
                     contributed = true
@@ -194,8 +226,44 @@ struct PlacemarkOutline {
             return contributed
         }
 
-        walk(root, path: "", depth: 0, hidden: false)
+        walk(root, path: "", key: "", depth: 0, hidden: false)
         return PlacemarkOutline(rows: rows, mappablePlacemarks: mappable)
+    }
+
+    // MARK: - Seen folders
+
+    /// The durable keys (`childFolderKeys`) of folders whose places are ALL seen, counting
+    /// places in their subfolders too. A folder with no places at all is never "all seen".
+    static func fullySeenFolderKeys(in root: KMLContainer, visited: Set<String>) -> Set<String> {
+        var result: Set<String> = []
+        /// Returns (places in the subtree, of which seen).
+        @discardableResult
+        func walk(_ container: KMLContainer, key: String) -> (total: Int, seen: Int) {
+            var total = container.placemarks.count
+            var seen = container.placemarks.reduce(0) { $0 + (visited.contains($1.stableKey) ? 1 : 0) }
+            for (child, childKey) in zip(container.children, childFolderKeys(of: container, parentKey: key)) {
+                let counts = walk(child, key: childKey)
+                total += counts.total
+                seen += counts.seen
+            }
+            if !key.isEmpty, total > 0, seen == total {
+                result.insert(key)
+            }
+            return (total, seen)
+        }
+        walk(root, key: "")
+        return result
+    }
+
+    /// Folders that became all seen going from `oldVisited` to `newVisited` — the ones to
+    /// collapse automatically. Only the transition counts, so a folder the user re-expands
+    /// stays open until one of its places is unmarked and marked again.
+    static func newlyFullySeenFolderKeys(
+        in root: KMLContainer, from oldVisited: Set<String>, to newVisited: Set<String>
+    ) -> Set<String> {
+        guard !root.children.isEmpty, !newVisited.subtracting(oldVisited).isEmpty else { return [] }
+        return fullySeenFolderKeys(in: root, visited: newVisited)
+            .subtracting(fullySeenFolderKeys(in: root, visited: oldVisited))
     }
 
     /// Builds the flat, nearest-first outline: every matching placemark across the whole tree
