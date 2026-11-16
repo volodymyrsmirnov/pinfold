@@ -76,12 +76,11 @@ extension EntryRoute {
 /// `entryFolderName` distinguishes the two producers: non-nil marks a session-restore
 /// bundle (routes AND the transient list state are applied, and `RootView` only hands it to
 /// the matching entry); nil marks a deep-link bundle (routes only — a live deep link must
-/// never clobber the open file's search/sort/collapse state).
+/// never clobber the open file's search/sort state; folder collapse lives in `metadata.json`).
 struct RestoreBundle: Equatable {
     var entryFolderName: String?
     var routes: [EntryRoute] = []
     var searchText: String = ""
-    var collapsedFolderIDs: Set<String> = []
     var nearestFirst: Bool = false
     var scrollAnchorRowID: String?
 }

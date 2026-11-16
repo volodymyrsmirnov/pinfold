@@ -24,6 +24,10 @@ import PinfoldCore
     /// Bumps on every change to `notes`; a cheap identity for "notes changed" triggers.
     private(set) var notesRevision = 0
 
+    /// Folders collapsed in the places list (durable folder keys). Kept in memory even when the
+    /// entry can't be written, so collapsing still works for this visit.
+    private(set) var collapsedFolderIDs: Set<String> = []
+
     @ObservationIgnored private let storage: StorageLocations
     @ObservationIgnored private let folderName: String
     @ObservationIgnored private var canPersist = true
@@ -53,12 +57,14 @@ import PinfoldCore
             favoriteKeys = meta?.favoriteKeys ?? []
             visitedKeys = meta?.visitedKeys ?? []
             notes = meta?.notes ?? [:]
+            collapsedFolderIDs = meta?.collapsedFolderIDs ?? []
         } catch {
             // Sidecar exists but failed to decode (corrupt/truncated). Start empty but
             // refuse to persist, so a toggle never overwrites recoverable data.
             favoriteKeys = []
             visitedKeys = []
             notes = [:]
+            collapsedFolderIDs = []
             canPersist = false
         }
     }
@@ -114,6 +120,36 @@ import PinfoldCore
         guard canPersist else { return }
         let added = toggle(&visitedKeys, key: key)
         persist(visited: (key, added))
+    }
+
+    // MARK: Folder collapse state
+
+    /// Collapses or expands one folder of the places list and saves it to the sidecar.
+    func setFolder(_ id: String, collapsed: Bool) {
+        var updated = collapsedFolderIDs
+        if collapsed {
+            updated.insert(id)
+        } else {
+            updated.remove(id)
+        }
+        setCollapsedFolderIDs(updated)
+    }
+
+    /// Collapses several folders at once (one sidecar write).
+    func collapseFolders(_ ids: Set<String>) {
+        setCollapsedFolderIDs(collapsedFolderIDs.union(ids))
+    }
+
+    /// Replaces the collapsed set; a no-op when unchanged, so nothing is written needlessly.
+    /// When the entry can't be written the change still applies for this visit.
+    private func setCollapsedFolderIDs(_ ids: Set<String>) {
+        guard ids != collapsedFolderIDs else { return }
+        collapsedFolderIDs = ids
+        guard canPersist else { return }
+        // View state: a failed write is tolerated (the in-memory state stays for this session).
+        _ = try? storage.updateExistingMetadata(forFolderNamed: folderName) { meta in
+            meta.collapsedFolderIDs = ids
+        }
     }
 
     /// The live (non-tombstone) note for a placemark, if any.

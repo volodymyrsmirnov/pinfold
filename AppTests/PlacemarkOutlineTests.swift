@@ -55,6 +55,19 @@ struct PlacemarkOutlineTests {
         )
     }
 
+    /// Durable collapse keys of the sample folders A, A.1 and B.
+    private var keyA: String {
+        PlacemarkOutline.childFolderKeys(of: sampleRoot(), parentKey: "")[0]
+    }
+
+    private var keyB: String {
+        PlacemarkOutline.childFolderKeys(of: sampleRoot(), parentKey: "")[1]
+    }
+
+    private var keyA1: String {
+        PlacemarkOutline.childFolderKeys(of: sampleRoot().children[0], parentKey: keyA)[0]
+    }
+
     // MARK: - Empty query flattens full tree
 
     @Test func rows_emptyQuery_flattensFullTreeWithDepths() {
@@ -114,7 +127,7 @@ struct PlacemarkOutlineTests {
     @Test func rows_collapsedFolders_hideDescendants() {
         // Collapse folder A (path "0"): its placemark, its child folder, and that
         // child's placemark all vanish; the folder A row itself stays.
-        let outline = PlacemarkOutline.build(from: sampleRoot(), matching: "", collapsed: ["0"])
+        let outline = PlacemarkOutline.build(from: sampleRoot(), matching: "", collapsed: [keyA])
 
         let ids = outline.rows.map(\.id)
         #expect(ids == ["p0", "0", "1", "1/p0"])
@@ -124,7 +137,7 @@ struct PlacemarkOutlineTests {
         // Force-expanded while searching: even though A is collapsed, a search keeps
         // the matching descendant visible (collapsed set is ignored for non-empty query).
         let outline = PlacemarkOutline.build(
-            from: sampleRoot(), matching: "Eleven", collapsed: ["0"]
+            from: sampleRoot(), matching: "Eleven", collapsed: [keyA]
         )
         let ids = outline.rows.map(\.id)
         #expect(ids == ["0", "0/0", "0/0/p0"])
@@ -332,5 +345,66 @@ struct PlacemarkOutlineTests {
             sort: .nearest(CLLocation(latitude: 0, longitude: 0)), corpus: corpus
         )
         #expect(nearest.rows.count == 1)
+    }
+
+    // MARK: - Fully seen folders
+
+    @Test func fullySeen_countsSubfoldersAndSkipsRoot() {
+        let root = sampleRoot()
+        // Only A.1's single place seen → A.1 is all seen; A still has a1 unseen.
+        #expect(PlacemarkOutline.fullySeenFolderKeys(in: root, visited: ["id:a11"]) == [keyA1])
+        // A's own place and its subfolder's place seen → both A and A.1; the root never counts.
+        let all: Set = ["id:a1", "id:a11", "id:b1", "id:r1"]
+        #expect(PlacemarkOutline.fullySeenFolderKeys(in: root, visited: all) == [keyA, keyA1, keyB])
+    }
+
+    @Test func fullySeen_emptyFolderNeverCounts() {
+        let empty = KMLContainer(id: "fE", name: "Empty", children: [], placemarks: [])
+        let root = KMLContainer(id: "root", name: nil, children: [empty], placemarks: [])
+        #expect(PlacemarkOutline.fullySeenFolderKeys(in: root, visited: []).isEmpty)
+    }
+
+    @Test func newlyFullySeen_onlyOnTheTransition() {
+        let root = sampleRoot()
+        // Marking the last unseen place in B collapses B.
+        #expect(PlacemarkOutline.newlyFullySeenFolderKeys(in: root, from: [], to: ["id:b1"]) == [keyB])
+        // Marking a11 completes A.1, and with a1 already seen completes A too.
+        #expect(PlacemarkOutline.newlyFullySeenFolderKeys(
+            in: root, from: ["id:a1"], to: ["id:a1", "id:a11"]
+        ) == [keyA, keyA1])
+        // A mark elsewhere doesn't re-report a folder that was already all seen.
+        #expect(PlacemarkOutline.newlyFullySeenFolderKeys(
+            in: root, from: ["id:b1"], to: ["id:b1", "id:r1"]
+        ).isEmpty)
+        // Unmarking never collapses anything.
+        #expect(PlacemarkOutline.newlyFullySeenFolderKeys(in: root, from: ["id:b1"], to: []).isEmpty)
+    }
+
+    // MARK: - Folder keys
+
+    @Test func folderKeys_surviveInsertingAndReorderingFolders() {
+        let root = sampleRoot()
+        let newFolder = KMLContainer(id: "fN", name: "New", children: [], placemarks: [])
+        // A new section above A, and B moved before A.
+        let reshaped = KMLContainer(
+            id: "root", name: nil, children: [newFolder, root.children[1], root.children[0]],
+            placemarks: root.placemarks
+        )
+        let keys = PlacemarkOutline.childFolderKeys(of: reshaped, parentKey: "")
+        #expect(keys[1] == keyB)
+        #expect(keys[2] == keyA)
+
+        // A collapsed A stays collapsed at its new position: its descendants stay hidden.
+        let outline = PlacemarkOutline.build(from: reshaped, matching: "", collapsed: [keyA])
+        #expect(outline.rows.map(\.id) == ["p0", "0", "1", "1/p0", "2"])
+    }
+
+    @Test func folderKeys_distinguishSameNamedSiblingsAndNesting() {
+        let day = KMLContainer(id: "d", name: "Day", children: [], placemarks: [])
+        let root = KMLContainer(id: "root", name: nil, children: [day, day], placemarks: [])
+        let keys = PlacemarkOutline.childFolderKeys(of: root, parentKey: "")
+        #expect(keys[0] != keys[1])
+        // The same name under a different parent is a different folder.
+        #expect(PlacemarkOutline.childFolderKeys(of: root, parentKey: keys[0])[0] != keys[0])
     }
 }

@@ -214,4 +214,18 @@ import Testing
         #expect(!store.setNote("lost", for: point("w")))
         #expect(store.note(for: point("w")) == nil)
     }
+
+    @Test func folderCollapseStatePersistsToSidecar() throws {
+        let (entry, storage) = try makeEntryAndStorage()
+        let store = PlacemarkAnnotations(entry: entry, storage: storage)
+        store.setFolder("0/1", collapsed: true)
+        store.collapseFolders(["2", "3"])
+        store.setFolder("2", collapsed: false)
+        #expect(store.collapsedFolderIDs == ["0/1", "3"])
+
+        let meta = try storage.readMetadata(forFolderNamed: entry.storageFolderName)
+        #expect(meta?.collapsedFolderIDs == ["0/1", "3"])
+        let reopened = PlacemarkAnnotations(entry: entry, storage: storage)
+        #expect(reopened.collapsedFolderIDs == ["0/1", "3"])
+    }
 }

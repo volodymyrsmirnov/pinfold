@@ -16,7 +16,6 @@ extension KMLDetailView {
             // Session restore: seed the saved transient state. (Deep-link bundles have a
             // nil folder name and leave the fresh defaults alone.)
             searchText = initialRestore.searchText
-            collapsedFolderIDs = initialRestore.collapsedFolderIDs
             nearestFirst = initialRestore.nearestFirst
             pendingScrollRowID = initialRestore.scrollAnchorRowID
         }
@@ -69,6 +68,17 @@ extension KMLDetailView {
         }
     }
 
+    /// Collapses the folders whose places all became seen between `oldKeys` and `newKeys` — on
+    /// the change only, so a folder the user expands again is left alone. `nil` on either side
+    /// is a store being attached or detached (the file opening), never a mark.
+    func autoCollapseSeenFolders(from oldKeys: Set<String>?, to newKeys: Set<String>?) {
+        guard let oldKeys, let newKeys, let document, let annotations else { return }
+        let newlySeen = PlacemarkOutline.newlyFullySeenFolderKeys(in: document.root, from: oldKeys, to: newKeys)
+        if !newlySeen.isEmpty {
+            annotations.collapseFolders(newlySeen)
+        }
+    }
+
     /// Writes the transient list state + scroll anchor to the resume slice. The scroll
     /// anchor is computed from live row geometry captured by `rowFrames` (see the geometry
     /// instrumentation in `contentList`/`outlineRow` and `applyPendingScroll`); `anchorRowID()`
@@ -83,7 +93,6 @@ extension KMLDetailView {
         // re-writes preserve the slice, so the steady state is untouched.
         settings.resumeEntryFolderName = entry.storageFolderName
         settings.resumeSearchText = searchText
-        settings.resumeCollapsedFolderIDs = Array(collapsedFolderIDs)
         settings.resumeNearestFirst = nearestFirst
         // A pushed screen empties `rowFrames` (covered rows fire onDisappear), so a nil
         // anchor here usually means "geometry unobservable", not "scrolled to the top".

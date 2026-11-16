@@ -34,13 +34,20 @@ struct EntryMetadata: Codable, Equatable {
     var notes: [String: PlacemarkNote] = [:]
     /// Set when the list follows a URL and refreshes itself; `nil` for a normal list.
     var subscription: Subscription?
+    /// Folders collapsed in the places list, by durable folder key (a hash of the folder's name
+    /// chain; see `PlacemarkOutline.childFolderKeys`), so adding or reordering folders doesn't
+    /// move the state. View state, synced so a file opens the same way on every device.
+    /// Devices on 2.2 or earlier drop it when they edit the sidecar (accepted, like
+    /// `subscription`).
+    var collapsedFolderIDs: Set<String> = []
 
     init(
         id: UUID, displayName: String, sourceFilename: String, importDate: Date,
         pointCount: Int, contentSHA256: String, trashedAt: Date?,
         favoriteKeys: Set<String> = [], visitedKeys: Set<String> = [],
         tags: [String] = [], notes: [String: PlacemarkNote] = [:],
-        subscription: Subscription? = nil
+        subscription: Subscription? = nil,
+        collapsedFolderIDs: Set<String> = []
     ) {
         self.id = id
         self.displayName = displayName
@@ -54,6 +61,7 @@ struct EntryMetadata: Codable, Equatable {
         self.tags = tags
         self.notes = notes
         self.subscription = subscription
+        self.collapsedFolderIDs = collapsedFolderIDs
     }
 
     // IMPORTANT: Codable is hand-written (not synthesised) so favoriteKeys/visitedKeys
@@ -62,6 +70,7 @@ struct EntryMetadata: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id, displayName, sourceFilename, importDate, pointCount
         case contentSHA256, trashedAt, favoriteKeys, visitedKeys, tags, notes, subscription
+        case collapsedFolderIDs
     }
 
     init(from decoder: any Decoder) throws {
@@ -78,6 +87,7 @@ struct EntryMetadata: Codable, Equatable {
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         notes = try c.decodeIfPresent([String: PlacemarkNote].self, forKey: .notes) ?? [:]
         subscription = try c.decodeIfPresent(Subscription.self, forKey: .subscription)
+        collapsedFolderIDs = try Set(c.decodeIfPresent([String].self, forKey: .collapsedFolderIDs) ?? [])
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -100,6 +110,10 @@ struct EntryMetadata: Codable, Equatable {
             try c.encode(notes, forKey: .notes)
         }
         try c.encodeIfPresent(subscription, forKey: .subscription)
+        // Omitted when empty (like notes) so files nobody collapsed keep their sidecar unchanged.
+        if !collapsedFolderIDs.isEmpty {
+            try c.encode(collapsedFolderIDs.sorted(), forKey: .collapsedFolderIDs)
+        }
     }
 
     /// Encodes to pretty-printed, key-sorted JSON for stable, diff-friendly files.
@@ -137,6 +151,8 @@ struct EntryMetadata: Codable, Equatable {
     ///   `pointCount`, `contentSHA256`): keep **current's** values. These describe the same
     ///   underlying file, so the winning version is authoritative; there is nothing to merge.
     /// - `subscription`: keeps **current's** value (the winning version is authoritative).
+    /// - `collapsedFolderIDs`: keeps **current's** value — it is view state, so the last
+    ///   writer wins; unioning would re-collapse folders the user just expanded elsewhere.
     /// - `trashedAt`: the **maximum** of all non-nil `trashedAt` values across current and
     ///   conflicts, or `nil` if every version is non-trashed. A trash performed on one device
     ///   therefore wins over an unaware copy (deletion is the user's most recent intent), and
