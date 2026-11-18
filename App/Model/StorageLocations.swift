@@ -38,7 +38,18 @@ enum SidecarReadResult: Equatable {
 /// <cacheRoot>/<storageFolderName>/
 ///     resources/            ← local-only icon/photo cache
 /// ```
-struct StorageLocations {
+///
+/// **Keep this plain data.** The active layout travels in the SwiftUI environment
+/// (`\.storageLocations`), and SwiftUI decides whether a view reading it must re-render by
+/// comparing the stored fields. Two URLs, a Bool and one class reference compare reliably.
+/// The closures and the existential probe that used to be stored here did not: an unchanged
+/// value kept reading as "changed", so every environment update re-rendered every reader. On
+/// a narrow iPhone (iPhone 17e) the file screen's toolbar re-laid itself out on each of those
+/// renders, which updated the environment again. Opening a file, or relaunching into one,
+/// then spun the main thread for over a minute on iOS 27, and App Review rejected 2.3 for the
+/// resulting watchdog kill. Put new injectable behaviour in `StorageSeams`, not in a stored
+/// closure or existential here.
+struct StorageLocations: Equatable {
     // MARK: - Properties
 
     /// Synced root: holds per-entry folders with the original file + sidecar.
@@ -48,15 +59,36 @@ struct StorageLocations {
     /// `true` when `root` is the iCloud container (set by `synced(root:)`). Gates the
     /// "never backfill over a sidecar that has not downloaded" rule.
     var isUbiquitous = false
+    /// The injectable iCloud seams, behind one shared reference (see the type's note on
+    /// keeping this struct plain data). Production values all share `StorageSeams.system`.
+    private var seams = StorageSeams.system
+
     /// Answers "has this iCloud item downloaded?" Injectable so tests need no iCloud.
-    var probe: any UbiquityProbe = SystemUbiquityProbe()
+    var probe: any UbiquityProbe {
+        get { seams.probe }
+        set { seams = seams.replacing(probe: newValue) }
+    }
+
     /// Unresolved iCloud conflict versions of a file. Injectable; defaults to `NSFileVersion`.
-    var conflictVersions: @Sendable (URL) -> [ConflictVersion] = ConflictVersion.systemVersions(of:)
+    var conflictVersions: @Sendable (URL) -> [ConflictVersion] {
+        get { seams.conflictVersions }
+        set { seams = seams.replacing(conflictVersions: newValue) }
+    }
+
     /// Discards every other version of a file once all conflicts were folded in. Injectable.
-    var removeOtherVersions: @Sendable (URL) throws -> Void = ConflictVersion.removeSystemOtherVersions(of:)
+    var removeOtherVersions: @Sendable (URL) throws -> Void {
+        get { seams.removeOtherVersions }
+        set { seams = seams.replacing(removeOtherVersions: newValue) }
+    }
 
     /// Top-level folder name reserved for the local cache root; never an entry folder.
     static let reservedCacheFolderName = "resources"
+
+    /// The same layout with the same seams (by identity: closures can't be compared).
+    static func == (lhs: StorageLocations, rhs: StorageLocations) -> Bool {
+        lhs.root == rhs.root && lhs.cacheRoot == rhs.cacheRoot
+            && lhs.isUbiquitous == rhs.isUbiquitous && lhs.seams === rhs.seams
+    }
 
     // MARK: - Init
 

@@ -50,6 +50,44 @@ struct SystemUbiquityProbe: UbiquityProbe {
     }
 }
 
+/// The iCloud seams `StorageLocations` injects, held by reference so `StorageLocations` stays
+/// plain data that SwiftUI can compare (see the note on `StorageLocations`). Immutable: a
+/// test that injects a seam gets a new instance (`replacing`), production shares `system`.
+final class StorageSeams: Sendable {
+    let probe: any UbiquityProbe
+    let conflictVersions: @Sendable (URL) -> [ConflictVersion]
+    let removeOtherVersions: @Sendable (URL) throws -> Void
+
+    init(
+        probe: any UbiquityProbe,
+        conflictVersions: @escaping @Sendable (URL) -> [ConflictVersion],
+        removeOtherVersions: @escaping @Sendable (URL) throws -> Void
+    ) {
+        self.probe = probe
+        self.conflictVersions = conflictVersions
+        self.removeOtherVersions = removeOtherVersions
+    }
+
+    /// The real system seams, shared by every production `StorageLocations`.
+    static let system = StorageSeams(
+        probe: SystemUbiquityProbe(),
+        conflictVersions: ConflictVersion.systemVersions(of:),
+        removeOtherVersions: ConflictVersion.removeSystemOtherVersions(of:)
+    )
+
+    func replacing(probe: any UbiquityProbe) -> StorageSeams {
+        StorageSeams(probe: probe, conflictVersions: conflictVersions, removeOtherVersions: removeOtherVersions)
+    }
+
+    func replacing(conflictVersions: @escaping @Sendable (URL) -> [ConflictVersion]) -> StorageSeams {
+        StorageSeams(probe: probe, conflictVersions: conflictVersions, removeOtherVersions: removeOtherVersions)
+    }
+
+    func replacing(removeOtherVersions: @escaping @Sendable (URL) throws -> Void) -> StorageSeams {
+        StorageSeams(probe: probe, conflictVersions: conflictVersions, removeOtherVersions: removeOtherVersions)
+    }
+}
+
 /// One unresolved iCloud conflict version of a file, behind closures so the conflict-resolution
 /// path can be tested with plain data (E3).
 struct ConflictVersion {
