@@ -14,6 +14,10 @@ extension HomeView {
                         Label("No Files", systemImage: "map")
                     } description: {
                         Text(ImportFormats.emptyCatalogueHint)
+                    } actions: {
+                        Button("Try a Sample File", action: importSampleFile)
+                            .buttonStyle(.borderedProminent)
+                            .disabled(importCoordinator.isImporting)
                     }
                 }
             } else if isSelecting {
