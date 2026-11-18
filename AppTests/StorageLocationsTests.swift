@@ -323,6 +323,31 @@ struct StorageLocationsTests {
         try locations.removeFolder(named: "never-existed")
     }
 
+    // MARK: - Equality (SwiftUI environment value)
+
+    /// The active layout is a SwiftUI environment value, so an unchanged one must compare
+    /// equal: production values share one `StorageSeams`, and only an injected seam (or a
+    /// different layout) makes two values differ. (2.3 was rejected for a main-thread hang
+    /// caused by an unchanged value reading as changed.)
+    @Test func equality_sameLayoutIsEqual_injectedSeamOrLayoutIsNot() {
+        let root = makeTempRoot()
+        let locations = StorageLocations(root: root)
+        let copy = locations
+        #expect(locations == copy)
+        #expect(locations == StorageLocations(root: root))
+
+        var probed = locations
+        probed.probe = FakeUbiquityProbe()
+        #expect(probed != locations)
+        // The other seams are kept when one is replaced.
+        #expect(probed.probe is FakeUbiquityProbe)
+
+        var ubiquitous = locations
+        ubiquitous.isUbiquitous = true
+        #expect(ubiquitous != locations)
+        #expect(StorageLocations(root: makeTempRoot()) != locations)
+    }
+
     // MARK: - Sidecar not downloaded (B2)
 
     private func ubiquitousLocations(probe: FakeUbiquityProbe) -> StorageLocations {
