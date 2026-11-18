@@ -15,6 +15,13 @@ extension HomeView {
             importCoordinator.importError = error
         }
     }
+
+    /// Imports the bundled sample file through the same queue as the file picker, so it gets
+    /// the usual progress, duplicate prompt and failure handling.
+    func importSampleFile() {
+        guard let url = SampleFile.url else { return }
+        importCoordinator.enqueue([url], catalog: catalog, cache: resourceCache)
+    }
 }
 
 // MARK: - Import progress label
