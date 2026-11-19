@@ -69,7 +69,8 @@ struct RetryPolicy {
             retryableStatuses.contains(status)
         case let DownloadError.transport(underlying):
             isRetryableTransport(underlying)
-        case DownloadError.tooLarge, DownloadError.redirectedToOtherHost, is CancellationError:
+        case DownloadError.tooLarge, DownloadError.redirectedToOtherHost, DownloadError.stalled,
+             is CancellationError:
             false
         default:
             isRetryableTransport(error)

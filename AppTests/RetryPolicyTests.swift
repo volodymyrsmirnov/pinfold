@@ -50,6 +50,7 @@ struct RetryPolicyTests {
     }
 
     @Test func boundsAndCancellation_areNotRetryable() {
+        #expect(!RetryPolicy.isRetryable(DownloadError.stalled))
         #expect(!RetryPolicy.isRetryable(DownloadError.tooLarge))
         #expect(!RetryPolicy.isRetryable(DownloadError.redirectedToOtherHost))
         #expect(!RetryPolicy.isRetryable(CancellationError()))

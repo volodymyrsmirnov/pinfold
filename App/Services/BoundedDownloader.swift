@@ -14,6 +14,9 @@ enum DownloadError: Error {
     /// Any transport-level failure (offline, timeout, TLS, bad URL). Retried at once only for
     /// connectivity, DNS, connect and timeout failures (`RetryPolicy`).
     case transport(Error)
+    /// The server answered, but the body didn't arrive in time (the whole-transfer timeout).
+    /// Not retried at once: a slow link would start the same long download over from zero.
+    case stalled
 }
 
 /// Outcome of a conditional GET.
@@ -327,6 +330,11 @@ private final class BoundedTransfer: @unchecked Sendable {
                 return .failure(CancellationError())
             }
             if let error {
+                // A timeout after the response arrived is a body too slow for the link, not a
+                // host that can't be reached: report it as a stall, which isn't retried.
+                if state.response != nil, (error as? URLError)?.code == .timedOut {
+                    return .failure(DownloadError.stalled)
+                }
                 return .failure(DownloadError.transport(error))
             }
             guard let response = state.response else {
@@ -383,6 +391,9 @@ private final class TransferRouter: NSObject, URLSessionDataDelegate, @unchecked
         configuration.httpShouldSetCookies = false
         configuration.urlCredentialStorage = nil
         configuration.urlCache = nil
+        // iOS defaults to 4 connections per host; `ResourceCache` runs up to 6 downloads per
+        // entry, and the 2 waiting for a connection would spend their timeout queued.
+        configuration.httpMaximumConnectionsPerHost = 6
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: configuration, delegate: TransferRouter(), delegateQueue: nil)
     }

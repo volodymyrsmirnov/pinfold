@@ -31,6 +31,7 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         case DownloadError.redirectedToOtherHost:
             self = .network(String(localized: "The server redirected to a different host."))
         case let DownloadError.transport(underlying): self = .network(underlying.localizedDescription)
+        case DownloadError.stalled: self = .network(URLError(.timedOut).localizedDescription)
         case is CancellationError: self = .network(String(localized: "The check was cancelled."))
         default: self = .network(error.localizedDescription)
         }

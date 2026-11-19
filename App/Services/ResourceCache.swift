@@ -13,8 +13,8 @@ private let maxResourceBytes = 20 * 1024 * 1024
 /// Per-request timeout for a remote resource download, in seconds.
 private let downloadTimeout: TimeInterval = 20
 
-/// Concurrent downloads per entry. Matches `URLSession`'s default connections per host, so a
-/// file whose images all live on one host keeps every connection busy.
+/// Concurrent downloads per entry. `BoundedDownloader`'s shared session allows as many
+/// connections per host, so a file whose images all live on one host keeps every one busy.
 private let maxConcurrentDownloads = 6
 
 /// A 2xx response that is not an image counts as a failed attempt; after this many the href
