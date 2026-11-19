@@ -17,6 +17,8 @@ final class StubURLProtocol: URLProtocol {
         var transientFailures = 0
         var transientStatus: Int?
         var transientError = URLError.Code.timedOut
+        /// Never answers (the request stays in flight until it is cancelled).
+        var hangs = false
     }
 
     private static let stubs = OSAllocatedUnfairLock<[String: Stub]>(initialState: [:])
@@ -59,6 +61,9 @@ final class StubURLProtocol: URLProtocol {
         let attempt = Self.counts.withLock { counts -> Int in
             counts[host, default: 0] += 1
             return counts[host] ?? 0
+        }
+        if stub.hangs {
+            return
         }
         if attempt <= stub.transientFailures {
             if let status = stub.transientStatus,
@@ -198,6 +203,45 @@ struct BoundedDownloaderTests {
         } catch {
             Issue.record("unexpected error \(error)")
         }
+    }
+
+    /// Cancelling the caller resumes it with `CancellationError` straight away, whatever the
+    /// URLSession task is doing (it must never be left waiting on a completion callback).
+    @Test(.timeLimit(.minutes(1)))
+    func cancellation_resumesTheCaller() async throws {
+        let host = "hangs.test"
+        StubURLProtocol.register(.init(hangs: true), host: host)
+        let url = try #require(URL(string: "https://\(host)/a.png"))
+        let fetch = Task {
+            try await BoundedDownloader.fetch(
+                url, maxBytes: 1000, timeout: 30, configuration: StubURLProtocol.configuration(), retry: .none
+            )
+        }
+        while StubURLProtocol.requestCount(host: host) == 0 {
+            await Task.yield()
+        }
+        fetch.cancel()
+        do {
+            _ = try await fetch.value
+            Issue.record("expected cancellation")
+        } catch is CancellationError {
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    /// Cancelled before the request starts (no window where a completion can be dropped).
+    @Test(.timeLimit(.minutes(1)), arguments: 0 ..< 20)
+    func cancellationRacingTheStart_resumesTheCaller(iteration _: Int) async throws {
+        StubURLProtocol.register(.init(hangs: true), host: "hangs-race.test")
+        let url = try #require(URL(string: "https://hangs-race.test/a.png"))
+        let fetch = Task {
+            try await BoundedDownloader.fetch(
+                url, maxBytes: 1000, timeout: 30, configuration: StubURLProtocol.configuration(), retry: .none
+            )
+        }
+        fetch.cancel()
+        await #expect(throws: CancellationError.self) { try await fetch.value }
     }
 
     @Test func nonHTTPScheme_isRejected() async throws {

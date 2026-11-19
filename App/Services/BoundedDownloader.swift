@@ -219,9 +219,16 @@ private final class BoundedTransfer: @unchecked Sendable {
         task.resume()
     }
 
+    /// The calling task was cancelled: cancels the request and resumes the caller at once with
+    /// `CancellationError`, without waiting for the task's completion callback. That callback
+    /// can't be relied on here: cancelled between `begin`'s check and `register`, the task can
+    /// complete before it is registered, and the router would drop its completion. (`finish`
+    /// resumes at most once; before `begin` stores the continuation it does nothing, and `begin`
+    /// then sees the flag.)
     func cancelByCaller(_ task: URLSessionDataTask) {
         locked { $0.cancelledByCaller = true }
         task.cancel()
+        finish(.failure(CancellationError()))
     }
 
     /// Records why the transfer fails (the first reason wins) and cancels the task.
