@@ -40,14 +40,14 @@ struct SubscriptionRefresherTests {
 
         func makeRefresher(
             network: NetworkStatus? = nil, clock: (() -> Date)? = nil,
-            hasher: SubscriptionRefresher.OriginalHasher? = nil
+            hasher: SubscriptionRefresher.OriginalHasher? = nil, retry: RetryPolicy? = nil
         ) -> SubscriptionRefresher {
             let stub = stub
             return SubscriptionRefresher(
                 catalog: catalog, cache: cache, network: network,
                 fetcher: { url, etag, lastModified in try await stub.fetch(url, etag: etag, lastModified: lastModified) },
                 clock: clock ?? { SubscriptionRefresherTests.now },
-                hashOriginal: hasher
+                hashOriginal: hasher, retry: retry
             )
         }
     }
@@ -541,6 +541,60 @@ struct SubscriptionRefresherTests {
 
     // MARK: - Stop Updating
 
+    /// Stop Updating while a retry waits: the host is not contacted again and nothing is recorded.
+    @Test func refresh_stopUpdatingDuringRetry_sendsNoMoreRequests() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        env.stub.fail(with: DownloadError.httpStatus(503))
+        let box = RefresherBox()
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .zero, jitter: 0) { _ in
+            try await box.stopUpdating(entry)
+        }
+        let refresher = env.makeRefresher(retry: retry)
+        box.refresher = refresher
+
+        _ = await refresher.refreshNow(entry)
+
+        #expect(env.stub.calls == 1)
+        #expect(try env.entry(folder).subscription == nil)
+        #expect(try refresher.phase(for: env.entry(folder)) == .idle)
+    }
+
+    /// Another window (its own refresher) stops the list while this window's retry waits: the
+    /// retry re-reads the sidecar and doesn't contact the host again.
+    @Test func refresh_stoppedInAnotherWindowDuringRetry_sendsNoMoreRequests() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        env.stub.fail(with: DownloadError.httpStatus(503))
+        let otherWindow = RefresherBox()
+        otherWindow.refresher = env.makeRefresher()
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .zero, jitter: 0) { _ in
+            try await otherWindow.stopUpdating(entry)
+        }
+        let refresher = env.makeRefresher(retry: retry)
+
+        _ = await refresher.refreshNow(entry)
+
+        #expect(env.stub.calls == 1)
+        let sidecar = try #require(try env.storage.readMetadata(forFolderNamed: folder))
+        #expect(sidecar.subscription == nil)
+    }
+
+    @Test func refresh_transientFailure_isRetried() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        env.stub.fail(with: DownloadError.httpStatus(503))
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .zero, jitter: 0) { _ in }
+        let refresher = env.makeRefresher(retry: retry)
+
+        _ = await refresher.refreshNow(entry)
+
+        #expect(env.stub.calls == 4)
+    }
+
     @Test func stopUpdating_clearsSubscriptionAndState() async throws {
         let env = makeEnvironment()
         let folder = try await addOnlineList(env, state: checkedAMinuteAgo)
@@ -683,5 +737,14 @@ actor FetchGate {
     func waitForArrivals(_ count: Int) async {
         guard arrivals < count else { return }
         await withCheckedContinuation { watchers.append((count, $0)) }
+    }
+}
+
+/// Lets a retry's wait call back into a refresher created after the policy.
+@MainActor final class RefresherBox {
+    var refresher: SubscriptionRefresher?
+
+    func stopUpdating(_ entry: CatalogEntry) async throws {
+        try await refresher?.stopUpdating(entry)
     }
 }

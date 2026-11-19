@@ -13,8 +13,9 @@ private let maxResourceBytes = 20 * 1024 * 1024
 /// Per-request timeout for a remote resource download, in seconds.
 private let downloadTimeout: TimeInterval = 20
 
-/// Concurrent downloads per entry.
-private let maxConcurrentDownloads = 4
+/// Concurrent downloads per entry. `BoundedDownloader`'s shared session allows as many
+/// connections per host, so a file whose images all live on one host keeps every one busy.
+private let maxConcurrentDownloads = 6
 
 /// A 2xx response that is not an image counts as a failed attempt; after this many the href
 /// is permanently skipped (a captive portal answering 200 with HTML recovers in between).
@@ -57,9 +58,11 @@ final class ResourceCache: Sendable {
     /// Supplies the current remote-image policy; read at the start of every download pass.
     typealias PolicyProvider = @Sendable () -> RemoteImagePolicy
 
-    /// The default downloader: `BoundedDownloader` with the size cap and a 20 s timeout.
+    /// The default downloader: `BoundedDownloader` (shared session) with the size cap and a 20 s
+    /// timeout. A single attempt: `ResourceCache` retries itself (`retry`), so it can recheck
+    /// the remote-image policy before every attempt.
     static let urlSessionDownloader: Downloader = { url in
-        try await BoundedDownloader.fetch(url, maxBytes: maxResourceBytes, timeout: downloadTimeout)
+        try await BoundedDownloader.fetch(url, maxBytes: maxResourceBytes, timeout: downloadTimeout, retry: .none)
     }
 
     /// The default policy provider, reading `UserDefaults.standard`.
@@ -80,6 +83,8 @@ final class ResourceCache: Sendable {
     // MARK: - Properties
 
     private let downloader: Downloader
+    /// Retries a transient download failure, rechecking `mayFetch` before every attempt.
+    private let retry: RetryPolicy
     private let policy: PolicyProvider
     private let now: @Sendable () -> Date
     private let store = ResourceManifestStore.shared
@@ -100,12 +105,17 @@ final class ResourceCache: Sendable {
     ///   - policy: Supplies the remote-image policy. Defaults to the value stored in
     ///     `UserDefaults.standard` (`.always` when unset).
     ///   - now: Clock used for retry backoff; injectable for tests.
+    ///   - retry: How a transient failure is retried within a pass. Defaults to
+    ///     `RetryPolicy.standard` with the live downloader and to a single attempt with an
+    ///     injected one (tests).
     init(
-        downloader: @escaping Downloader = ResourceCache.urlSessionDownloader,
+        downloader: Downloader? = nil,
         policy: @escaping PolicyProvider = ResourceCache.storedPolicy,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        retry: RetryPolicy? = nil
     ) {
-        self.downloader = downloader
+        self.downloader = downloader ?? Self.urlSessionDownloader
+        self.retry = retry ?? (downloader == nil ? .standard : .none)
         self.policy = policy
         self.now = now
     }
@@ -189,7 +199,9 @@ final class ResourceCache: Sendable {
     }
 
     /// Fetches the hrefs that are unresolved and out of backoff, at most
-    /// `maxConcurrentDownloads` at a time.
+    /// `maxConcurrentDownloads` at a time. They are marked queued in `ResourceActivity` (the
+    /// placeholders show progress) until each one ends. Once a download finds the device offline
+    /// the pass starts no more: they would all fail the same way, each after its retries.
     private func fetchDue(_ hrefs: [String], to resourcesDir: URL) async {
         let state = store.state(in: resourcesDir)
         // Cleared by the user: wait until the entry is opened (`resumeDeferred(in:)`).
@@ -206,17 +218,58 @@ final class ResourceCache: Sendable {
             guard let next = state.hrefs[href]?.nextAttemptAt else { return true }
             return next <= current
         }
-        await withTaskGroup(of: Void.self) { group in
-            var iterator = due.makeIterator()
-            for _ in 0 ..< maxConcurrentDownloads {
-                guard mayFetch(in: resourcesDir), let href = iterator.next() else { break }
-                group.addTask { await self.fetchOne(href, to: resourcesDir) }
+        // Failures of hrefs the entry no longer has (an online list replaced them) are dropped.
+        ResourceActivity.retainFailures(Set(hrefs), in: resourcesDir)
+        // Hrefs another pass over this entry is already fetching stay with that pass.
+        let claimed = ResourceActivity.claim(due, in: resourcesDir)
+        guard !claimed.isEmpty else { return }
+        await withTaskGroup(of: FetchOutcome.self) { group in
+            var queue = claimed[...]
+            func startNext() -> Bool {
+                guard mayFetch(in: resourcesDir), let href = queue.popFirst() else { return false }
+                group.addTask { await self.fetchTracked(href, to: resourcesDir) }
+                return true
             }
-            while await group.next() != nil {
-                guard mayFetch(in: resourcesDir), let href = iterator.next() else { continue }
-                group.addTask { await self.fetchOne(href, to: resourcesDir) }
+            /// Unmarks the rest at once when the pass starts no more, rather than when the slowest
+            /// running download ends, so their placeholders stop showing progress.
+            func stop() {
+                ResourceActivity.cancel(queue, in: resourcesDir)
+                queue = []
             }
+            var stopped = false
+            for _ in 0 ..< maxConcurrentDownloads where !stopped {
+                if !startNext() {
+                    stopped = true
+                    stop()
+                }
+            }
+            while let outcome = await group.next() {
+                if outcome == .offline {
+                    stopped = true
+                }
+                if !stopped, !startNext() {
+                    stopped = true
+                }
+                if stopped {
+                    stop()
+                }
+            }
+            stop()
         }
+    }
+
+    /// How one download ended.
+    private enum FetchOutcome { case cached, failed, offline, notStarted }
+
+    /// `fetchOne`, keeping `ResourceActivity` up to date.
+    private func fetchTracked(_ href: String, to resourcesDir: URL) async -> FetchOutcome {
+        let outcome = await fetchOne(href, to: resourcesDir)
+        switch outcome {
+        case .notStarted: ResourceActivity.cancel([href], in: resourcesDir)
+        case .cached: ResourceActivity.end(href, failed: false, in: resourcesDir)
+        case .failed, .offline: ResourceActivity.end(href, failed: true, in: resourcesDir)
+        }
+        return outcome
     }
 
     /// Whether a request may start now (re-read before every request): not cancelled, not
@@ -232,43 +285,62 @@ final class ResourceCache: Sendable {
         }
     }
 
-    private func fetchOne(_ href: String, to resourcesDir: URL) async {
-        guard let url = URL(string: href), mayFetch(in: resourcesDir) else { return }
+    private func fetchOne(_ href: String, to resourcesDir: URL) async -> FetchOutcome {
+        guard let url = URL(string: href), mayFetch(in: resourcesDir) else { return .notStarted }
+        // Another pass may have cached (or skipped) it since this pass read the manifest, or
+        // failed and put it into backoff.
+        if let filename = store.manifest(in: resourcesDir)[href] {
+            return filename.isEmpty ? .failed : .cached
+        }
+        if let next = store.state(in: resourcesDir).hrefs[href]?.nextAttemptAt, next > now() {
+            return .failed
+        }
         // App Transport Security blocks plain http loads, so fetch over https. Many KML
         // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
         // hosts also serve https. The manifest is still keyed by the original `href`
         // so UI lookups via `localURL(forHref:)` resolve unchanged. A host that serves
         // *only* http (no https) is unsupported by design.
         do {
-            let data = try await downloader(Self.httpsUpgraded(url))
+            let upgraded = Self.httpsUpgraded(url)
+            let data = try await retry.run {
+                // The policy, consent or deferral may change while a retry waits.
+                guard mayFetch(in: resourcesDir) else { throw CancellationError() }
+                return try await downloader(upgraded)
+            }
             guard data.count <= maxResourceBytes else {
                 Self.logger.warning("Rejecting resource over size cap; skipping permanently")
                 markSkipped(href, to: resourcesDir)
-                return
+                return .failed
             }
             guard Self.looksLikeImage(data) else {
                 // A 2xx non-image may be a captive portal: retry with backoff, give up
                 // only after `maxNonImageAttempts`.
                 Self.logger.warning("Rejecting non-image remote resource")
                 recordFailure(href, in: resourcesDir, isNonImage: true)
-                return
+                return .failed
             }
             let filename = cachedFilename(for: href)
             try data.write(to: resourcesDir.appendingPathComponent(filename), options: .atomic)
             try store.updateManifest(in: resourcesDir) { $0[href] = filename }
             store.updateState(in: resourcesDir) { $0.hrefs[href] = nil }
+            return .cached
         } catch DownloadError.tooLarge {
             Self.logger.warning("Rejecting resource over size cap; skipping permanently")
             markSkipped(href, to: resourcesDir)
+            return .failed
+        } catch is CancellationError {
+            return .notStarted
         } catch {
             if Self.isConnectivityFailure(error) {
                 // The device is offline (not the host's fault): don't burn an attempt or grow the
                 // backoff, so the image is fetched as soon as the connection is back.
                 Self.logger.debug("Offline; leaving resource pending without penalty")
-                return
+                return .offline
             }
-            // HTTP errors, timeouts, dead hosts: retry later with backoff.
+            // HTTP errors, timeouts, dead hosts (already retried briefly by the downloader):
+            // retry later with backoff.
             recordFailure(href, in: resourcesDir, isNonImage: false)
+            return .failed
         }
     }
 
@@ -285,7 +357,9 @@ final class ResourceCache: Sendable {
             var entry = state.hrefs[href] ?? DownloadState.HrefState(attempts: 0, nextAttemptAt: nil)
             entry.attempts += 1
             // Only 2xx non-image responses count toward giving up (not HTTP/transport failures).
-            if isNonImage { entry.nonImageResponses += 1 }
+            if isNonImage {
+                entry.nonImageResponses += 1
+            }
             if isNonImage, entry.nonImageResponses >= maxNonImageAttempts {
                 giveUp = true
                 state.hrefs[href] = nil
@@ -317,101 +391,6 @@ final class ResourceCache: Sendable {
     func grantConsent(in resourcesDir: URL) async {
         store.updateState(in: resourcesDir) { $0.consent = true }
         await retryPending(in: resourcesDir)
-    }
-
-    // MARK: - Image sniffing
-
-    /// Returns `true` if `data` begins with the magic bytes of an image format we render.
-    ///
-    /// Content-type response headers are unreliable (and absent for archive resources), and we
-    /// hand these bytes straight to the image pipeline, so we sniff the actual bytes. Covers
-    /// PNG, JPEG, GIF, WebP, BMP, TIFF, and the ISO-BMFF `ftyp` family (HEIC/HEIF/AVIF).
-    static func looksLikeImage(_ data: Data) -> Bool {
-        // Need at least the largest signature window we inspect (12 bytes for RIFF/WEBP & ftyp).
-        guard data.count >= 12 else {
-            // BMP ("BM") and the shortest TIFF/JPEG headers still fit in fewer bytes.
-            return shortSignatureMatch(data)
-        }
-        let b = [UInt8](data.prefix(12))
-
-        // PNG: 89 50 4E 47
-        if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 {
-            return true
-        }
-        // JPEG: FF D8 FF
-        if b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF {
-            return true
-        }
-        // GIF: 47 49 46 38 ("GIF8")
-        if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 {
-            return true
-        }
-        // BMP: 42 4D ("BM")
-        if b[0] == 0x42, b[1] == 0x4D {
-            return true
-        }
-        // TIFF little-endian "II*\0" / big-endian "MM\0*"
-        if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 {
-            return true
-        }
-        if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A {
-            return true
-        }
-        // WebP: "RIFF"...."WEBP"
-        let isRIFF = b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46
-        if isRIFF, b[8] == 0x57, b[9] == 0x45, b[10] == 0x42, b[11] == 0x50 {
-            return true
-        }
-        // ISO-BMFF ftyp box (bytes 4-7 == "ftyp"), brand at bytes 8-11. Compare the brand as
-        // raw ASCII bytes to avoid a Data→String conversion.
-        if b[4] == 0x66, b[5] == 0x74, b[6] == 0x79, b[7] == 0x70 {
-            let brand = Array(b[8 ..< 12])
-            let imageBrands: Set<[UInt8]> = [
-                Array("heic".utf8), Array("heix".utf8), Array("hevc".utf8),
-                Array("mif1".utf8), Array("msf1".utf8), Array("avif".utf8),
-            ]
-            if imageBrands.contains(brand) {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Signature check for payloads shorter than the 12-byte window (BMP, short TIFF/JPEG).
-    private static func shortSignatureMatch(_ data: Data) -> Bool {
-        let b = [UInt8](data.prefix(4))
-        if b.count >= 2, b[0] == 0x42, b[1] == 0x4D {
-            return true
-        } // BMP
-        if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8, b[2] == 0xFF {
-            return true
-        } // JPEG
-        if b.count >= 4 {
-            if b[0] == 0x89, b[1] == 0x50, b[2] == 0x4E, b[3] == 0x47 {
-                return true
-            } // PNG
-            if b[0] == 0x47, b[1] == 0x49, b[2] == 0x46, b[3] == 0x38 {
-                return true
-            } // GIF
-            if b[0] == 0x49, b[1] == 0x49, b[2] == 0x2A, b[3] == 0x00 {
-                return true
-            } // TIFF LE
-            if b[0] == 0x4D, b[1] == 0x4D, b[2] == 0x00, b[3] == 0x2A {
-                return true
-            } // TIFF BE
-        }
-        return false
-    }
-
-    /// Returns `url` with its scheme upgraded from `http` to `https`; other URLs unchanged.
-    static func httpsUpgraded(_ url: URL) -> URL {
-        guard url.scheme?.lowercased() == "http",
-              var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        else {
-            return url
-        }
-        components.scheme = "https"
-        return components.url ?? url
     }
 
     // MARK: - Retry
@@ -454,6 +433,7 @@ final class ResourceCache: Sendable {
         if !store.recordedHrefs(in: resourcesDir).isEmpty {
             store.updateState(in: resourcesDir) { $0.deferredUntilOpened = true }
         }
+        ResourceActivity.reset(in: resourcesDir)
     }
 
     /// Clears the deferral and fetches the recorded hrefs again (policy, consent and backoff

@@ -9,7 +9,8 @@ import UIKit
 ///
 /// For each href in `photoLinks`, the view resolves the local cached file via
 /// `ResourceCache`. Resolved images are shown as tappable thumbnails. Unresolved
-/// (missing or not yet downloaded) links show a placeholder tile.
+/// (missing or not yet downloaded) links show a placeholder tile: a spinner while the photo
+/// downloads, a "couldn't load" badge after a failed attempt.
 ///
 /// Tapping a resolved thumbnail opens `PhotoViewer` in a sheet on that photo: swipe sideways
 /// between the place's photos, pinch or double-tap to zoom, drag down to close.
@@ -31,17 +32,25 @@ struct PhotoGalleryView: View {
     // MARK: - Body
 
     var body: some View {
-        let urls = localURLs
+        let statuses = imageStatuses
+        let urls = statuses.map { status -> URL? in
+            if case let .cached(url) = status {
+                url
+            } else {
+                nil
+            }
+        }
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(Array(photoLinks.enumerated()), id: \.offset) { index, _ in
                     let url = urls[index]
-                    thumbnailTile(url: url)
+                    thumbnailTile(status: statuses[index])
                         .onTapGesture {
                             open(at: index, in: urls)
                         }
                         .accessibilityElement()
                         .accessibilityLabel("Photo \(index + 1) of \(photoLinks.count)")
+                        .accessibilityValue(Self.accessibilityStatus(statuses[index]))
                         .accessibilityAddTraits(url == nil ? [] : .isButton)
                 }
             }
@@ -53,10 +62,20 @@ struct PhotoGalleryView: View {
         }
     }
 
-    /// The cached file for each link, in link order (`nil` where it isn't on disk yet).
-    private var localURLs: [URL?] {
+    /// The tile's status for VoiceOver: its label is the position, so the placeholder's own
+    /// label isn't read.
+    private static func accessibilityStatus(_ status: RemoteImageStatus) -> Text {
+        switch status {
+        case .loading: Text("Downloading")
+        case .failed: Text("Couldn't Download")
+        case .idle, .cached: Text(verbatim: "")
+        }
+    }
+
+    /// Where each link's photo stands, in link order.
+    private var imageStatuses: [RemoteImageStatus] {
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        return photoLinks.map { resourceCache.observedLocalURL(forHref: $0, in: resourcesDir) }
+        return photoLinks.map { resourceCache.observedImageStatus(forHref: $0, in: resourcesDir) }
     }
 
     /// Opens the viewer on the tapped photo, paging through only the photos that are on disk.
@@ -72,8 +91,8 @@ struct PhotoGalleryView: View {
     // MARK: - Thumbnail tile
 
     @ViewBuilder
-    private func thumbnailTile(url: URL?) -> some View {
-        if let url {
+    private func thumbnailTile(status: RemoteImageStatus) -> some View {
+        if case let .cached(url) = status {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
@@ -83,24 +102,17 @@ struct PhotoGalleryView: View {
                         .frame(width: 100, height: 100)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 default:
-                    placeholderTile
+                    placeholderTile(.idle)
                 }
             }
             .frame(width: 100, height: 100)
         } else {
-            placeholderTile
+            placeholderTile(status)
         }
     }
 
-    private var placeholderTile: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 100, height: 100)
-            Image(systemName: "photo")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary)
-        }
+    private func placeholderTile(_ status: RemoteImageStatus) -> some View {
+        RemoteImagePlaceholder(status: status, size: 100, cornerRadius: 8, symbolSize: 28)
     }
 }
 
@@ -109,9 +121,14 @@ struct PhotoGalleryView: View {
 /// A sheet showing a place's photos one at a time: swipe left and right between them, pinch or
 /// double-tap to zoom, and drag the sheet down (or tap Close) to dismiss.
 ///
-/// Built from a paging `TabView` and a zooming `UIScrollView` per photo rather than Quick Look:
+/// Built from a paging `ScrollView` and a zooming `UIScrollView` per photo rather than Quick Look:
 /// cached photos are stored under hashed file names (which Quick Look would show as titles), and
 /// a photo downloaded from a URL without an extension is cached as `.img`, which it can't open.
+///
+/// Not a page-style `TabView`: the neighbours are decoded as a swipe settles, and a page whose
+/// content changed mid-swipe (spinner to photo) left the `TabView` stopped between pages, half of
+/// one photo beside half of the next. Here every page is exactly the container's size
+/// (`containerRelativeFrame`), so a page's content can't move the pager.
 struct PhotoViewer: View {
     /// What the sheet opens on: the photos to page through and the one to start on.
     struct Item: Identifiable {
@@ -136,32 +153,71 @@ struct PhotoViewer: View {
 
     var body: some View {
         NavigationStack {
-            TabView(selection: $selection) {
+            pager
+                .overlay(alignment: .bottom) { pageDots }
+                .background { pagingShortcuts }
+                .task(id: selection) { await loadImages(around: selection) }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .close) { dismiss() }
+                    }
+                }
+        }
+        .environment(\.colorScheme, .dark)
+        .presentationBackground(.black)
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.page)
+    }
+
+    /// One page per photo, swiped sideways a whole page at a time.
+    private var pager: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
                 ForEach(item.urls.indices, id: \.self) { index in
                     ZoomablePhoto(
                         image: images[index],
                         failed: failures.contains(index),
                         isCurrent: index == selection
                     )
+                    .containerRelativeFrame([.horizontal, .vertical])
                     .accessibilityLabel("Photo \(index + 1) of \(item.urls.count)")
-                    .tag(index)
+                    .id(index)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: item.urls.count > 1 ? .always : .never))
-            .background { pagingShortcuts }
-            .task(id: selection) { await loadImages(around: selection) }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .close) { dismiss() }
-                }
-            }
+            .scrollTargetLayout()
         }
-        .environment(\.colorScheme, .dark)
-        .presentationBackground(.black)
-        .presentationDragIndicator(.visible)
-        .presentationSizing(.page)
+        .scrollTargetBehavior(.paging)
+        .scrollIndicators(.hidden)
+        .scrollPosition(id: pageBinding)
+    }
+
+    /// The scrolled-to page, as `selection`.
+    private var pageBinding: Binding<Int?> {
+        Binding(
+            get: { selection },
+            set: { page in
+                if let page {
+                    selection = page
+                }
+            }
+        )
+    }
+
+    /// The page indicator the system pager drew: a `UIPageControl`, which shrinks and scrolls
+    /// its dots for a long gallery and can be tapped, scrubbed and adjusted with VoiceOver.
+    @ViewBuilder
+    private var pageDots: some View {
+        if item.urls.count > 1 {
+            PageControl(numberOfPages: item.urls.count, currentPage: selection) { page in
+                withAnimation { selection = page }
+            }
+            // The full width, so UIPageControl fits (and scrolls) the dots of a long gallery itself.
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .padding(.bottom, 12)
+        }
     }
 
     /// Left and right arrows page on a hardware keyboard (iPad, Mac), where swiping is awkward.
@@ -215,6 +271,45 @@ struct PhotoViewer: View {
     /// "2 of 5" when there is more than one photo; nothing otherwise.
     private var title: String {
         item.urls.count > 1 ? String(localized: "\(selection + 1) of \(item.urls.count)") : ""
+    }
+}
+
+// MARK: - PageControl
+
+/// `UIPageControl` for SwiftUI: shows `currentPage` and reports the page the person picks.
+private struct PageControl: UIViewRepresentable {
+    let numberOfPages: Int
+    let currentPage: Int
+    let onSelect: (Int) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelect: onSelect)
+    }
+
+    func makeUIView(context: Context) -> UIPageControl {
+        let control = UIPageControl()
+        control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return control
+    }
+
+    func updateUIView(_ control: UIPageControl, context: Context) {
+        context.coordinator.onSelect = onSelect
+        control.numberOfPages = numberOfPages
+        if control.currentPage != currentPage {
+            control.currentPage = currentPage
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var onSelect: (Int) -> Void
+
+        init(onSelect: @escaping (Int) -> Void) {
+            self.onSelect = onSelect
+        }
+
+        @objc func changed(_ control: UIPageControl) {
+            onSelect(control.currentPage)
+        }
     }
 }
 
@@ -286,149 +381,6 @@ private struct ZoomableImageView: UIViewRepresentable {
         }
         if !isCurrent {
             view.resetZoom()
-        }
-    }
-}
-
-/// A scroll view that fits its image to the bounds, centres it, and zooms from 1× to 4× with a
-/// pinch or a double tap.
-///
-/// At 1× only the pan gesture is switched off, so a vertical drag goes to the sheet (dismiss) and
-/// a horizontal one to the pager, while the pinch gesture stays live to start a zoom. (Turning off
-/// `isScrollEnabled` instead would forward every touch up the responder chain, pinch included.)
-/// Zoomed in, it pans; if the sheet takes over a drag at the top edge, the offset is put back
-/// inside the content when the drag ends, so the photo never stays parked off-centre.
-final class ZoomingImageScrollView: UIScrollView, UIScrollViewDelegate {
-    private let imageView = UIImageView()
-    /// The bounds size the image was last fitted to; a change refits at 1×.
-    private var fittedBounds: CGSize = .zero
-
-    var image: UIImage? {
-        imageView.image
-    }
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        delegate = self
-        minimumZoomScale = 1
-        maximumZoomScale = 4
-        showsVerticalScrollIndicator = false
-        showsHorizontalScrollIndicator = false
-        alwaysBounceVertical = false
-        alwaysBounceHorizontal = false
-        bouncesZoom = true
-        decelerationRate = .fast
-        panGestureRecognizer.isEnabled = false
-        contentInsetAdjustmentBehavior = .never
-        backgroundColor = .clear
-        imageView.contentMode = .scaleAspectFit
-        addSubview(imageView)
-
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-        doubleTap.numberOfTapsRequired = 2
-        addGestureRecognizer(doubleTap)
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    /// Shows `image` at 1×, fitted to the current bounds.
-    func display(_ image: UIImage) {
-        imageView.image = image
-        fittedBounds = .zero
-        setNeedsLayout()
-    }
-
-    /// Returns to 1× (used when the page is swiped away).
-    func resetZoom() {
-        if zoomScale != minimumZoomScale {
-            setZoomScale(minimumZoomScale, animated: false)
-        }
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard let image = imageView.image, bounds.width > 0, bounds.height > 0 else { return }
-        if fittedBounds != bounds.size {
-            fittedBounds = bounds.size
-            zoomScale = 1
-            let fitted = Self.fittedSize(of: image.size, in: bounds.size)
-            imageView.frame = CGRect(origin: .zero, size: fitted)
-            contentSize = fitted
-        }
-        centreContent()
-    }
-
-    /// `size` scaled down (or up) to fit inside `bounds` with its aspect ratio kept.
-    static func fittedSize(of size: CGSize, in bounds: CGSize) -> CGSize {
-        guard size.width > 0, size.height > 0 else { return bounds }
-        let scale = min(bounds.width / size.width, bounds.height / size.height)
-        return CGSize(width: size.width * scale, height: size.height * scale)
-    }
-
-    /// Insets that keep the image centred while it is smaller than the bounds.
-    private func centreContent() {
-        let horizontal = max(0, (bounds.width - contentSize.width) / 2)
-        let vertical = max(0, (bounds.height - contentSize.height) / 2)
-        contentInset = UIEdgeInsets(top: vertical, left: horizontal, bottom: vertical, right: horizontal)
-    }
-
-    @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
-        if zoomScale > minimumZoomScale {
-            setZoomScale(minimumZoomScale, animated: true)
-            return
-        }
-        let point = recognizer.location(in: imageView)
-        let scale = min(maximumZoomScale, 2.5)
-        let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
-        let target = CGRect(
-            x: point.x - size.width / 2, y: point.y - size.height / 2,
-            width: size.width, height: size.height
-        )
-        zoom(to: target, animated: true)
-    }
-
-    // MARK: UIScrollViewDelegate
-
-    func viewForZooming(in _: UIScrollView) -> UIView? {
-        imageView
-    }
-
-    func scrollViewDidZoom(_: UIScrollView) {
-        centreContent()
-        panGestureRecognizer.isEnabled = zoomScale > minimumZoomScale
-    }
-
-    func scrollViewDidEndZooming(_: UIScrollView, with _: UIView?, atScale scale: CGFloat) {
-        panGestureRecognizer.isEnabled = scale > minimumZoomScale
-        settleIntoContent()
-    }
-
-    func scrollViewDidEndDragging(_: UIScrollView, willDecelerate decelerate: Bool) {
-        if !decelerate {
-            settleIntoContent()
-        }
-    }
-
-    func scrollViewDidEndDecelerating(_: UIScrollView) {
-        settleIntoContent()
-    }
-
-    /// Moves the offset back inside the content (plus the centring insets) if something — the
-    /// sheet's dismiss drag, typically — left it outside.
-    private func settleIntoContent() {
-        let minX = -contentInset.left
-        let minY = -contentInset.top
-        let maxX = max(minX, contentSize.width + contentInset.right - bounds.width)
-        let maxY = max(minY, contentSize.height + contentInset.bottom - bounds.height)
-        let settled = CGPoint(
-            x: min(max(contentOffset.x, minX), maxX),
-            y: min(max(contentOffset.y, minY), maxY)
-        )
-        if settled != contentOffset {
-            setContentOffset(settled, animated: true)
         }
     }
 }

@@ -3,43 +3,6 @@ import Observation
 import os
 import PinfoldCore
 
-/// Why refreshing an online list failed. The description is what the list shows and records.
-enum SubscriptionError: Error, LocalizedError, Equatable {
-    case http(Int), tooLarge, notSupported, linkOnly, network(String), writeFailed(String), readOnly
-
-    var errorDescription: String? {
-        switch self {
-        case let .http(status):
-            String(localized: "The server returned an error (HTTP \(status)).")
-        case .tooLarge:
-            String(localized: "The file is larger than 50 MB.")
-        case .notSupported:
-            String(localized: "The server didn't return a KML, KMZ, GPX or GeoJSON file.")
-        case .linkOnly:
-            String(localized: "The server returned a file that only links to other files.")
-        case let .network(reason):
-            reason
-        case let .writeFailed(reason):
-            String(localized: "The update couldn't be saved: \(reason)")
-        case .readOnly:
-            String(localized: "This list can't be changed on this device right now.")
-        }
-    }
-
-    /// Maps a fetch failure (`DownloadError`, cancellation or anything else) to a refresh error.
-    init(fetchError error: Error) {
-        switch error {
-        case let DownloadError.httpStatus(status): self = .http(status)
-        case DownloadError.tooLarge: self = .tooLarge
-        case DownloadError.redirectedToOtherHost:
-            self = .network(String(localized: "The server redirected to a different host."))
-        case let DownloadError.transport(underlying): self = .network(underlying.localizedDescription)
-        case is CancellationError: self = .network(String(localized: "The check was cancelled."))
-        default: self = .network(error.localizedDescription)
-        }
-    }
-}
-
 /// Keeps online lists up to date while the app is open: at launch, when the scene becomes
 /// active, and on an in-session timer (`SubscriptionRefresher+Timer.swift`). Never runs in the
 /// background.
@@ -68,10 +31,12 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     static let maxParallelFetches = 3
 
     /// The conditional GET used outside tests: 50 MB cap, 30 s timeout, no cross-host redirects.
+    /// A single attempt: the refresher and `SubscriptionService` retry it themselves (`retry`),
+    /// so a refresh can check before every attempt that the list still wants it.
     nonisolated static let liveFetcher: Fetcher = { url, etag, lastModified in
         try await BoundedDownloader.fetchConditional(
             url, etag: etag, lastModified: lastModified, maxBytes: maxBytes, timeout: timeout,
-            followCrossHostRedirects: false
+            followCrossHostRedirects: false, retry: .none
         )
     }
 
@@ -91,6 +56,9 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
     @ObservationIgnored let clock: () -> Date
     @ObservationIgnored private let cache: ResourceCache
     @ObservationIgnored let fetcher: Fetcher
+    /// Retries a transient fetch failure. `.standard` with the live fetcher, a single attempt
+    /// with an injected one (tests).
+    @ObservationIgnored let retry: RetryPolicy
     @ObservationIgnored let hashOriginal: OriginalHasher
     /// Shared with `SubscriptionService`, whose subscribe writes are serialised with refreshes.
     /// Never call `refreshNow`, `refreshDue` or `stopUpdating` from inside one of its
@@ -140,12 +108,14 @@ enum SubscriptionError: Error, LocalizedError, Equatable {
         fetcher: Fetcher? = nil,
         clock: @escaping () -> Date = { .now },
         storageQueue: StorageApplyQueue = StorageApplyQueue(),
-        hashOriginal: OriginalHasher? = nil
+        hashOriginal: OriginalHasher? = nil,
+        retry: RetryPolicy? = nil
     ) {
         self.catalog = catalog
         self.cache = cache
         self.network = network
         self.fetcher = fetcher ?? Self.liveFetcher
+        self.retry = retry ?? (fetcher == nil ? .standard : .none)
         self.hashOriginal = hashOriginal ?? Self.liveOriginalHasher
         self.clock = clock
         self.storageQueue = storageQueue

@@ -34,10 +34,29 @@ extension SubscriptionRefresher {
         let validated = onDisk != nil && state.contentSHA256 == onDisk
         let response: ConditionalResponse
         do {
-            response = try await fetcher(
-                subscription.url, validated ? state.etag : nil, validated ? state.lastModified : nil
-            )
+            var isRetry = false
+            response = try await retry.run {
+                // Stop Updating, a re-subscribe or leaving the foreground while a retry waits:
+                // don't contact the host again. A retry also re-reads the sidecar, which another
+                // window (with its own refresher and catalogue) may have stopped meanwhile.
+                guard isStillEligible(
+                    live.storageFolderName, subscription: subscription, automatic: automatic, generation: generation
+                ), !isRetry || followsOnDisk(live.storageFolderName, subscription.url) else {
+                    throw CancellationError()
+                }
+                isRetry = true
+                return try await fetcher(
+                    subscription.url, validated ? state.etag : nil, validated ? state.lastModified : nil
+                )
+            }
+        } catch is CancellationError where !followsOnDisk(live.storageFolderName, subscription.url) {
+            // Stopped in another window: a no-op, not a failure to record.
+            return nil
         } catch {
+            // No longer wanted: a no-op, not a failure to record.
+            guard isStillEligible(
+                live.storageFolderName, subscription: subscription, automatic: automatic, generation: generation
+            ) else { return nil }
             return .failed(SubscriptionError(fetchError: error))
         }
         // A 304 verifies something only if a validator actually went out with the request.
@@ -55,6 +74,12 @@ extension SubscriptionRefresher {
         case let .changed(result): return .changed(result, response)
         case let .failed(error): return .failed(error)
         }
+    }
+
+    /// Whether the list's sidecar on disk still follows `url` (another window may have stopped it).
+    private func followsOnDisk(_ folder: String, _ url: URL) -> Bool {
+        guard case let .ok(sidecar) = catalog.storage.readSidecar(forFolderNamed: folder) else { return false }
+        return sidecar.subscription?.url == url
     }
 }
 

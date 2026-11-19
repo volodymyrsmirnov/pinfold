@@ -93,7 +93,8 @@ private struct DescriptionImage: View {
     @Environment(\.storageLocations) private var storage
 
     var body: some View {
-        if let url = resourceCache.observedLocalURL(forHref: src, in: storage.resourcesDirectory(for: entry)) {
+        let status = resourceCache.observedImageStatus(forHref: src, in: storage.resourcesDirectory(for: entry))
+        if case let .cached(url) = status {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
@@ -104,6 +105,10 @@ private struct DescriptionImage: View {
             }
             .frame(maxWidth: .infinity, maxHeight: 320, alignment: .leading)
             .accessibilityLabel(alt ?? "Image")
+        } else if status == .loading {
+            ProgressView()
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .accessibilityLabel(alt.map { "Downloading \($0)" } ?? "Downloading Image")
         } else if let alt {
             Text(alt)
                 .font(.footnote)
