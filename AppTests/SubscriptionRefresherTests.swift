@@ -561,6 +561,27 @@ struct SubscriptionRefresherTests {
         #expect(try refresher.phase(for: env.entry(folder)) == .idle)
     }
 
+    /// Another window (its own refresher) stops the list while this window's retry waits: the
+    /// retry re-reads the sidecar and doesn't contact the host again.
+    @Test func refresh_stoppedInAnotherWindowDuringRetry_sendsNoMoreRequests() async throws {
+        let env = makeEnvironment()
+        let folder = try await addOnlineList(env)
+        let entry = try env.entry(folder)
+        env.stub.fail(with: DownloadError.httpStatus(503))
+        let otherWindow = RefresherBox()
+        otherWindow.refresher = env.makeRefresher()
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .zero, jitter: 0) { _ in
+            try await otherWindow.stopUpdating(entry)
+        }
+        let refresher = env.makeRefresher(retry: retry)
+
+        _ = await refresher.refreshNow(entry)
+
+        #expect(env.stub.calls == 1)
+        let sidecar = try #require(try env.storage.readMetadata(forFolderNamed: folder))
+        #expect(sidecar.subscription == nil)
+    }
+
     @Test func refresh_transientFailure_isRetried() async throws {
         let env = makeEnvironment()
         let folder = try await addOnlineList(env)

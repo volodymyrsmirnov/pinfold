@@ -287,9 +287,13 @@ final class ResourceCache: Sendable {
 
     private func fetchOne(_ href: String, to resourcesDir: URL) async -> FetchOutcome {
         guard let url = URL(string: href), mayFetch(in: resourcesDir) else { return .notStarted }
-        // Another pass may have cached (or skipped) it since this pass read the manifest.
+        // Another pass may have cached (or skipped) it since this pass read the manifest, or
+        // failed and put it into backoff.
         if let filename = store.manifest(in: resourcesDir)[href] {
             return filename.isEmpty ? .failed : .cached
+        }
+        if let next = store.state(in: resourcesDir).hrefs[href]?.nextAttemptAt, next > now() {
+            return .failed
         }
         // App Transport Security blocks plain http loads, so fetch over https. Many KML
         // files reference icons via http URLs (e.g. http://maps.google.com/...) whose

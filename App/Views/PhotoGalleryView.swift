@@ -50,6 +50,7 @@ struct PhotoGalleryView: View {
                         }
                         .accessibilityElement()
                         .accessibilityLabel("Photo \(index + 1) of \(photoLinks.count)")
+                        .accessibilityValue(Self.accessibilityStatus(statuses[index]))
                         .accessibilityAddTraits(url == nil ? [] : .isButton)
                 }
             }
@@ -58,6 +59,16 @@ struct PhotoGalleryView: View {
         .frame(height: 120)
         .sheet(item: $viewer) { item in
             PhotoViewer(item: item)
+        }
+    }
+
+    /// The tile's status for VoiceOver: its label is the position, so the placeholder's own
+    /// label isn't read.
+    private static func accessibilityStatus(_ status: RemoteImageStatus) -> Text {
+        switch status {
+        case .loading: Text("Downloading")
+        case .failed: Text("Couldn't Download")
+        case .idle, .cached: Text(verbatim: "")
         }
     }
 
