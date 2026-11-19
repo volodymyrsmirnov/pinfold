@@ -110,9 +110,14 @@ struct PhotoGalleryView: View {
 /// A sheet showing a place's photos one at a time: swipe left and right between them, pinch or
 /// double-tap to zoom, and drag the sheet down (or tap Close) to dismiss.
 ///
-/// Built from a paging `TabView` and a zooming `UIScrollView` per photo rather than Quick Look:
+/// Built from a paging `ScrollView` and a zooming `UIScrollView` per photo rather than Quick Look:
 /// cached photos are stored under hashed file names (which Quick Look would show as titles), and
 /// a photo downloaded from a URL without an extension is cached as `.img`, which it can't open.
+///
+/// Not a page-style `TabView`: the neighbours are decoded as a swipe settles, and a page whose
+/// content changed mid-swipe (spinner to photo) left the `TabView` stopped between pages, half of
+/// one photo beside half of the next. Here every page is exactly the container's size
+/// (`containerRelativeFrame`), so a page's content can't move the pager.
 struct PhotoViewer: View {
     /// What the sheet opens on: the photos to page through and the one to start on.
     struct Item: Identifiable {
@@ -137,32 +142,75 @@ struct PhotoViewer: View {
 
     var body: some View {
         NavigationStack {
-            TabView(selection: $selection) {
+            pager
+                .overlay(alignment: .bottom) { pageDots }
+                .background { pagingShortcuts }
+                .task(id: selection) { await loadImages(around: selection) }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .close) { dismiss() }
+                    }
+                }
+        }
+        .environment(\.colorScheme, .dark)
+        .presentationBackground(.black)
+        .presentationDragIndicator(.visible)
+        .presentationSizing(.page)
+    }
+
+    /// One page per photo, swiped sideways a whole page at a time.
+    private var pager: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
                 ForEach(item.urls.indices, id: \.self) { index in
                     ZoomablePhoto(
                         image: images[index],
                         failed: failures.contains(index),
                         isCurrent: index == selection
                     )
+                    .containerRelativeFrame([.horizontal, .vertical])
                     .accessibilityLabel("Photo \(index + 1) of \(item.urls.count)")
-                    .tag(index)
+                    .id(index)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: item.urls.count > 1 ? .always : .never))
-            .background { pagingShortcuts }
-            .task(id: selection) { await loadImages(around: selection) }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .close) { dismiss() }
-                }
-            }
+            .scrollTargetLayout()
         }
-        .environment(\.colorScheme, .dark)
-        .presentationBackground(.black)
-        .presentationDragIndicator(.visible)
-        .presentationSizing(.page)
+        .scrollTargetBehavior(.paging)
+        .scrollIndicators(.hidden)
+        .scrollPosition(id: pageBinding)
+    }
+
+    /// The scrolled-to page, as `selection`.
+    private var pageBinding: Binding<Int?> {
+        Binding(
+            get: { selection },
+            set: { page in
+                if let page {
+                    selection = page
+                }
+            }
+        )
+    }
+
+    /// The page indicator the system pager drew: one dot per photo, the current one bright.
+    @ViewBuilder
+    private var pageDots: some View {
+        if item.urls.count > 1 {
+            HStack(spacing: 8) {
+                ForEach(item.urls.indices, id: \.self) { index in
+                    Circle()
+                        .fill(index == selection ? Color.white : Color.white.opacity(0.35))
+                        .frame(width: 7, height: 7)
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     /// Left and right arrows page on a hardware keyboard (iPad, Mac), where swiping is awkward.
