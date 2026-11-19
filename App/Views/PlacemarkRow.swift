@@ -110,7 +110,8 @@ struct PlacemarkRow: View {
     private var thumbnailView: some View {
         if let firstLink = placemark.photoLinks.first {
             let resourcesDir = storage.resourcesDirectory(for: entry)
-            if let localURL = resourceCache.observedLocalURL(forHref: firstLink, in: resourcesDir) {
+            let status = resourceCache.observedImageStatus(forHref: firstLink, in: resourcesDir)
+            if case let .cached(localURL) = status {
                 AsyncImage(url: localURL) { phase in
                     switch phase {
                     case let .success(image):
@@ -120,24 +121,17 @@ struct PlacemarkRow: View {
                             .frame(width: 44, height: 44)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     default:
-                        photoPlaceholder
+                        photoPlaceholder(.idle)
                     }
                 }
                 .frame(width: 44, height: 44)
             } else {
-                photoPlaceholder
+                photoPlaceholder(status)
             }
         }
     }
 
-    private var photoPlaceholder: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 44, height: 44)
-            Image(systemName: "photo")
-                .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-        }
+    private func photoPlaceholder(_ status: RemoteImageStatus) -> some View {
+        RemoteImagePlaceholder(status: status, size: 44, cornerRadius: 6, symbolSize: 16)
     }
 }

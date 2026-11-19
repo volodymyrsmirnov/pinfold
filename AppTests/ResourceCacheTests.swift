@@ -665,7 +665,7 @@ extension ResourceCacheTests {
         #expect(state(dir).hrefs[href] == nil)
     }
 
-    @Test func downloadsRunAtMostFourAtATime() async throws {
+    @Test func downloadsRunAtMostSixAtATime() async throws {
         let dir = try makeTempDir()
         let current = Mutable(0)
         let peak = Mutable(0)
@@ -676,9 +676,9 @@ extension ResourceCacheTests {
             current.mutate { $0 -= 1 }
             return Self.png
         }
-        await cache.downloadRemote((0 ..< 12).map { "https://example.com/\($0).png" }, to: dir)
-        #expect(peak.value <= 4)
-        #expect(ResourceManifestStore.shared.manifest(in: dir).count == 12)
+        await cache.downloadRemote((0 ..< 18).map { "https://example.com/\($0).png" }, to: dir)
+        #expect(peak.value <= 6)
+        #expect(ResourceManifestStore.shared.manifest(in: dir).count == 18)
     }
 
     // MARK: DL-3

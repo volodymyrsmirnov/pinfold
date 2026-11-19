@@ -12,12 +12,24 @@ final class StubURLProtocol: URLProtocol {
         var chunks: [Data] = []
         /// Request headers that must be present; otherwise the stub fails the request.
         var requiredRequestHeaders: [String: String] = [:]
+        /// The first this-many requests fail before the stub answers as above: with
+        /// `transientStatus` when set, else with `transientError`.
+        var transientFailures = 0
+        var transientStatus: Int?
+        var transientError = URLError.Code.timedOut
     }
 
     private static let stubs = OSAllocatedUnfairLock<[String: Stub]>(initialState: [:])
+    private static let counts = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
 
     static func register(_ stub: Stub, host: String) {
         stubs.withLock { $0[host] = stub }
+        counts.withLock { $0[host] = 0 }
+    }
+
+    /// How many requests reached `host` since it was registered.
+    static func requestCount(host: String) -> Int {
+        counts.withLock { $0[host] ?? 0 }
     }
 
     static func configuration() -> URLSessionConfiguration {
@@ -42,6 +54,21 @@ final class StubURLProtocol: URLProtocol {
               )
         else {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+            return
+        }
+        let attempt = Self.counts.withLock { counts -> Int in
+            counts[host, default: 0] += 1
+            return counts[host] ?? 0
+        }
+        if attempt <= stub.transientFailures {
+            if let status = stub.transientStatus,
+               let failure = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])
+            {
+                client?.urlProtocol(self, didReceive: failure, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocolDidFinishLoading(self)
+            } else {
+                client?.urlProtocol(self, didFailWithError: URLError(stub.transientError))
+            }
             return
         }
         for (name, value) in stub.requiredRequestHeaders where request.value(forHTTPHeaderField: name) != value {
@@ -70,7 +97,7 @@ struct BoundedDownloaderTests {
             URL(string: "https://\(host)/a.png")!,
             maxBytes: maxBytes,
             timeout: 5,
-            configuration: StubURLProtocol.configuration()
+            configuration: StubURLProtocol.configuration(), retry: .none
         )
     }
 
@@ -81,7 +108,7 @@ struct BoundedDownloaderTests {
         do {
             _ = try await BoundedDownloader.fetch(
                 #require(URL(string: "https://origin.redirect.test/a.kml")), maxBytes: 100, timeout: 5,
-                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration()
+                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration(), retry: .none
             )
             Issue.record("expected failure")
         } catch DownloadError.redirectedToOtherHost {
@@ -96,7 +123,7 @@ struct BoundedDownloaderTests {
         StubURLProtocol.register(.init(chunks: [Data([7])]), host: "target2.redirect.test")
         let data = try await BoundedDownloader.fetch(
             #require(URL(string: "https://origin2.redirect.test/a.png")), maxBytes: 100, timeout: 5,
-            configuration: StubURLProtocol.configuration()
+            configuration: StubURLProtocol.configuration(), retry: .none
         )
         #expect(data == Data([7]))
     }
@@ -109,7 +136,7 @@ struct BoundedDownloaderTests {
         do {
             _ = try await BoundedDownloader.fetch(
                 #require(URL(string: "https://same.redirect.test/a")), maxBytes: 100, timeout: 5,
-                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration()
+                followCrossHostRedirects: false, configuration: StubURLProtocol.configuration(), retry: .none
             )
         } catch DownloadError.redirectedToOtherHost {
             Issue.record("same-host redirect must not be refused")
@@ -177,7 +204,7 @@ struct BoundedDownloaderTests {
         do {
             _ = try await BoundedDownloader.fetch(
                 #require(URL(string: "ftp://example.com/a.png")), maxBytes: 10, timeout: 5,
-                configuration: StubURLProtocol.configuration()
+                configuration: StubURLProtocol.configuration(), retry: .none
             )
             Issue.record("expected failure")
         } catch DownloadError.transport {
@@ -195,7 +222,7 @@ struct BoundedDownloaderTests {
         try await BoundedDownloader.fetchConditional(
             #require(URL(string: "https://\(host)/feed.kml")), etag: etag, lastModified: lastModified,
             maxBytes: maxBytes, timeout: 5, followCrossHostRedirects: followCrossHost,
-            configuration: StubURLProtocol.configuration(), now: now
+            configuration: StubURLProtocol.configuration(), retry: .none, now: now
         )
     }
 

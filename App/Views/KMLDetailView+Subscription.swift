@@ -49,4 +49,26 @@ extension KMLDetailView {
             refreshError = message
         }
     }
+
+    /// What pulling the list down does: refresh this online list and wait for it, so the spinner
+    /// stays until the refresh ends. `nil` (no pull to refresh) for a file that doesn't follow a
+    /// URL, or one that can't be changed on this device (Refresh Now is disabled there too).
+    var pullToRefreshAction: (() async -> Void)? {
+        let live = liveEntry
+        guard let refresher, live.isOnline, !live.isReadOnly else { return nil }
+        return { await showRefreshError(refresher.refreshNowMessage(live)) }
+    }
+}
+
+/// `.refreshable` when there is an action, nothing otherwise.
+struct OnlineListRefreshable: ViewModifier {
+    let action: (() async -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.refreshable { await action() }
+        } else {
+            content
+        }
+    }
 }

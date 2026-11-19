@@ -44,6 +44,8 @@ extension KMLDetailView {
                 OrphanedNotesSection(notes: orphanedNotes)
             }
             .listStyle(.insetGrouped)
+            // Pull to refresh, on an online list only (the same refresh as Refresh Now).
+            .modifier(OnlineListRefreshable(action: pullToRefreshAction))
             .onGeometryChange(for: CGRect.self) { geometry in
                 geometry.frame(in: .global)
             } action: { frame in

@@ -177,7 +177,8 @@ private struct PlacemarkPreviewCard: View {
     private var thumbnail: some View {
         if let firstLink = placemark.photoLinks.first {
             let resourcesDir = storage.resourcesDirectory(for: entry)
-            if let localURL = resourceCache.observedLocalURL(forHref: firstLink, in: resourcesDir) {
+            let status = resourceCache.observedImageStatus(forHref: firstLink, in: resourcesDir)
+            if case let .cached(localURL) = status {
                 AsyncImage(url: localURL) { phase in
                     if case let .success(image) = phase {
                         image
@@ -188,6 +189,8 @@ private struct PlacemarkPreviewCard: View {
                     }
                 }
                 .frame(width: 44, height: 44)
+            } else if status == .loading {
+                RemoteImagePlaceholder(status: status, size: 44, cornerRadius: 8, symbolSize: 16)
             }
         }
     }

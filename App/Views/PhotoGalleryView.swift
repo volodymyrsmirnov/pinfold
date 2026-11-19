@@ -9,7 +9,8 @@ import UIKit
 ///
 /// For each href in `photoLinks`, the view resolves the local cached file via
 /// `ResourceCache`. Resolved images are shown as tappable thumbnails. Unresolved
-/// (missing or not yet downloaded) links show a placeholder tile.
+/// (missing or not yet downloaded) links show a placeholder tile: a spinner while the photo
+/// downloads, a "couldn't load" badge after a failed attempt.
 ///
 /// Tapping a resolved thumbnail opens `PhotoViewer` in a sheet on that photo: swipe sideways
 /// between the place's photos, pinch or double-tap to zoom, drag down to close.
@@ -31,12 +32,19 @@ struct PhotoGalleryView: View {
     // MARK: - Body
 
     var body: some View {
-        let urls = localURLs
+        let statuses = imageStatuses
+        let urls = statuses.map { status -> URL? in
+            if case let .cached(url) = status {
+                url
+            } else {
+                nil
+            }
+        }
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(Array(photoLinks.enumerated()), id: \.offset) { index, _ in
                     let url = urls[index]
-                    thumbnailTile(url: url)
+                    thumbnailTile(status: statuses[index])
                         .onTapGesture {
                             open(at: index, in: urls)
                         }
@@ -53,10 +61,10 @@ struct PhotoGalleryView: View {
         }
     }
 
-    /// The cached file for each link, in link order (`nil` where it isn't on disk yet).
-    private var localURLs: [URL?] {
+    /// Where each link's photo stands, in link order.
+    private var imageStatuses: [RemoteImageStatus] {
         let resourcesDir = storage.resourcesDirectory(for: entry)
-        return photoLinks.map { resourceCache.observedLocalURL(forHref: $0, in: resourcesDir) }
+        return photoLinks.map { resourceCache.observedImageStatus(forHref: $0, in: resourcesDir) }
     }
 
     /// Opens the viewer on the tapped photo, paging through only the photos that are on disk.
@@ -72,8 +80,8 @@ struct PhotoGalleryView: View {
     // MARK: - Thumbnail tile
 
     @ViewBuilder
-    private func thumbnailTile(url: URL?) -> some View {
-        if let url {
+    private func thumbnailTile(status: RemoteImageStatus) -> some View {
+        if case let .cached(url) = status {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case let .success(image):
@@ -83,24 +91,17 @@ struct PhotoGalleryView: View {
                         .frame(width: 100, height: 100)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 default:
-                    placeholderTile
+                    placeholderTile(.idle)
                 }
             }
             .frame(width: 100, height: 100)
         } else {
-            placeholderTile
+            placeholderTile(status)
         }
     }
 
-    private var placeholderTile: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.secondary.opacity(0.15))
-                .frame(width: 100, height: 100)
-            Image(systemName: "photo")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary)
-        }
+    private func placeholderTile(_ status: RemoteImageStatus) -> some View {
+        RemoteImagePlaceholder(status: status, size: 100, cornerRadius: 8, symbolSize: 28)
     }
 }
 
