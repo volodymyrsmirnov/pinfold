@@ -34,10 +34,21 @@ extension SubscriptionRefresher {
         let validated = onDisk != nil && state.contentSHA256 == onDisk
         let response: ConditionalResponse
         do {
-            response = try await fetcher(
-                subscription.url, validated ? state.etag : nil, validated ? state.lastModified : nil
-            )
+            response = try await retry.run {
+                // Stop Updating, a re-subscribe or leaving the foreground while a retry waits:
+                // don't contact the host again.
+                guard isStillEligible(
+                    live.storageFolderName, subscription: subscription, automatic: automatic, generation: generation
+                ) else { throw CancellationError() }
+                return try await fetcher(
+                    subscription.url, validated ? state.etag : nil, validated ? state.lastModified : nil
+                )
+            }
         } catch {
+            // No longer wanted: a no-op, not a failure to record.
+            guard isStillEligible(
+                live.storageFolderName, subscription: subscription, automatic: automatic, generation: generation
+            ) else { return nil }
             return .failed(SubscriptionError(fetchError: error))
         }
         // A 304 verifies something only if a validator actually went out with the request.

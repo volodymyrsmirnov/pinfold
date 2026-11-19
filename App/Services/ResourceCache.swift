@@ -230,23 +230,31 @@ final class ResourceCache: Sendable {
                 group.addTask { await self.fetchTracked(href, to: resourcesDir) }
                 return true
             }
-            for _ in 0 ..< maxConcurrentDownloads {
-                guard startNext() else { break }
+            /// Unmarks the rest at once when the pass starts no more, rather than when the slowest
+            /// running download ends, so their placeholders stop showing progress.
+            func stop() {
+                ResourceActivity.cancel(queue, in: resourcesDir)
+                queue = []
             }
             var stopped = false
+            for _ in 0 ..< maxConcurrentDownloads where !stopped {
+                if !startNext() {
+                    stopped = true
+                    stop()
+                }
+            }
             while let outcome = await group.next() {
                 if outcome == .offline {
                     stopped = true
                 }
-                if stopped || !startNext() {
-                    // Starting no more: unmark the rest at once, not when the slowest running
-                    // download ends, so their placeholders stop showing progress.
+                if !stopped, !startNext() {
                     stopped = true
-                    ResourceActivity.cancel(queue, in: resourcesDir)
-                    queue = []
+                }
+                if stopped {
+                    stop()
                 }
             }
-            ResourceActivity.cancel(queue, in: resourcesDir)
+            stop()
         }
     }
 
@@ -279,6 +287,10 @@ final class ResourceCache: Sendable {
 
     private func fetchOne(_ href: String, to resourcesDir: URL) async -> FetchOutcome {
         guard let url = URL(string: href), mayFetch(in: resourcesDir) else { return .notStarted }
+        // Another pass may have cached (or skipped) it since this pass read the manifest.
+        if let filename = store.manifest(in: resourcesDir)[href] {
+            return filename.isEmpty ? .failed : .cached
+        }
         // App Transport Security blocks plain http loads, so fetch over https. Many KML
         // files reference icons via http URLs (e.g. http://maps.google.com/...) whose
         // hosts also serve https. The manifest is still keyed by the original `href`

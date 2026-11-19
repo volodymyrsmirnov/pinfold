@@ -43,19 +43,24 @@ enum SubscriptionURL {
     let cache: ResourceCache
     let refresher: SubscriptionRefresher
     private let fetcher: SubscriptionRefresher.Fetcher
+    /// Retries a transient fetch failure: `.standard` with the live fetcher, a single attempt
+    /// with an injected one (tests).
+    private let retry: RetryPolicy
 
     init(
         catalog: Catalog,
         coordinator: ImportCoordinator,
         cache: ResourceCache,
         refresher: SubscriptionRefresher,
-        fetcher: SubscriptionRefresher.Fetcher? = nil
+        fetcher: SubscriptionRefresher.Fetcher? = nil,
+        retry: RetryPolicy? = nil
     ) {
         self.catalog = catalog
         self.coordinator = coordinator
         self.cache = cache
         self.refresher = refresher
         self.fetcher = fetcher ?? SubscriptionRefresher.liveFetcher
+        self.retry = retry ?? (fetcher == nil ? .standard : .none)
     }
 
     // MARK: - Subscribe
@@ -162,7 +167,7 @@ enum SubscriptionURL {
         let attemptAt = refresher.clock()
         let response: ConditionalResponse
         do {
-            response = try await fetcher(url, nil, nil)
+            response = try await retry.run { try await fetcher(url, nil, nil) }
         } catch {
             throw SubscriptionError(fetchError: error)
         }

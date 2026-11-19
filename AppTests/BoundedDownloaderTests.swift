@@ -244,6 +244,49 @@ struct BoundedDownloaderTests {
         await #expect(throws: CancellationError.self) { try await fetch.value }
     }
 
+    /// One session across requests, as in the app: requests cancelled at every point of their
+    /// start, mixed with ones that complete, leave no route behind, and the others still answer.
+    @Test(.timeLimit(.minutes(1)))
+    func reusedSession_cancellationsLeaveNoRoutes() async throws {
+        StubURLProtocol.register(.init(hangs: true), host: "routes-hang.test")
+        StubURLProtocol.register(.init(chunks: [Data([5])]), host: "routes-ok.test")
+        let session = BoundedDownloader.makeReusableSession(StubURLProtocol.configuration(), timeout: 30)
+        defer { session.invalidateAndCancel() }
+        let hang = try #require(URL(string: "https://routes-hang.test/a.png"))
+        let ok = try #require(URL(string: "https://routes-ok.test/a.png"))
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0 ..< 40 {
+                let cancelled = Task {
+                    try await BoundedDownloader.fetch(
+                        hang, maxBytes: 100, timeout: 30, session: session, retry: .none
+                    )
+                }
+                // Cancel at different points: before, during and after the start.
+                if index % 3 == 1 {
+                    await Task.yield()
+                }
+                cancelled.cancel()
+                group.addTask {
+                    await #expect(throws: CancellationError.self) { try await cancelled.value }
+                }
+                group.addTask {
+                    let data = try await BoundedDownloader.fetch(
+                        ok, maxBytes: 100, timeout: 30, session: session, retry: .none
+                    )
+                    #expect(data == Data([5]))
+                }
+            }
+            try await group.waitForAll()
+        }
+        // Completion callbacks arrive on the session's queue just after the callers resume.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while BoundedDownloader.pendingTransfers(in: session) > 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(BoundedDownloader.pendingTransfers(in: session) == 0)
+    }
+
     @Test func nonHTTPScheme_isRejected() async throws {
         do {
             _ = try await BoundedDownloader.fetch(

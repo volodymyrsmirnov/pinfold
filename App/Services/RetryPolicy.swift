@@ -37,8 +37,13 @@ struct RetryPolicy {
     }
 
     /// Runs `operation`, retrying it while it fails with a retryable error and retries remain.
-    /// The last error (or the first non-retryable one) is rethrown.
-    func run<T>(_ operation: () async throws -> T) async throws -> T {
+    /// The last error (or the first non-retryable one) is rethrown. `operation` runs in the
+    /// caller's isolation, so it can check actor state (is this still wanted?) before each
+    /// attempt and throw `CancellationError` to stop.
+    func run<T>(
+        isolation _: isolated (any Actor)? = #isolation,
+        _ operation: () async throws -> T
+    ) async throws -> T {
         var retry = 0
         while true {
             do {

@@ -50,6 +50,8 @@ enum BoundedDownloader {
     ///     `.redirectedToOtherHost`. Defaults to `true` (image downloads).
     ///   - configuration: A session configuration for this request alone; `nil` (the default)
     ///     uses the shared session. Tests inject one carrying a `URLProtocol` stub.
+    ///   - session: A session from `makeReusableSession` to use instead (tests that, like the
+    ///     shared session, need one session across requests).
     ///   - retry: How transient failures are retried.
     /// - Throws: `DownloadError`, or `CancellationError` when the calling task is cancelled.
     static func fetch(
@@ -58,12 +60,13 @@ enum BoundedDownloader {
         timeout: TimeInterval,
         followCrossHostRedirects: Bool = true,
         configuration: URLSessionConfiguration? = nil,
+        session: URLSession? = nil,
         retry: RetryPolicy = .standard
     ) async throws -> Data {
         let result = try await retry.run {
             try await download(
                 url, request: URLRequest(url: url), maxBytes: maxBytes, timeout: timeout,
-                followCrossHostRedirects: followCrossHostRedirects, configuration: configuration,
+                followCrossHostRedirects: followCrossHostRedirects, configuration: configuration, session: session,
                 allowNotModified: false
             )
         }
@@ -143,18 +146,21 @@ enum BoundedDownloader {
         timeout: TimeInterval,
         followCrossHostRedirects: Bool,
         configuration: URLSessionConfiguration?,
+        session reusable: URLSession? = nil,
         allowNotModified: Bool
     ) async throws -> (response: HTTPURLResponse, data: Data?) {
         guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else {
             throw DownloadError.transport(URLError(.unsupportedURL))
         }
-        let session: URLSession = if let configuration {
+        let session: URLSession = if let reusable {
+            reusable
+        } else if let configuration {
             TransferRouter.makeSession(configuration, timeout: timeout)
         } else {
             TransferRouter.sharedSession(timeout: timeout)
         }
         defer {
-            if configuration != nil {
+            if reusable == nil, configuration != nil {
                 session.finishTasksAndInvalidate()
             }
         }
@@ -172,6 +178,21 @@ enum BoundedDownloader {
         } onCancel: {
             transfer.cancelByCaller(task)
         }
+    }
+}
+
+// MARK: - Test seams
+
+extension BoundedDownloader {
+    /// A session built like the shared ones, from `configuration`, kept across requests.
+    static func makeReusableSession(_ configuration: URLSessionConfiguration, timeout: TimeInterval) -> URLSession {
+        TransferRouter.makeSession(configuration, timeout: timeout)
+    }
+
+    /// Requests of `session` still waiting for their task to complete. Zero once every request
+    /// has ended: a route left behind would stay for the life of the shared session.
+    static func pendingTransfers(in session: URLSession) -> Int {
+        (session.delegate as? TransferRouter)?.count ?? 0
     }
 }
 
@@ -368,6 +389,10 @@ private final class TransferRouter: NSObject, URLSessionDataDelegate, @unchecked
 
     func register(_ transfer: BoundedTransfer, for task: URLSessionTask) {
         transfers.withLock { $0[task.taskIdentifier] = transfer }
+    }
+
+    var count: Int {
+        transfers.withLock { $0.count }
     }
 
     func unregister(_ task: URLSessionTask) {
