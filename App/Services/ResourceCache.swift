@@ -58,10 +58,11 @@ final class ResourceCache: Sendable {
     /// Supplies the current remote-image policy; read at the start of every download pass.
     typealias PolicyProvider = @Sendable () -> RemoteImagePolicy
 
-    /// The default downloader: `BoundedDownloader` (shared session, transient failures retried)
-    /// with the size cap and a 20 s timeout.
+    /// The default downloader: `BoundedDownloader` (shared session) with the size cap and a 20 s
+    /// timeout. A single attempt: `ResourceCache` retries itself (`retry`), so it can recheck
+    /// the remote-image policy before every attempt.
     static let urlSessionDownloader: Downloader = { url in
-        try await BoundedDownloader.fetch(url, maxBytes: maxResourceBytes, timeout: downloadTimeout)
+        try await BoundedDownloader.fetch(url, maxBytes: maxResourceBytes, timeout: downloadTimeout, retry: .none)
     }
 
     /// The default policy provider, reading `UserDefaults.standard`.
@@ -82,6 +83,8 @@ final class ResourceCache: Sendable {
     // MARK: - Properties
 
     private let downloader: Downloader
+    /// Retries a transient download failure, rechecking `mayFetch` before every attempt.
+    private let retry: RetryPolicy
     private let policy: PolicyProvider
     private let now: @Sendable () -> Date
     private let store = ResourceManifestStore.shared
@@ -102,12 +105,17 @@ final class ResourceCache: Sendable {
     ///   - policy: Supplies the remote-image policy. Defaults to the value stored in
     ///     `UserDefaults.standard` (`.always` when unset).
     ///   - now: Clock used for retry backoff; injectable for tests.
+    ///   - retry: How a transient failure is retried within a pass. Defaults to
+    ///     `RetryPolicy.standard` with the live downloader and to a single attempt with an
+    ///     injected one (tests).
     init(
-        downloader: @escaping Downloader = ResourceCache.urlSessionDownloader,
+        downloader: Downloader? = nil,
         policy: @escaping PolicyProvider = ResourceCache.storedPolicy,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        retry: RetryPolicy? = nil
     ) {
-        self.downloader = downloader
+        self.downloader = downloader ?? Self.urlSessionDownloader
+        self.retry = retry ?? (downloader == nil ? .standard : .none)
         self.policy = policy
         self.now = now
     }
@@ -210,27 +218,36 @@ final class ResourceCache: Sendable {
             guard let next = state.hrefs[href]?.nextAttemptAt else { return true }
             return next <= current
         }
-        guard !due.isEmpty else { return }
-        ResourceActivity.begin(due, in: resourcesDir)
-        var started = Set<String>()
+        // Failures of hrefs the entry no longer has (an online list replaced them) are dropped.
+        ResourceActivity.retainFailures(Set(hrefs), in: resourcesDir)
+        // Hrefs another pass over this entry is already fetching stay with that pass.
+        let claimed = ResourceActivity.claim(due, in: resourcesDir)
+        guard !claimed.isEmpty else { return }
         await withTaskGroup(of: FetchOutcome.self) { group in
-            var iterator = due.makeIterator()
-            var offline = false
-            for _ in 0 ..< maxConcurrentDownloads {
-                guard mayFetch(in: resourcesDir), let href = iterator.next() else { break }
-                started.insert(href)
+            var queue = claimed[...]
+            func startNext() -> Bool {
+                guard mayFetch(in: resourcesDir), let href = queue.popFirst() else { return false }
                 group.addTask { await self.fetchTracked(href, to: resourcesDir) }
+                return true
             }
+            for _ in 0 ..< maxConcurrentDownloads {
+                guard startNext() else { break }
+            }
+            var stopped = false
             while let outcome = await group.next() {
                 if outcome == .offline {
-                    offline = true
+                    stopped = true
                 }
-                guard !offline, mayFetch(in: resourcesDir), let href = iterator.next() else { continue }
-                started.insert(href)
-                group.addTask { await self.fetchTracked(href, to: resourcesDir) }
+                if stopped || !startNext() {
+                    // Starting no more: unmark the rest at once, not when the slowest running
+                    // download ends, so their placeholders stop showing progress.
+                    stopped = true
+                    ResourceActivity.cancel(queue, in: resourcesDir)
+                    queue = []
+                }
             }
+            ResourceActivity.cancel(queue, in: resourcesDir)
         }
-        ResourceActivity.cancel(due.filter { !started.contains($0) }, in: resourcesDir)
     }
 
     /// How one download ended.
@@ -268,7 +285,12 @@ final class ResourceCache: Sendable {
         // so UI lookups via `localURL(forHref:)` resolve unchanged. A host that serves
         // *only* http (no https) is unsupported by design.
         do {
-            let data = try await downloader(Self.httpsUpgraded(url))
+            let upgraded = Self.httpsUpgraded(url)
+            let data = try await retry.run {
+                // The policy, consent or deferral may change while a retry waits.
+                guard mayFetch(in: resourcesDir) else { throw CancellationError() }
+                return try await downloader(upgraded)
+            }
             guard data.count <= maxResourceBytes else {
                 Self.logger.warning("Rejecting resource over size cap; skipping permanently")
                 markSkipped(href, to: resourcesDir)

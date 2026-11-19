@@ -205,17 +205,24 @@ private final class BoundedTransfer: @unchecked Sendable {
         self.refuseCrossHostRedirects = refuseCrossHostRedirects
     }
 
+    /// Registers with the router, then starts the task unless the caller was cancelled.
+    ///
+    /// Registration comes first, so the task's completion always finds this transfer and
+    /// removes the route. A caller cancelled before that is caught by the flag check after it:
+    /// the route is taken back and the task never starts (a task cancelled before `resume` may
+    /// already have completed, unseen, and would never report again).
     func begin(_ task: URLSessionDataTask, router: TransferRouter?, continuation: CheckedContinuation<Outcome, Error>) {
-        let cancelled = locked { state in
-            state.continuation = continuation
-            return state.cancelledByCaller
-        }
-        guard !cancelled, let router else {
-            let error: Error = cancelled ? CancellationError() : DownloadError.transport(URLError(.unknown))
-            finish(.failure(error))
+        locked { $0.continuation = continuation }
+        guard let router else {
+            finish(.failure(DownloadError.transport(URLError(.unknown))))
             return
         }
         router.register(self, for: task)
+        if locked({ $0.cancelledByCaller }) {
+            router.unregister(task)
+            finish(.failure(CancellationError()))
+            return
+        }
         task.resume()
     }
 
@@ -278,11 +285,13 @@ private final class BoundedTransfer: @unchecked Sendable {
     func append(_ chunk: Data) -> Bool {
         locked { state in
             guard state.failure == nil, state.response?.statusCode != 304 else { return true }
-            state.data.append(chunk)
-            guard state.data.count <= maxBytes else {
+            // Checked before appending, so the buffer never grows past the cap.
+            guard chunk.count <= maxBytes - state.data.count else {
                 state.failure = DownloadError.tooLarge
+                state.data = Data()
                 return false
             }
+            state.data.append(chunk)
             return true
         }
     }
@@ -360,6 +369,11 @@ private final class TransferRouter: NSObject, URLSessionDataDelegate, @unchecked
     func register(_ transfer: BoundedTransfer, for task: URLSessionTask) {
         transfers.withLock { $0[task.taskIdentifier] = transfer }
     }
+
+    func unregister(_ task: URLSessionTask) {
+        transfers.withLock { _ = $0.removeValue(forKey: task.taskIdentifier) }
+    }
+
 
     private func transfer(for task: URLSessionTask) -> BoundedTransfer? {
         transfers.withLock { $0[task.taskIdentifier] }

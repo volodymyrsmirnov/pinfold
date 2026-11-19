@@ -138,4 +138,81 @@ struct ResourceActivityTests {
         cache.clearDownloaded(in: dir)
         #expect(!ResourceActivity.hasFailed(href, in: dir))
     }
+
+    /// Switching remote images to Never while a retry waits stops the retry before it contacts
+    /// the host again.
+    @Test func policyChangeDuringRetry_stopsTheRetry() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/policy.png"
+        let requests = OSAllocatedUnfairLock(initialState: 0)
+        let policy = OSAllocatedUnfairLock(initialState: RemoteImagePolicy.always)
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .seconds(1), jitter: 0) { _ in
+            policy.withLock { $0 = .never }
+        }
+        let cache = ResourceCache(downloader: { _ in
+            requests.withLock { $0 += 1 }
+            throw DownloadError.httpStatus(503)
+        }, policy: { policy.withLock { $0 } }, retry: retry)
+
+        await cache.downloadRemote([href], to: dir)
+        #expect(requests.withLock { $0 } == 1)
+        #expect(!ResourceActivity.isActive(href, in: dir))
+        #expect(!ResourceActivity.hasFailed(href, in: dir), "a stopped retry is not a failure")
+    }
+
+    /// The live retry policy retries a transient failure within the pass.
+    @Test func transientFailure_isRetriedWithinThePass() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/retry.png"
+        let requests = OSAllocatedUnfairLock(initialState: 0)
+        let retry = RetryPolicy(maxRetries: 3, baseDelay: .zero, jitter: 0) { _ in }
+        let cache = ResourceCache(downloader: { _ in
+            let count = requests.withLock { value -> Int in
+                value += 1
+                return value
+            }
+            if count < 3 {
+                throw DownloadError.httpStatus(503)
+            }
+            return Self.png
+        }, policy: { .always }, retry: retry)
+
+        await cache.downloadRemote([href], to: dir)
+        #expect(requests.withLock { $0 } == 3)
+        #expect(cache.localURL(forHref: href, in: dir) != nil)
+    }
+
+    /// A second pass over the same entry leaves hrefs the first is fetching alone (no duplicate
+    /// request, and its outcome can't clear the first pass's progress).
+    @Test func overlappingPasses_fetchEachHrefOnce() async throws {
+        let dir = try makeTempDir()
+        let href = "https://example.com/overlap.png"
+        let gate = Gate()
+        let requests = OSAllocatedUnfairLock(initialState: 0)
+        let cache = ResourceCache(downloader: { _ in
+            requests.withLock { $0 += 1 }
+            await gate.wait()
+            return Self.png
+        }, policy: { .always })
+
+        let first = Task.detached { await cache.downloadRemote([href], to: dir) }
+        while gate.waiting == 0 {
+            await Task.yield()
+        }
+        await cache.downloadRemote([href], to: dir)
+        #expect(ResourceActivity.isActive(href, in: dir), "the first pass still owns it")
+        gate.release()
+        await first.value
+        #expect(requests.withLock { $0 } == 1)
+    }
+
+    @Test func failuresOfRemovedHrefs_areForgotten() async throws {
+        let dir = try makeTempDir()
+        let old = "https://example.com/old.png"
+        let cache = ResourceCache(downloader: { _ in throw DownloadError.httpStatus(500) }, policy: { .always })
+        await cache.downloadRemote([old], to: dir)
+        #expect(ResourceActivity.hasFailed(old, in: dir))
+        await cache.retryPending(["https://example.com/new.png"], to: dir)
+        #expect(!ResourceActivity.hasFailed(old, in: dir))
+    }
 }

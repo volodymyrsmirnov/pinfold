@@ -28,13 +28,21 @@ enum ResourceActivity {
 
     private static let entries = OSAllocatedUnfairLock<[String: Entry]>(initialState: [:])
 
-    /// Marks `hrefs` as queued for download.
-    static func begin(_ hrefs: some Sequence<String>, in resourcesDir: URL) {
+    /// Marks `hrefs` as queued for download and returns those this caller now owns: hrefs
+    /// already queued or downloading (by another pass over the same entry) are left out.
+    static func claim(_ hrefs: [String], in resourcesDir: URL) -> [String] {
+        var claimed: [String] = []
         update(resourcesDir) { entry in
-            for href in hrefs {
-                entry.active.insert(href)
+            for href in hrefs where entry.active.insert(href).inserted {
+                claimed.append(href)
             }
         }
+        return claimed
+    }
+
+    /// Forgets the failures of hrefs not in `hrefs` (the entry no longer has them).
+    static func retainFailures(_ hrefs: Set<String>, in resourcesDir: URL) {
+        update(resourcesDir) { $0.failed.formIntersection(hrefs) }
     }
 
     /// Marks `href` as no longer downloading; `failed` records how its attempt ended.

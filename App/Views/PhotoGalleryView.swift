@@ -194,22 +194,18 @@ struct PhotoViewer: View {
         )
     }
 
-    /// The page indicator the system pager drew: one dot per photo, the current one bright.
+    /// The page indicator the system pager drew: a `UIPageControl`, which shrinks and scrolls
+    /// its dots for a long gallery and can be tapped, scrubbed and adjusted with VoiceOver.
     @ViewBuilder
     private var pageDots: some View {
         if item.urls.count > 1 {
-            HStack(spacing: 8) {
-                ForEach(item.urls.indices, id: \.self) { index in
-                    Circle()
-                        .fill(index == selection ? Color.white : Color.white.opacity(0.35))
-                        .frame(width: 7, height: 7)
-                }
+            PageControl(numberOfPages: item.urls.count, currentPage: selection) { page in
+                withAnimation { selection = page }
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
+            // The full width, so UIPageControl fits (and scrolls) the dots of a long gallery itself.
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
             .padding(.bottom, 12)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
         }
     }
 
@@ -264,6 +260,45 @@ struct PhotoViewer: View {
     /// "2 of 5" when there is more than one photo; nothing otherwise.
     private var title: String {
         item.urls.count > 1 ? String(localized: "\(selection + 1) of \(item.urls.count)") : ""
+    }
+}
+
+// MARK: - PageControl
+
+/// `UIPageControl` for SwiftUI: shows `currentPage` and reports the page the person picks.
+private struct PageControl: UIViewRepresentable {
+    let numberOfPages: Int
+    let currentPage: Int
+    let onSelect: (Int) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelect: onSelect)
+    }
+
+    func makeUIView(context: Context) -> UIPageControl {
+        let control = UIPageControl()
+        control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return control
+    }
+
+    func updateUIView(_ control: UIPageControl, context: Context) {
+        context.coordinator.onSelect = onSelect
+        control.numberOfPages = numberOfPages
+        if control.currentPage != currentPage {
+            control.currentPage = currentPage
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var onSelect: (Int) -> Void
+
+        init(onSelect: @escaping (Int) -> Void) {
+            self.onSelect = onSelect
+        }
+
+        @objc func changed(_ control: UIPageControl) {
+            onSelect(control.currentPage)
+        }
     }
 }
 
