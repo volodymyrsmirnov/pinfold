@@ -374,7 +374,6 @@ private final class TransferRouter: NSObject, URLSessionDataDelegate, @unchecked
         transfers.withLock { _ = $0.removeValue(forKey: task.taskIdentifier) }
     }
 
-
     private func transfer(for task: URLSessionTask) -> BoundedTransfer? {
         transfers.withLock { $0[task.taskIdentifier] }
     }
